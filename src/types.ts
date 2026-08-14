@@ -1,0 +1,68 @@
+export type UserRole = 'Super Administrator' | 'Recruitment Staff' | 'Viewer';
+
+export interface User {
+  id: string;
+  fullName: string;
+  email: string;
+  username: string;
+  role: UserRole;
+  status: 'Active' | 'Inactive';
+  createdAt: string;
+  lastLoginAt?: string;
+}
+
+export type AdmissionStatus = 'A - PASS' | 'B - PENDING';
+
+export interface StudentRecord {
+  id: string;
+  lrn: string;                  // Learner Reference Number (Unique string)
+  surname: string;              // SN
+  middleName: string;           // MN
+  firstName: string;            // FN
+  birthday: string;             // YYYY-MM-DD
+  address: string;
+  fatherName: string;
+  motherName: string;
+  guardianName: string;
+  numSiblings: number;
+  fatherOccupation: string;
+  motherOccupation: string;
+  guardianOccupation: string;
+  examScore: number;
+  elementarySchool: string;
+  remarks: AdmissionStatus;     // A - PASS or B - PENDING
+  healthStatus: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  updatedBy: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  userId: string;
+  userName: string;
+  action: string;
+  details: string;
+  timestamp: string;
+}
+
+export interface SystemSettings {
+  schoolName: string;
+  subTitle?: string;
+  schoolLogoUrl?: string;
+  maxExamScore: number;
+  dashboardBgTheme?: 'royal-blue' | 'navy-gold' | 'emerald' | 'burgundy' | 'slate' | 'custom';
+  dashboardBgGradient?: string;
+  dashboardBgImageUrl?: string;
+  academicYear?: string;
+}
+
+export interface DashboardStats {
+  totalStudents: number;
+  totalPass: number;
+  totalPending: number;
+  recentStudents: StudentRecord[];
+  elementarySchoolsCount: number;
+  averageExamScore: number;
+}

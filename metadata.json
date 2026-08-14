@@ -1,0 +1,6 @@
+{
+  "name": "Sisters of Mary School-Girlstown, Inc.",
+  "description": "Student Recruitment and Information Management System for Sisters of Mary School-Girlstown, Inc.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
