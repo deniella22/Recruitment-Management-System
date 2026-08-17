@@ -564,18 +564,24 @@ async function startServer() {
         required: ['extractedData'],
       };
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType: cleanMimeType,
-                data: cleanBase64,
-              },
-            },
-            {
-              text: `You are an expert OCR and document understanding system for Sisters of Mary School-Girlstown, Inc. student recruitment forms.
+      let responseText = '';
+      const candidateModels = ['gemini-3.7-flash', 'gemini-2.5-flash'];
+      let lastErr: any = null;
+
+      for (const modelName of candidateModels) {
+        try {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: cleanMimeType,
+                    data: cleanBase64,
+                  },
+                },
+                {
+                  text: `You are an expert OCR and document understanding system for Sisters of Mary School-Girlstown, Inc. student recruitment forms.
 Analyze the provided document image (Personal Data Form / Applicant Form) and extract all printed and handwritten information with high fidelity.
 
 FORM STRUCTURE AND MAPPING GUIDELINES:
@@ -603,16 +609,32 @@ ACCURACY & INTEGRITY RULES:
 - NEVER guess unreadable handwriting or invent sample names/data.
 - If a field is blank, unmarked, or completely illegible, return an empty string "" or 0 and assign fieldConfidence as "LOW" or "NOT_DETECTED".
 - Put the names of any ambiguous/faint fields into the uncertainFields array so recruitment staff can easily review and verify them.`,
+                },
+              ],
             },
-          ],
-        },
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: schema,
-        },
-      });
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: schema,
+            },
+          });
 
-      const resultText = response.text || '{}';
+          responseText = response.text || '{}';
+          if (responseText && responseText.trim()) {
+            break; // Succeeded!
+          }
+        } catch (modelErr: any) {
+          lastErr = modelErr;
+          console.warn(`OCR attempt with ${modelName} encountered error:`, modelErr?.message || modelErr);
+          // Wait 300ms before trying fallback model if 503 or 429
+          await new Promise((r) => setTimeout(r, 300));
+        }
+      }
+
+      if (!responseText && lastErr) {
+        throw lastErr;
+      }
+
+      const resultText = responseText || '{}';
       let parsed: any = {};
       try {
         parsed = JSON.parse(resultText);
@@ -646,8 +668,24 @@ ACCURACY & INTEGRITY RULES:
       });
     } catch (err: any) {
       console.error('OCR Scanning Error:', err);
+      const errMsg = err?.message || String(err);
+      const is503OrBusy =
+        errMsg.includes('503') ||
+        errMsg.includes('UNAVAILABLE') ||
+        errMsg.includes('high demand') ||
+        errMsg.includes('Resource has been exhausted') ||
+        errMsg.includes('rate limit') ||
+        errMsg.includes('429');
+
+      if (is503OrBusy) {
+        return res.status(503).json({
+          error: 'The scanning service is temporarily busy. Please try again.',
+          isTemporary: true,
+        });
+      }
+
       return res.status(500).json({
-        error: err.message || 'Failed to scan document image with OCR.',
+        error: errMsg || 'Failed to scan document image with OCR. Please try again.',
       });
     }
   });

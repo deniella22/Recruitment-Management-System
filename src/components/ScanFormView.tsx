@@ -123,22 +123,43 @@ export const ScanFormView: React.FC<Props> = ({
 
   // Clean up camera stream on unmount
   useEffect(() => {
+    if (!initialImageBase64) {
+      // Auto-start live camera on mount
+      startCamera('environment');
+    }
     return () => {
       stopCamera();
     };
   }, []);
 
-  // Initial trigger if initialImageBase64 passed
-  useEffect(() => {
-    if (initialImageBase64) {
-      runOCR(initialImageBase64);
+  // Re-connect stream to video element whenever isCameraActive changes or video element mounts
+  const attachStreamToVideo = useCallback((videoEl: HTMLVideoElement | null) => {
+    if (videoEl && streamRef.current) {
+      if (videoEl.srcObject !== streamRef.current) {
+        videoEl.srcObject = streamRef.current;
+      }
+      videoEl.muted = true;
+      videoEl.playsInline = true;
+      videoEl.autoplay = true;
+      videoEl.play().catch((err) => {
+        console.warn('Video auto-play warning:', err);
+      });
     }
-  }, [initialImageBase64]);
+  }, []);
 
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {
+          console.warn('Error stopping track:', e);
+        }
+      });
       streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setIsCameraActive(false);
   };
@@ -164,19 +185,36 @@ export const ScanFormView: React.FC<Props> = ({
           audio: false,
         });
       } catch (err) {
-        // Fall back to standard video constraint
+        // Fall back to basic video constraint
         stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: facing },
           audio: false,
         });
       }
 
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+      // Verify active video track
+      const videoTracks = stream.getVideoTracks();
+      if (!videoTracks || videoTracks.length === 0 || videoTracks[0].readyState !== 'live') {
+        throw new Error('No live video track available from camera device.');
       }
+
+      streamRef.current = stream;
       setIsCameraActive(true);
       setCameraFacingMode(facing);
+
+      // Attach stream to video element
+      if (videoRef.current) {
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
+        video.autoplay = true;
+        try {
+          await video.play();
+        } catch (playErr) {
+          console.warn('Video play call required gesture or had warning:', playErr);
+        }
+      }
     } catch (err: any) {
       console.warn('Camera stream error:', err);
       setIsCameraActive(false);
@@ -189,13 +227,13 @@ export const ScanFormView: React.FC<Props> = ({
         errMsg.includes('Permission dismissed') ||
         errMsg.includes('Permission denied')
       ) {
-        setCameraError('Camera access was dismissed or restricted. Click "Upload Document File" or "Native Camera Capture" to snap a photo.');
+        setCameraError('Camera permission was not granted or dismissed. You can snap a photo with your device camera app or upload a document file.');
       } else if (errName === 'NotFoundError') {
         setCameraError('No camera found on this device. Please select or upload a document photo from your device storage.');
       } else if (errName === 'NotReadableError') {
         setCameraError('Camera is currently being used by another application. Please close other camera tabs and try again.');
       } else {
-        setCameraError(`Camera connection note: ${errMsg || 'Restricted'}. Please use "Upload Document File" or device camera picker.`);
+        setCameraError(`Camera note: ${errMsg || 'Connection unavailable'}. Please use "Upload Document File" or choose a photo.`);
       }
     }
   };
@@ -206,15 +244,24 @@ export const ScanFormView: React.FC<Props> = ({
   };
 
   const capturePhoto = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current) {
+      setCameraError('Camera is not ready for capture. Please wait a moment or restart camera.');
+      return;
+    }
     const video = videoRef.current;
 
+    const width = video.videoWidth || 1920;
+    const height = video.videoHeight || 1080;
+
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 1920;
-    canvas.height = video.videoHeight || 1080;
+    canvas.width = width;
+    canvas.height = height;
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      setCameraError('Unable to create image canvas. Please try again.');
+      return;
+    }
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
@@ -603,15 +650,59 @@ export const ScanFormView: React.FC<Props> = ({
         {stage === 'capture' && (
           <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
             {ocrError && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs font-semibold flex items-center gap-3 animate-in fade-in">
-                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
-                <div className="flex-1">{ocrError}</div>
-                <button
-                  onClick={() => setOcrError(null)}
-                  className="text-red-700 hover:underline text-xs font-bold"
-                >
-                  Dismiss
-                </button>
+              <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-amber-950 text-xs font-medium space-y-3 animate-in fade-in shadow-xs">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-bold text-amber-900 text-sm">
+                      {ocrError.includes('busy') || ocrError.includes('503')
+                        ? 'The scanning service is temporarily busy. Please try again.'
+                        : ocrError}
+                    </p>
+                    <p className="text-amber-800 text-xs mt-0.5">
+                      Your captured document image has been preserved. You can retry OCR immediately without taking another photo.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setOcrError(null)}
+                    className="text-amber-700 hover:text-amber-950 p-1 rounded-lg hover:bg-amber-100"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {imagePreview && (
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1 border-t border-amber-200/80">
+                    <button
+                      type="button"
+                      onClick={() => runOCR(imagePreview)}
+                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>[ 🔄 TRY AGAIN ]</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview(null);
+                        setOcrError(null);
+                        startCamera('environment');
+                      }}
+                      className="px-3.5 py-2 bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Retake Photo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-3.5 py-2 bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Choose Different File</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -622,6 +713,14 @@ export const ScanFormView: React.FC<Props> = ({
                   <span className="leading-relaxed">{cameraError}</span>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1 pl-7">
+                  <button
+                    type="button"
+                    onClick={() => startCamera('environment')}
+                    className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Retry Camera Permission</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => nativeCameraInputRef.current?.click()}
@@ -644,48 +743,70 @@ export const ScanFormView: React.FC<Props> = ({
 
             {/* LIVE CAMERA VIEWFINDER */}
             {isCameraActive ? (
-              <div className="bg-black rounded-2xl overflow-hidden relative border-2 border-emerald-500 shadow-2xl max-w-2xl mx-auto">
+              <div className="bg-slate-950 rounded-2xl overflow-hidden relative border-2 border-emerald-500 shadow-2xl max-w-3xl mx-auto flex items-center justify-center min-h-[360px] sm:min-h-[460px]">
+                {/* Layer 1: Real HTML <video> Camera Element */}
                 <video
-                  ref={videoRef}
+                  ref={(el) => {
+                    videoRef.current = el;
+                    if (el && streamRef.current) {
+                      if (el.srcObject !== streamRef.current) {
+                        el.srcObject = streamRef.current;
+                      }
+                      el.muted = true;
+                      el.playsInline = true;
+                      el.autoplay = true;
+                      el.play().catch(() => {});
+                    }
+                  }}
                   autoPlay
+                  muted
                   playsInline
-                  className="w-full h-80 sm:h-96 object-cover"
+                  className="w-full h-full min-h-[360px] sm:min-h-[460px] max-h-[560px] object-contain bg-slate-950 block z-0"
+                  style={{ objectFit: 'contain', width: '100%', height: '100%' }}
                 />
 
-                {/* Laser scan line guide */}
-                <div className="absolute inset-x-8 top-12 bottom-16 border-2 border-dashed border-emerald-400/80 rounded-xl pointer-events-none flex flex-col justify-between p-3">
-                  <div className="flex justify-between items-start">
-                    <div className="w-6 h-6 border-t-4 border-l-4 border-emerald-400" />
-                    <div className="bg-black/70 text-emerald-300 px-3 py-1 rounded-full text-[11px] font-black backdrop-blur-xs tracking-wider uppercase border border-emerald-500/40">
-                      Align "Personal Data Form" Inside Frame
+                {/* Layer 2 & 3 & 4: Scanning Frame Overlay & Guides */}
+                <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-4 sm:p-6">
+                  {/* Top Header inside camera */}
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg" />
+                    <div className="bg-slate-900/85 text-emerald-300 px-4 py-1.5 rounded-full text-xs font-black backdrop-blur-md tracking-wider uppercase border border-emerald-500/50 shadow-md flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>ALIGN PERSONAL DATA FORM INSIDE FRAME</span>
                     </div>
-                    <div className="w-6 h-6 border-t-4 border-r-4 border-emerald-400" />
+                    <div className="w-8 h-8 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg" />
                   </div>
 
-                  <div className="flex justify-between items-end">
-                    <div className="w-6 h-6 border-b-4 border-l-4 border-emerald-400" />
-                    <div className="text-[10px] text-white/80 font-bold bg-black/60 px-2 py-0.5 rounded">
+                  {/* Center subtle scan line */}
+                  <div className="flex-1 flex items-center justify-center my-4">
+                    <div className="w-full h-[1.5px] bg-gradient-to-r from-transparent via-emerald-400/60 to-transparent animate-pulse" />
+                  </div>
+
+                  {/* Bottom Footer inside camera */}
+                  <div className="flex items-center justify-between">
+                    <div className="w-8 h-8 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg" />
+                    <div className="text-[11px] text-white/90 font-bold bg-slate-900/85 px-3.5 py-1 rounded-full border border-slate-700/60 backdrop-blur-md">
                       Hold steady for clear handwriting recognition
                     </div>
-                    <div className="w-6 h-6 border-b-4 border-r-4 border-emerald-400" />
+                    <div className="w-8 h-8 border-b-4 border-r-4 border-emerald-400 rounded-br-lg" />
                   </div>
                 </div>
 
-                {/* Camera Bottom Controls */}
-                <div className="absolute bottom-4 inset-x-0 flex items-center justify-center gap-4 px-4">
+                {/* Layer 5: Camera Controls & Buttons */}
+                <div className="absolute bottom-5 inset-x-0 flex items-center justify-center gap-3 sm:gap-4 px-4 z-20">
                   <button
                     type="button"
                     onClick={toggleCameraFacing}
-                    className="p-3 bg-white/20 hover:bg-white/30 text-white rounded-full backdrop-blur-md transition-all cursor-pointer border border-white/30"
+                    className="p-3.5 bg-slate-900/85 hover:bg-slate-800 text-white rounded-full backdrop-blur-md transition-all cursor-pointer border border-white/30 shadow-lg"
                     title="Switch Camera (Front / Rear)"
                   >
-                    <SwitchCamera className="w-5 h-5" />
+                    <SwitchCamera className="w-5 h-5 text-emerald-300" />
                   </button>
 
                   <button
                     type="button"
                     onClick={capturePhoto}
-                    className="px-8 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm uppercase tracking-wider rounded-full shadow-2xl transition-all flex items-center gap-2.5 cursor-pointer border-2 border-white transform active:scale-95"
+                    className="px-6 sm:px-8 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-full shadow-2xl transition-all flex items-center gap-2.5 cursor-pointer border-2 border-white transform active:scale-95 hover:shadow-emerald-500/25"
                   >
                     <Camera className="w-5 h-5 text-white" />
                     <span>[ 📷 SNAP & PROCESS FORM ]</span>
@@ -693,11 +814,13 @@ export const ScanFormView: React.FC<Props> = ({
 
                   <button
                     type="button"
-                    onClick={stopCamera}
-                    className="p-3 bg-red-600/80 hover:bg-red-700 text-white rounded-full backdrop-blur-md transition-all cursor-pointer border border-white/30"
-                    title="Cancel Camera"
+                    onClick={() => {
+                      stopCamera();
+                    }}
+                    className="p-3.5 bg-slate-900/85 hover:bg-slate-800 text-white rounded-full backdrop-blur-md transition-all cursor-pointer border border-white/30 shadow-lg"
+                    title="Choose File Instead"
                   >
-                    <X className="w-5 h-5" />
+                    <Upload className="w-5 h-5 text-blue-300" />
                   </button>
                 </div>
               </div>
