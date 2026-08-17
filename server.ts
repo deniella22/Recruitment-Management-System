@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { dbService } from './server/db.js';
@@ -8,9 +9,19 @@ import { User, StudentRecord, AdmissionStatus, SystemSettings } from './src/type
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  const PORT = 3000;
+
+  const UPLOADS_DIR = path.join(process.cwd(), 'data', 'uploads');
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+  // Static uploads directory serving
+  app.use('/api/uploads', express.static(UPLOADS_DIR));
+  app.use('/uploads', express.static(UPLOADS_DIR));
 
   // Helper middleware to extract user from header or query token
   const getCurrentUser = (req: express.Request): User | null => {
@@ -624,12 +635,208 @@ If any field is missing or unclear on the document, set it as an empty string or
     return res.json(logs);
   });
 
-  // 13. System Settings
+  // Direct fallback route for uploaded files (serves from disk or database backup)
+  const handleUploadedFile = (req: express.Request, res: express.Response) => {
+    const filename = req.params.filename;
+    const filePath = path.join(UPLOADS_DIR, filename);
+    if (fs.existsSync(filePath)) {
+      return res.sendFile(filePath);
+    }
+
+    // Fallback: If disk was wiped or container redeployed, reconstruct from DB
+    if (filename.startsWith('logo_')) {
+      const logo = dbService.getLogoStream();
+      if (logo) {
+        res.setHeader('Content-Type', logo.mime);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.send(logo.data);
+      }
+    } else if (filename.startsWith('bg_')) {
+      const bg = dbService.getBackgroundStream();
+      if (bg) {
+        res.setHeader('Content-Type', bg.mime);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.send(bg.data);
+      }
+    } else if (filename.startsWith('splash_')) {
+      const splash = dbService.getSplashBackgroundStream();
+      if (splash) {
+        res.setHeader('Content-Type', splash.mime);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        return res.send(splash.data);
+      }
+    }
+
+    return res.status(404).send('Image file not found');
+  };
+
+  app.get('/api/uploads/:filename', handleUploadedFile);
+  app.get('/uploads/:filename', handleUploadedFile);
+
+  // 13. System Settings & Branding Endpoints
+  // 13a. GET /api/settings/logo - Stream active logo image directly
+  app.get('/api/settings/logo', (req, res) => {
+    const logo = dbService.getLogoStream();
+    if (logo) {
+      res.setHeader('Content-Type', logo.mime);
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.send(logo.data);
+    }
+    const defaultLogo = path.join(process.cwd(), 'public', 'school_logo.png');
+    if (fs.existsSync(defaultLogo)) {
+      res.setHeader('Content-Type', 'image/png');
+      return res.sendFile(defaultLogo);
+    }
+    return res.status(404).send('Default school logo not found');
+  });
+
+  // 13b. PUT/PATCH/POST /api/settings/logo - Upload & save system logo permanently
+  const handleLogoSave = (req: express.Request, res: express.Response) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can update system logo.' });
+    }
+
+    const { imageBase64, mimeType, logoUrl } = req.body;
+    const targetImage = imageBase64 || logoUrl;
+    if (!targetImage) {
+      return res.status(400).json({ error: 'Logo image data is required.' });
+    }
+
+    try {
+      const result = dbService.saveLogo(targetImage, mimeType);
+      dbService.addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        action: 'Logo Updated',
+        details: `Updated permanent system school logo (${result.logoUrl})`,
+      });
+      return res.json({
+        success: true,
+        logoUrl: result.logoUrl,
+        settings: result.settings,
+        message: 'System logo saved and persisted successfully.',
+      });
+    } catch (err: any) {
+      console.error('Logo upload error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to save system logo.' });
+    }
+  };
+  app.put('/api/settings/logo', handleLogoSave);
+  app.patch('/api/settings/logo', handleLogoSave);
+  app.post('/api/settings/logo', handleLogoSave);
+
+  // 13c. GET /api/settings/background - Stream active background image directly
+  app.get('/api/settings/background', (req, res) => {
+    const bg = dbService.getBackgroundStream();
+    if (bg) {
+      res.setHeader('Content-Type', bg.mime);
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.send(bg.data);
+    }
+    const defaultBg = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
+    if (fs.existsSync(defaultBg)) {
+      res.setHeader('Content-Type', 'image/jpeg');
+      return res.sendFile(defaultBg);
+    }
+    return res.status(404).send('Default dashboard background not found');
+  });
+
+  // 13d. PUT/PATCH/POST /api/settings/background - Upload & save system background permanently
+  const handleBgSave = (req: express.Request, res: express.Response) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can update system background.' });
+    }
+
+    const { imageBase64, mimeType, backgroundUrl } = req.body;
+    const targetImage = imageBase64 || backgroundUrl;
+    if (!targetImage) {
+      return res.status(400).json({ error: 'Background image data is required.' });
+    }
+
+    try {
+      const result = dbService.saveBackground(targetImage, mimeType);
+      dbService.addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        action: 'Background Updated',
+        details: `Updated permanent dashboard background image (${result.backgroundUrl})`,
+      });
+      return res.json({
+        success: true,
+        backgroundUrl: result.backgroundUrl,
+        settings: result.settings,
+        message: 'Dashboard background saved and persisted successfully.',
+      });
+    } catch (err: any) {
+      console.error('Background upload error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to save system background.' });
+    }
+  };
+  app.put('/api/settings/background', handleBgSave);
+  app.patch('/api/settings/background', handleBgSave);
+  app.post('/api/settings/background', handleBgSave);
+
+  // 13e. GET /api/settings/splash-background - Stream active splash background image directly
+  app.get('/api/settings/splash-background', (req, res) => {
+    const splash = dbService.getSplashBackgroundStream();
+    if (splash) {
+      res.setHeader('Content-Type', splash.mime);
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.send(splash.data);
+    }
+    const defaultBg = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
+    if (fs.existsSync(defaultBg)) {
+      res.setHeader('Content-Type', 'image/jpeg');
+      return res.sendFile(defaultBg);
+    }
+    return res.status(404).send('Default splash background not found');
+  });
+
+  // 13f. PUT/PATCH/POST /api/settings/splash-background - Upload & save splash screen background permanently
+  const handleSplashBgSave = (req: express.Request, res: express.Response) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can update splash background.' });
+    }
+
+    const { imageBase64, mimeType, splashBackgroundUrl } = req.body;
+    const targetImage = imageBase64 || splashBackgroundUrl;
+    if (!targetImage) {
+      return res.status(400).json({ error: 'Splash background image data is required.' });
+    }
+
+    try {
+      const result = dbService.saveSplashBackground(targetImage, mimeType);
+      dbService.addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        action: 'Splash Background Updated',
+        details: `Updated permanent splash screen background image (${result.splashBackgroundUrl})`,
+      });
+      return res.json({
+        success: true,
+        splashBackgroundUrl: result.splashBackgroundUrl,
+        settings: result.settings,
+        message: 'Splash screen background saved and persisted successfully.',
+      });
+    } catch (err: any) {
+      console.error('Splash background upload error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to save splash screen background.' });
+    }
+  };
+  app.put('/api/settings/splash-background', handleSplashBgSave);
+  app.patch('/api/settings/splash-background', handleSplashBgSave);
+  app.post('/api/settings/splash-background', handleSplashBgSave);
+
+  // 13g. GET /api/settings
   app.get('/api/settings', (req, res) => {
     const settings = dbService.getSettings();
     return res.json(settings);
   });
 
+  // 13h. PUT /api/settings
   app.put('/api/settings', (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
@@ -639,11 +846,14 @@ If any field is missing or unclear on the document, set it as an empty string or
     const {
       schoolName,
       subTitle,
+      systemName,
+      schoolLocation,
       schoolLogoUrl,
       maxExamScore,
       dashboardBgTheme,
       dashboardBgGradient,
       dashboardBgImageUrl,
+      splashBgImageUrl,
       academicYear,
     } = req.body;
 
@@ -658,6 +868,14 @@ If any field is missing or unclear on the document, set it as an empty string or
 
     if (subTitle !== undefined) {
       updates.subTitle = String(subTitle).trim();
+    }
+
+    if (systemName !== undefined) {
+      updates.systemName = String(systemName).trim();
+    }
+
+    if (schoolLocation !== undefined) {
+      updates.schoolLocation = String(schoolLocation).trim();
     }
 
     if (schoolLogoUrl !== undefined) {
@@ -680,6 +898,10 @@ If any field is missing or unclear on the document, set it as an empty string or
       updates.dashboardBgImageUrl = String(dashboardBgImageUrl).trim();
     }
 
+    if (splashBgImageUrl !== undefined) {
+      updates.splashBgImageUrl = String(splashBgImageUrl).trim();
+    }
+
     if (maxExamScore !== undefined) {
       const scoreNum = Number(maxExamScore);
       if (isNaN(scoreNum) || scoreNum <= 0) {
@@ -688,14 +910,19 @@ If any field is missing or unclear on the document, set it as an empty string or
       updates.maxExamScore = scoreNum;
     }
 
-    const updated = dbService.updateSettings(updates);
-    dbService.addAuditLog({
-      userId: currentUser.id,
-      userName: currentUser.fullName,
-      action: 'Settings Updated',
-      details: `Updated system settings (School: "${updated.schoolName}", Theme: "${updated.dashboardBgTheme || 'default'}")`,
-    });
-    return res.json(updated);
+    try {
+      const updated = dbService.updateSettings(updates);
+      dbService.addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        action: 'Settings Updated',
+        details: `Updated system branding and configuration settings`,
+      });
+      return res.json(updated);
+    } catch (err: any) {
+      console.error('Settings update error:', err);
+      return res.status(500).json({ error: err.message || 'Failed to update system settings.' });
+    }
   });
 
   // 14. User Management (Super Admin)

@@ -11,18 +11,49 @@ interface DbSchema {
 }
 
 const DATA_DIR = path.join(process.cwd(), 'data');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 const DEFAULT_SETTINGS: SystemSettings = {
+  id: 'system_default_settings',
   schoolName: 'Sisters of Mary School-Girlstown, Inc.',
   subTitle: 'Internal Student Recruitment & Information Management System',
+  systemName: 'Male Student Recruitment Management System',
+  schoolLocation: 'Adlas, Silang, Cavite, Philippines',
   schoolLogoUrl: '/school_logo.png',
   maxExamScore: 100,
   dashboardBgTheme: 'custom',
   dashboardBgGradient: 'from-[#1E3A8A] via-[#1D4ED8] to-[#172554]',
   dashboardBgImageUrl: '/dashboard_bg.jpg',
+  splashBgImageUrl: '/dashboard_bg.jpg',
   academicYear: 'SY 2026-2027 Recruitment',
+  updatedAt: new Date().toISOString(),
 };
+
+function ensureUploadsDir(): void {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+}
+
+function parseBase64Image(dataString: string, fallbackMime = 'image/png'): { base64Data: string; mimeType: string; ext: string } {
+  let mimeType = fallbackMime;
+  let base64Data = dataString;
+
+  const mimeMatch = dataString.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/);
+  if (mimeMatch) {
+    mimeType = mimeMatch[1];
+    base64Data = dataString.replace(/^data:[a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+;base64,/, '');
+  }
+
+  let ext = '.png';
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = '.jpg';
+  else if (mimeType.includes('webp')) ext = '.webp';
+  else if (mimeType.includes('svg')) ext = '.svg';
+  else if (mimeType.includes('gif')) ext = '.gif';
+
+  return { base64Data, mimeType, ext };
+}
 
 function ensureDbExists(): DbSchema {
   if (!fs.existsSync(DATA_DIR)) {
@@ -298,35 +329,399 @@ export const dbService = {
 
   getSettings(): SystemSettings {
     const db = ensureDbExists();
-    return db.settings || DEFAULT_SETTINGS;
+    const settings = db.settings || DEFAULT_SETTINGS;
+    return {
+      ...DEFAULT_SETTINGS,
+      ...settings,
+    };
+  },
+
+  saveLogo(
+    dataString: string,
+    mimeTypeOverride?: string
+  ): { logoUrl: string; settings: SystemSettings } {
+    const db = ensureDbExists();
+    ensureUploadsDir();
+
+    if (!dataString) {
+      throw new Error('Logo image data is required');
+    }
+
+    if (dataString.startsWith('data:image') || dataString.length > 500) {
+      const { base64Data, mimeType, ext } = parseBase64Image(dataString, mimeTypeOverride || 'image/png');
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const filename = `logo_${timestamp}_${randomSuffix}${ext}`;
+      const filePath = path.join(UPLOADS_DIR, filename);
+
+      // Write physical file to uploads directory
+      fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+
+      // Clean up older logo files in uploads directory
+      try {
+        const files = fs.readdirSync(UPLOADS_DIR);
+        for (const file of files) {
+          if (file.startsWith('logo_') && file !== filename) {
+            fs.unlinkSync(path.join(UPLOADS_DIR, file));
+          }
+        }
+      } catch (cleanupErr) {
+        console.warn('Old logo cleanup warning:', cleanupErr);
+      }
+
+      // Extra fallback sync to public and dist folders
+      try {
+        const publicLogo = path.join(process.cwd(), 'public', 'school_logo.png');
+        fs.writeFileSync(publicLogo, Buffer.from(base64Data, 'base64'));
+        const distLogo = path.join(process.cwd(), 'dist', 'school_logo.png');
+        if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
+          fs.writeFileSync(distLogo, Buffer.from(base64Data, 'base64'));
+        }
+      } catch (syncErr) {
+        // Non-critical fallback
+      }
+
+      const logoUrl = `/api/uploads/${filename}`;
+      db.settings = {
+        ...DEFAULT_SETTINGS,
+        ...db.settings,
+        schoolLogoUrl: logoUrl,
+        schoolLogoData: base64Data,
+        schoolLogoMime: mimeType,
+        updatedAt: new Date().toISOString(),
+      };
+      saveDb(db);
+
+      return { logoUrl, settings: db.settings };
+    } else {
+      // Direct URL passed
+      const logoUrl = dataString.trim();
+      db.settings = {
+        ...DEFAULT_SETTINGS,
+        ...db.settings,
+        schoolLogoUrl: logoUrl,
+        updatedAt: new Date().toISOString(),
+      };
+      if (logoUrl === '/school_logo.png') {
+        delete db.settings.schoolLogoData;
+        delete db.settings.schoolLogoMime;
+      }
+      saveDb(db);
+      return { logoUrl, settings: db.settings };
+    }
+  },
+
+  saveBackground(
+    dataString: string,
+    mimeTypeOverride?: string
+  ): { backgroundUrl: string; settings: SystemSettings } {
+    const db = ensureDbExists();
+    ensureUploadsDir();
+
+    if (!dataString) {
+      throw new Error('Background image data is required');
+    }
+
+    if (dataString.startsWith('data:image') || dataString.length > 500) {
+      const { base64Data, mimeType, ext } = parseBase64Image(dataString, mimeTypeOverride || 'image/jpeg');
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const filename = `bg_${timestamp}_${randomSuffix}${ext}`;
+      const filePath = path.join(UPLOADS_DIR, filename);
+
+      // Write physical file to uploads directory
+      fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+
+      // Clean up older background files in uploads directory
+      try {
+        const files = fs.readdirSync(UPLOADS_DIR);
+        for (const file of files) {
+          if (file.startsWith('bg_') && file !== filename) {
+            fs.unlinkSync(path.join(UPLOADS_DIR, file));
+          }
+        }
+      } catch (cleanupErr) {
+        console.warn('Old background cleanup warning:', cleanupErr);
+      }
+
+      // Extra fallback sync to public and dist folders
+      try {
+        const publicBg = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
+        fs.writeFileSync(publicBg, Buffer.from(base64Data, 'base64'));
+        const distBg = path.join(process.cwd(), 'dist', 'dashboard_bg.jpg');
+        if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
+          fs.writeFileSync(distBg, Buffer.from(base64Data, 'base64'));
+        }
+      } catch (syncErr) {
+        // Non-critical fallback
+      }
+
+      const backgroundUrl = `/api/uploads/${filename}`;
+      db.settings = {
+        ...DEFAULT_SETTINGS,
+        ...db.settings,
+        dashboardBgImageUrl: backgroundUrl,
+        dashboardBgImageData: base64Data,
+        dashboardBgImageMime: mimeType,
+        dashboardBgTheme: 'custom',
+        updatedAt: new Date().toISOString(),
+      };
+      saveDb(db);
+
+      return { backgroundUrl, settings: db.settings };
+    } else {
+      // Direct URL passed
+      const backgroundUrl = dataString.trim();
+      db.settings = {
+        ...DEFAULT_SETTINGS,
+        ...db.settings,
+        dashboardBgImageUrl: backgroundUrl,
+        updatedAt: new Date().toISOString(),
+      };
+      if (backgroundUrl === '/dashboard_bg.jpg') {
+        delete db.settings.dashboardBgImageData;
+        delete db.settings.dashboardBgImageMime;
+      }
+      saveDb(db);
+      return { backgroundUrl, settings: db.settings };
+    }
+  },
+
+  getLogoStream(): { data: Buffer; mime: string } | null {
+    const db = ensureDbExists();
+    if (db.settings?.schoolLogoData) {
+      try {
+        const buf = Buffer.from(db.settings.schoolLogoData, 'base64');
+        return {
+          data: buf,
+          mime: db.settings.schoolLogoMime || 'image/png',
+        };
+      } catch (e) {
+        console.error('Error parsing schoolLogoData from DB:', e);
+      }
+    }
+
+    // Check uploads dir
+    try {
+      if (fs.existsSync(UPLOADS_DIR)) {
+        const files = fs.readdirSync(UPLOADS_DIR);
+        const logoFile = files.find((f) => f.startsWith('logo_'));
+        if (logoFile) {
+          const filePath = path.join(UPLOADS_DIR, logoFile);
+          const buf = fs.readFileSync(filePath);
+          const ext = path.extname(logoFile).toLowerCase();
+          const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : ext === '.webp' ? 'image/webp' : 'image/png';
+          return { data: buf, mime };
+        }
+      }
+    } catch (e) {
+      console.error('Error finding logo file in uploads:', e);
+    }
+
+    // Fallback to public
+    try {
+      const publicPath = path.join(process.cwd(), 'public', 'school_logo.png');
+      if (fs.existsSync(publicPath)) {
+        return {
+          data: fs.readFileSync(publicPath),
+          mime: 'image/png',
+        };
+      }
+    } catch (e) {
+      // No fallback
+    }
+
+    return null;
+  },
+
+  getBackgroundStream(): { data: Buffer; mime: string } | null {
+    const db = ensureDbExists();
+    if (db.settings?.dashboardBgImageData) {
+      try {
+        const buf = Buffer.from(db.settings.dashboardBgImageData, 'base64');
+        return {
+          data: buf,
+          mime: db.settings.dashboardBgImageMime || 'image/jpeg',
+        };
+      } catch (e) {
+        console.error('Error parsing dashboardBgImageData from DB:', e);
+      }
+    }
+
+    // Check uploads dir
+    try {
+      if (fs.existsSync(UPLOADS_DIR)) {
+        const files = fs.readdirSync(UPLOADS_DIR);
+        const bgFile = files.find((f) => f.startsWith('bg_'));
+        if (bgFile) {
+          const filePath = path.join(UPLOADS_DIR, bgFile);
+          const buf = fs.readFileSync(filePath);
+          const ext = path.extname(bgFile).toLowerCase();
+          const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+          return { data: buf, mime };
+        }
+      }
+    } catch (e) {
+      console.error('Error finding bg file in uploads:', e);
+    }
+
+    // Fallback to public
+    try {
+      const publicPath = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
+      if (fs.existsSync(publicPath)) {
+        return {
+          data: fs.readFileSync(publicPath),
+          mime: 'image/jpeg',
+        };
+      }
+    } catch (e) {
+      // No fallback
+    }
+
+    return null;
+  },
+
+  saveSplashBackground(
+    dataString: string,
+    mimeTypeOverride?: string
+  ): { splashBackgroundUrl: string; settings: SystemSettings } {
+    const db = ensureDbExists();
+    ensureUploadsDir();
+
+    if (!dataString) {
+      throw new Error('Splash background image data is required');
+    }
+
+    if (dataString.startsWith('data:image') || dataString.length > 500) {
+      const { base64Data, mimeType, ext } = parseBase64Image(dataString, mimeTypeOverride || 'image/jpeg');
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const filename = `splash_${timestamp}_${randomSuffix}${ext}`;
+      const filePath = path.join(UPLOADS_DIR, filename);
+
+      // Write physical file to uploads directory
+      fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+
+      // Clean up older splash files in uploads directory
+      try {
+        const files = fs.readdirSync(UPLOADS_DIR);
+        for (const file of files) {
+          if (file.startsWith('splash_') && file !== filename) {
+            fs.unlinkSync(path.join(UPLOADS_DIR, file));
+          }
+        }
+      } catch (cleanupErr) {
+        console.warn('Old splash background cleanup warning:', cleanupErr);
+      }
+
+      const splashBackgroundUrl = `/api/uploads/${filename}`;
+      db.settings = {
+        ...DEFAULT_SETTINGS,
+        ...db.settings,
+        splashBgImageUrl: splashBackgroundUrl,
+        splashBgImageData: base64Data,
+        splashBgImageMime: mimeType,
+        updatedAt: new Date().toISOString(),
+      };
+      saveDb(db);
+
+      return { splashBackgroundUrl, settings: db.settings };
+    } else {
+      // Direct URL passed
+      const splashBackgroundUrl = dataString.trim();
+      db.settings = {
+        ...DEFAULT_SETTINGS,
+        ...db.settings,
+        splashBgImageUrl: splashBackgroundUrl,
+        updatedAt: new Date().toISOString(),
+      };
+      if (splashBackgroundUrl === '/dashboard_bg.jpg' || splashBackgroundUrl === '/school_logo.png') {
+        delete db.settings.splashBgImageData;
+        delete db.settings.splashBgImageMime;
+      }
+      saveDb(db);
+      return { splashBackgroundUrl, settings: db.settings };
+    }
+  },
+
+  getSplashBackgroundStream(): { data: Buffer; mime: string } | null {
+    const db = ensureDbExists();
+    if (db.settings?.splashBgImageData) {
+      try {
+        const buf = Buffer.from(db.settings.splashBgImageData, 'base64');
+        return {
+          data: buf,
+          mime: db.settings.splashBgImageMime || 'image/jpeg',
+        };
+      } catch (e) {
+        console.error('Error parsing splashBgImageData from DB:', e);
+      }
+    }
+
+    // Check uploads dir
+    try {
+      if (fs.existsSync(UPLOADS_DIR)) {
+        const files = fs.readdirSync(UPLOADS_DIR);
+        const splashFile = files.find((f) => f.startsWith('splash_'));
+        if (splashFile) {
+          const filePath = path.join(UPLOADS_DIR, splashFile);
+          const buf = fs.readFileSync(filePath);
+          const ext = path.extname(splashFile).toLowerCase();
+          const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+          return { data: buf, mime };
+        }
+      }
+    } catch (e) {
+      console.error('Error finding splash file in uploads:', e);
+    }
+
+    // Fallback to general dashboard background
+    const bgStream = this.getBackgroundStream();
+    if (bgStream) return bgStream;
+
+    // Fallback to public
+    try {
+      const publicPath = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
+      if (fs.existsSync(publicPath)) {
+        return {
+          data: fs.readFileSync(publicPath),
+          mime: 'image/jpeg',
+        };
+      }
+    } catch (e) {
+      // No fallback
+    }
+
+    return null;
   },
 
   updateSettings(newSettings: Partial<SystemSettings>): SystemSettings {
     const db = ensureDbExists();
 
-    // Auto-persist uploaded base64 logo to public/school_logo.png
-    if (newSettings.schoolLogoUrl && newSettings.schoolLogoUrl.startsWith('data:image')) {
-      try {
-        const base64Data = newSettings.schoolLogoUrl.replace(/^data:image\/\w+;base64,/, '');
-        const publicLogoPath = path.join(process.cwd(), 'public', 'school_logo.png');
-        fs.writeFileSync(publicLogoPath, Buffer.from(base64Data, 'base64'));
-      } catch (err) {
-        console.error('Failed to sync public school_logo.png:', err);
-      }
+    // If new base64 logo provided in batch update
+    if (newSettings.schoolLogoUrl && (newSettings.schoolLogoUrl.startsWith('data:image') || newSettings.schoolLogoUrl.length > 500)) {
+      this.saveLogo(newSettings.schoolLogoUrl);
+      delete newSettings.schoolLogoUrl;
     }
 
-    // Auto-persist uploaded base64 background to public/dashboard_bg.jpg
-    if (newSettings.dashboardBgImageUrl && newSettings.dashboardBgImageUrl.startsWith('data:image')) {
-      try {
-        const base64Data = newSettings.dashboardBgImageUrl.replace(/^data:image\/\w+;base64,/, '');
-        const publicBgPath = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
-        fs.writeFileSync(publicBgPath, Buffer.from(base64Data, 'base64'));
-      } catch (err) {
-        console.error('Failed to sync public dashboard_bg.jpg:', err);
-      }
+    // If new base64 background provided in batch update
+    if (newSettings.dashboardBgImageUrl && (newSettings.dashboardBgImageUrl.startsWith('data:image') || newSettings.dashboardBgImageUrl.length > 500)) {
+      this.saveBackground(newSettings.dashboardBgImageUrl);
+      delete newSettings.dashboardBgImageUrl;
     }
 
-    db.settings = { ...db.settings, ...newSettings };
+    // If new base64 splash background provided in batch update
+    if (newSettings.splashBgImageUrl && (newSettings.splashBgImageUrl.startsWith('data:image') || newSettings.splashBgImageUrl.length > 500)) {
+      this.saveSplashBackground(newSettings.splashBgImageUrl);
+      delete newSettings.splashBgImageUrl;
+    }
+
+    db.settings = {
+      ...DEFAULT_SETTINGS,
+      ...db.settings,
+      ...newSettings,
+      updatedAt: new Date().toISOString(),
+    };
     saveDb(db);
     return db.settings;
   },

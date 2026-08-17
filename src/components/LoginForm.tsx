@@ -6,9 +6,10 @@ import { User as UserType, SystemSettings } from '../types';
 interface Props {
   onSuccess: (user: UserType, token: string) => void;
   onResetAccounts?: () => void;
+  systemSettings?: SystemSettings;
 }
 
-export const LoginForm: React.FC<Props> = ({ onSuccess, onResetAccounts }) => {
+export const LoginForm: React.FC<Props> = ({ onSuccess, onResetAccounts, systemSettings }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -17,14 +18,8 @@ export const LoginForm: React.FC<Props> = ({ onSuccess, onResetAccounts }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const [settings, setSettings] = useState<SystemSettings>(() => {
-    try {
-      const cached = localStorage.getItem('sms_system_settings');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed && parsed.schoolName) return parsed;
-      }
-    } catch (e) {
-      // Ignore cache error
+    if (systemSettings && systemSettings.schoolName) {
+      return systemSettings;
     }
     return {
       schoolName: 'Sisters of Mary School-Girlstown, Inc.',
@@ -35,17 +30,16 @@ export const LoginForm: React.FC<Props> = ({ onSuccess, onResetAccounts }) => {
   });
 
   useEffect(() => {
-    fetchSettings()
-      .then((s) => {
-        setSettings(s);
-        try {
-          localStorage.setItem('sms_system_settings', JSON.stringify(s));
-        } catch (e) {
-          // Ignore storage error
-        }
-      })
-      .catch((err) => console.error('Error loading settings in login form:', err));
-  }, []);
+    if (systemSettings && systemSettings.schoolName) {
+      setSettings(systemSettings);
+    } else {
+      fetchSettings()
+        .then((s) => {
+          if (s) setSettings(s);
+        })
+        .catch((err) => console.error('Error loading settings in login form:', err));
+    }
+  }, [systemSettings]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

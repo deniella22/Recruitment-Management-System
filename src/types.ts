@@ -48,14 +48,25 @@ export interface AuditLogEntry {
 }
 
 export interface SystemSettings {
+  id?: string;
   schoolName: string;
   subTitle?: string;
+  systemName?: string;
+  schoolLocation?: string;
   schoolLogoUrl?: string;
+  schoolLogoData?: string;
+  schoolLogoMime?: string;
   maxExamScore: number;
   dashboardBgTheme?: 'royal-blue' | 'navy-gold' | 'emerald' | 'burgundy' | 'slate' | 'custom';
   dashboardBgGradient?: string;
   dashboardBgImageUrl?: string;
+  dashboardBgImageData?: string;
+  dashboardBgImageMime?: string;
+  splashBgImageUrl?: string;
+  splashBgImageData?: string;
+  splashBgImageMime?: string;
   academicYear?: string;
+  updatedAt?: string;
 }
 
 export interface DashboardStats {

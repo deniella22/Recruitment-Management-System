@@ -2,47 +2,56 @@ import React, { useState, useEffect } from 'react';
 import {
   Settings,
   Save,
+  Building2,
+  Image as ImageIcon,
+  Palette,
+  Award,
   AlertCircle,
   CheckCircle2,
-  Shield,
-  Building2,
-  Award,
-  Upload,
-  Image as ImageIcon,
   RotateCcw,
-  Palette,
-  Eye,
   Sparkles,
+  Shield,
+  Upload,
+  Eye,
   RefreshCw,
+  MonitorPlay,
+  MapPin,
 } from 'lucide-react';
 import { SystemSettings, UserRole } from '../types';
-import { fetchSettings, updateSettings, resetAllUsers } from '../lib/api';
+import {
+  fetchSettings,
+  updateSettings,
+  resetAllUsers,
+  uploadSystemLogo,
+  uploadSystemBackground,
+  uploadSplashBackground,
+} from '../lib/api';
 import { getThemeGradientClass } from './DashboardView';
 
 interface Props {
   userRole: UserRole;
-  onSettingsUpdated: (settings: SystemSettings) => void;
+  onSettingsUpdated: (newSettings: SystemSettings) => void;
   onAccountsResetNeeded?: () => void;
 }
 
 const THEME_PRESETS = [
   {
     id: 'royal-blue',
-    name: 'Royal Blue Classic',
+    name: 'Institutional Royal Blue',
     gradient: 'from-[#1E3A8A] via-[#1D4ED8] to-[#172554]',
     colorBadge: 'bg-[#1E3A8A]',
   },
   {
     id: 'navy-gold',
-    name: 'Deep Navy Gold',
-    gradient: 'from-[#0f172a] via-[#1e293b] to-[#1e3a8a]',
-    colorBadge: 'bg-[#0f172a]',
+    name: 'Navy & Amber Gold',
+    gradient: 'from-[#0F172A] via-[#1E3A8A] to-[#D97706]',
+    colorBadge: 'bg-[#0F172A]',
   },
   {
     id: 'emerald',
-    name: 'Emerald Campus',
-    gradient: 'from-[#064e3b] via-[#047857] to-[#022c22]',
-    colorBadge: 'bg-[#047857]',
+    name: 'Academic Emerald',
+    gradient: 'from-[#064E3B] via-[#047857] to-[#022c22]',
+    colorBadge: 'bg-[#064E3B]',
   },
   {
     id: 'burgundy',
@@ -64,6 +73,8 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
   // Form States
   const [schoolName, setSchoolName] = useState<string>('Sisters of Mary School-Girlstown, Inc.');
   const [subTitle, setSubTitle] = useState<string>('Internal Student Recruitment & Information Management System');
+  const [systemName, setSystemName] = useState<string>('MALE STUDENT RECRUITMENT MANAGEMENT SYSTEM');
+  const [schoolLocation, setSchoolLocation] = useState<string>('ADLAS, SILANG, CAVITE, PHILIPPINES');
   const [academicYear, setAcademicYear] = useState<string>('SY 2026-2027 Recruitment');
   const [schoolLogoUrl, setSchoolLogoUrl] = useState<string>('/school_logo.png');
   const [maxExamScore, setMaxExamScore] = useState<number>(100);
@@ -72,6 +83,17 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
   const [dashboardBgTheme, setDashboardBgTheme] = useState<SystemSettings['dashboardBgTheme']>('custom');
   const [dashboardBgGradient, setDashboardBgGradient] = useState<string>('from-[#1E3A8A] via-[#1D4ED8] to-[#172554]');
   const [dashboardBgImageUrl, setDashboardBgImageUrl] = useState<string>('/dashboard_bg.jpg');
+
+  // Splash Screen Background State (Independently Configurable)
+  const [splashBgImageUrl, setSplashBgImageUrl] = useState<string>('/dashboard_bg.jpg');
+
+  // Pending Upload Buffers
+  const [pendingLogoBase64, setPendingLogoBase64] = useState<string | null>(null);
+  const [pendingLogoMime, setPendingLogoMime] = useState<string | null>(null);
+  const [pendingBgBase64, setPendingBgBase64] = useState<string | null>(null);
+  const [pendingBgMime, setPendingBgMime] = useState<string | null>(null);
+  const [pendingSplashBgBase64, setPendingSplashBgBase64] = useState<string | null>(null);
+  const [pendingSplashBgMime, setPendingSplashBgMime] = useState<string | null>(null);
 
   // Status
   const [loading, setLoading] = useState(true);
@@ -86,12 +108,15 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
       .then((s) => {
         if (s.schoolName) setSchoolName(s.schoolName);
         if (s.subTitle) setSubTitle(s.subTitle);
+        if (s.systemName) setSystemName(s.systemName);
+        if (s.schoolLocation) setSchoolLocation(s.schoolLocation);
         if (s.academicYear) setAcademicYear(s.academicYear);
         if (s.schoolLogoUrl) setSchoolLogoUrl(s.schoolLogoUrl);
         if (s.maxExamScore) setMaxExamScore(s.maxExamScore);
         if (s.dashboardBgTheme) setDashboardBgTheme(s.dashboardBgTheme);
         if (s.dashboardBgGradient) setDashboardBgGradient(s.dashboardBgGradient);
         if (s.dashboardBgImageUrl !== undefined) setDashboardBgImageUrl(s.dashboardBgImageUrl);
+        if (s.splashBgImageUrl !== undefined) setSplashBgImageUrl(s.splashBgImageUrl);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -102,8 +127,8 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 3 * 1024 * 1024) {
-      setError('Logo image file must be under 3MB.');
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Logo image file must be under 5MB.');
       return;
     }
 
@@ -111,8 +136,10 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
     reader.onload = (event) => {
       const result = event.target?.result as string;
       if (result) {
+        setPendingLogoBase64(result);
+        setPendingLogoMime(file.type || 'image/png');
         setSchoolLogoUrl(result);
-        setSuccess('New logo uploaded and previewed! Click "Save All Settings" to apply.');
+        setSuccess('New logo selected! Click "Save All Settings" to permanently save to database.');
       }
     };
     reader.readAsDataURL(file);
@@ -122,8 +149,8 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Background image file must be under 5MB.');
+    if (file.size > 8 * 1024 * 1024) {
+      setError('Background image file must be under 8MB.');
       return;
     }
 
@@ -131,9 +158,33 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
     reader.onload = (event) => {
       const result = event.target?.result as string;
       if (result) {
+        setPendingBgBase64(result);
+        setPendingBgMime(file.type || 'image/jpeg');
         setDashboardBgImageUrl(result);
         setDashboardBgTheme('custom');
-        setSuccess('Dashboard background image uploaded! Click "Save All Settings" to apply.');
+        setSuccess('Dashboard background image selected! Click "Save All Settings" to permanently save to database.');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSplashBgFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      setError('Splash background image file must be under 8MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setPendingSplashBgBase64(result);
+        setPendingSplashBgMime(file.type || 'image/jpeg');
+        setSplashBgImageUrl(result);
+        setSuccess('Splash screen background image selected! Click "Save All Settings" to permanently save to database.');
       }
     };
     reader.readAsDataURL(file);
@@ -143,18 +194,36 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
     setDashboardBgTheme(preset.id as any);
     setDashboardBgGradient(preset.gradient);
     setDashboardBgImageUrl('');
+    setPendingBgBase64(null);
+    setPendingBgMime(null);
+  };
+
+  const handleResetSplashBgToDefault = () => {
+    setSplashBgImageUrl('/dashboard_bg.jpg');
+    setPendingSplashBgBase64(null);
+    setPendingSplashBgMime(null);
+    setSuccess('Splash background set back to official campus default. Click "Save All Settings" to finalize.');
   };
 
   const handleResetToDefaults = () => {
     setSchoolName('Sisters of Mary School-Girlstown, Inc.');
     setSubTitle('Internal Student Recruitment & Information Management System');
+    setSystemName('MALE STUDENT RECRUITMENT MANAGEMENT SYSTEM');
+    setSchoolLocation('ADLAS, SILANG, CAVITE, PHILIPPINES');
     setAcademicYear('SY 2026-2027 Recruitment');
     setSchoolLogoUrl('/school_logo.png');
     setMaxExamScore(100);
     setDashboardBgTheme('custom');
     setDashboardBgGradient('from-[#1E3A8A] via-[#1D4ED8] to-[#172554]');
     setDashboardBgImageUrl('/dashboard_bg.jpg');
-    setSuccess('Settings reset to official school defaults. Click "Save All Settings" to finalize.');
+    setSplashBgImageUrl('/dashboard_bg.jpg');
+    setPendingLogoBase64(null);
+    setPendingLogoMime(null);
+    setPendingBgBase64(null);
+    setPendingBgMime(null);
+    setPendingSplashBgBase64(null);
+    setPendingSplashBgMime(null);
+    setSuccess('Settings reset to official school defaults. Click "Save All Settings" to finalize and save.');
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -176,19 +245,58 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
 
     try {
       setSaving(true);
+
+      // 1. Upload custom logo if a new one is pending
+      let activeLogoUrl = schoolLogoUrl;
+      if (pendingLogoBase64) {
+        const logoRes = await uploadSystemLogo(pendingLogoBase64, pendingLogoMime || undefined);
+        activeLogoUrl = logoRes.logoUrl;
+      }
+
+      // 2. Upload custom dashboard background if a new one is pending
+      let activeBgUrl = dashboardBgImageUrl;
+      if (pendingBgBase64) {
+        const bgRes = await uploadSystemBackground(pendingBgBase64, pendingBgMime || undefined);
+        activeBgUrl = bgRes.backgroundUrl;
+      }
+
+      // 3. Upload custom splash background if a new one is pending
+      let activeSplashBgUrl = splashBgImageUrl;
+      if (pendingSplashBgBase64) {
+        const splashRes = await uploadSplashBackground(pendingSplashBgBase64, pendingSplashBgMime || undefined);
+        activeSplashBgUrl = splashRes.splashBackgroundUrl;
+      }
+
+      // 4. Save all updated metadata & theme settings
       const updated = await updateSettings({
         schoolName: schoolName.trim(),
         subTitle: subTitle.trim(),
+        systemName: systemName.trim(),
+        schoolLocation: schoolLocation.trim(),
         academicYear: academicYear.trim(),
-        schoolLogoUrl: schoolLogoUrl.trim(),
+        schoolLogoUrl: activeLogoUrl,
         maxExamScore: scoreNum,
         dashboardBgTheme,
         dashboardBgGradient,
-        dashboardBgImageUrl: dashboardBgImageUrl.trim(),
+        dashboardBgImageUrl: activeBgUrl,
+        splashBgImageUrl: activeSplashBgUrl,
       });
 
-      setSuccess('All system branding and configuration settings saved successfully!');
-      onSettingsUpdated(updated);
+      // 5. Fetch clean fresh settings from database
+      const fresh = await fetchSettings();
+
+      setPendingLogoBase64(null);
+      setPendingLogoMime(null);
+      setPendingBgBase64(null);
+      setPendingBgMime(null);
+      setPendingSplashBgBase64(null);
+      setPendingSplashBgMime(null);
+      setSchoolLogoUrl(fresh.schoolLogoUrl || activeLogoUrl);
+      setDashboardBgImageUrl(fresh.dashboardBgImageUrl || activeBgUrl);
+      setSplashBgImageUrl(fresh.splashBgImageUrl || activeSplashBgUrl);
+
+      setSuccess('All system branding and configuration settings saved and persisted permanently across all browsers and sessions!');
+      onSettingsUpdated(fresh);
     } catch (err: any) {
       setError(err.message || 'Failed to update settings.');
     } finally {
@@ -219,7 +327,7 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
             <h2 className="font-extrabold text-lg text-gray-900">System Branding & Settings</h2>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            Customize school name, logo emblem, dashboard header themes, and recruitment exam rules.
+            Customize school identity, logo emblem, dashboard header theme, splash screen background, and admissions exam rules.
           </p>
         </div>
 
@@ -287,11 +395,11 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-[11px] font-bold text-blue-100 border border-white/15">
               <span>{academicYear || 'SY 2026-2027 Recruitment'}</span>
               <span>•</span>
-              <span>{subTitle || 'Internal Management System'}</span>
+              <span>{systemName || subTitle || 'Student Recruitment Portal'}</span>
             </div>
             <h2 className="text-xl font-black tracking-tight">{schoolName || 'School Name Placeholder'}</h2>
             <p className="text-[11px] text-blue-100/90 font-medium">
-              This preview shows how your updated logo, school title, and background banner look across the system.
+              {schoolLocation || 'ADLAS, SILANG, CAVITE, PHILIPPINES'}
             </p>
           </div>
 
@@ -313,7 +421,7 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
         <div className="bg-white rounded-2xl border border-blue-100 shadow-xs p-6 space-y-4">
           <h3 className="font-bold text-sm text-gray-900 uppercase tracking-wider pb-3 border-b border-gray-100 flex items-center gap-2">
             <Building2 className="w-4 h-4 text-[#1E3A8A]" />
-            <span>1. School Identity & Header Names</span>
+            <span>1. School Identity & Institutional Titles</span>
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -326,11 +434,44 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
                 disabled={!isSuperAdmin}
                 value={schoolName}
                 onChange={(e) => setSchoolName(e.target.value)}
-                placeholder="e.g. Sisters of Mary School-Girlstown, Inc."
+                placeholder="e.g. Sisters of Mary School-Girlstown, Inc. or Sisters of Mary School Adlas, Inc."
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-gray-200 rounded-xl font-extrabold text-[#1E3A8A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
               />
               <p className="text-[11px] text-gray-500 mt-1">
-                Appears on the top bar header, sidebar, login page, export reports, and student profiles.
+                Appears on the splash screen, top header, sidebar, login portal, export reports, and student profiles.
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-bold text-gray-700 uppercase mb-1">Recruitment System Title</label>
+              <input
+                type="text"
+                disabled={!isSuperAdmin}
+                value={systemName}
+                onChange={(e) => setSystemName(e.target.value)}
+                placeholder="e.g. MALE STUDENT RECRUITMENT MANAGEMENT SYSTEM"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-gray-200 rounded-xl font-bold text-cyan-800 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+              />
+              <p className="text-[11px] text-gray-500 mt-1">
+                Prominently displayed in cyan on the splash screen and system banners.
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-bold text-gray-700 uppercase mb-1 flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-[#1E3A8A]" />
+                <span>School Location / Address</span>
+              </label>
+              <input
+                type="text"
+                disabled={!isSuperAdmin}
+                value={schoolLocation}
+                onChange={(e) => setSchoolLocation(e.target.value)}
+                placeholder="e.g. ADLAS, SILANG, CAVITE, PHILIPPINES"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-gray-200 rounded-xl font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+              />
+              <p className="text-[11px] text-gray-500 mt-1">
+                Displayed below the recruitment title on the splash screen and reports.
               </p>
             </div>
 
@@ -360,39 +501,48 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
           </div>
         </div>
 
-        {/* SECTION 2: Logo Customization */}
-        <div className="bg-white rounded-2xl border border-blue-100 shadow-xs p-6 space-y-4">
+        {/* SECTION 2: Branding & Appearance (Logo, System Background, Splash Background) */}
+        <div className="bg-white rounded-2xl border border-blue-100 shadow-xs p-6 space-y-6">
           <h3 className="font-bold text-sm text-gray-900 uppercase tracking-wider pb-3 border-b border-gray-100 flex items-center gap-2">
             <ImageIcon className="w-4 h-4 text-[#1E3A8A]" />
-            <span>2. School Logo Customization</span>
+            <span>2. Branding & Appearance Customization</span>
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            {/* Logo Preview Box */}
-            <div className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-2xl border border-dashed border-gray-300 text-center space-y-2">
-              <div className="w-24 h-24 bg-white p-2 rounded-2xl shadow-md border border-gray-200 flex items-center justify-center overflow-hidden">
-                <img
-                  src={schoolLogoUrl}
-                  alt="Current Logo"
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = '/school_logo.png';
-                  }}
-                />
-              </div>
-              <p className="text-[11px] font-bold text-gray-700">Active Logo Emblem</p>
+          {/* 2A: System Logo */}
+          <div className="p-4 bg-slate-50/80 rounded-2xl border border-gray-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-extrabold text-xs text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-[#1E3A8A]" />
+                <span>System Official Logo</span>
+              </h4>
+              <span className="text-[11px] font-semibold text-gray-500">Stored in Persistent Database</span>
             </div>
 
-            {/* Logo Input Options */}
-            <div className="md:col-span-2 space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">
-                  Upload Logo File (PNG, JPG, SVG)
-                </label>
-                <div className="flex items-center gap-3">
-                  <label className="cursor-pointer px-4 py-2 bg-blue-50 hover:bg-[#1E3A8A] hover:text-white text-[#1E3A8A] border border-blue-200 font-bold rounded-xl transition-all flex items-center gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+              {/* Logo Preview Box */}
+              <div className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl border border-dashed border-gray-300 text-center space-y-1.5 shadow-xs">
+                <div className="w-24 h-24 bg-white p-2 rounded-2xl shadow-sm border border-gray-200 flex items-center justify-center overflow-hidden">
+                  <img
+                    src={schoolLogoUrl}
+                    alt="Current Logo"
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = '/school_logo.png';
+                    }}
+                  />
+                </div>
+                <p className="text-[10px] font-extrabold text-gray-700">Current Logo Preview</p>
+              </div>
+
+              {/* Logo Input Options */}
+              <div className="md:col-span-2 space-y-3 text-xs">
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">
+                    Upload New Logo (PNG, SVG, JPG)
+                  </label>
+                  <label className="cursor-pointer px-4 py-2 bg-blue-50 hover:bg-[#1E3A8A] hover:text-white text-[#1E3A8A] border border-blue-200 font-bold rounded-xl transition-all inline-flex items-center gap-2">
                     <Upload className="w-4 h-4" />
-                    <span>Choose Image File...</span>
+                    <span>Choose Logo File...</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -401,137 +551,219 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
                       className="hidden"
                     />
                   </label>
-                  <span className="text-[11px] text-gray-500">Supports PNG, SVG, JPG (Max 3MB)</span>
                 </div>
-              </div>
 
-              <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">Or Paste Image URL / Data Base64</label>
-                <input
-                  type="text"
-                  disabled={!isSuperAdmin}
-                  value={schoolLogoUrl}
-                  onChange={(e) => setSchoolLogoUrl(e.target.value)}
-                  placeholder="https://example.com/logo.png or data:image/png;base64,..."
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-gray-200 rounded-xl font-mono text-[11px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">Quick Logo Presets</label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSchoolLogoUrl('/school_logo.svg')}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-blue-100 text-gray-800 hover:text-[#1E3A8A] font-bold rounded-lg transition-all text-[11px] border border-gray-200 cursor-pointer"
-                  >
-                    🏫 Official Vector SVG
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSchoolLogoUrl('/school_logo.png')}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-blue-100 text-gray-800 hover:text-[#1E3A8A] font-bold rounded-lg transition-all text-[11px] border border-gray-200 cursor-pointer"
-                  >
-                    🛡️ PNG Shield Emblem
-                  </button>
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">Quick Logo Presets</label>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSchoolLogoUrl('/school_logo.svg')}
+                      className="px-3 py-1.5 bg-white hover:bg-blue-50 text-gray-800 hover:text-[#1E3A8A] font-bold rounded-lg transition-all text-[11px] border border-gray-200 cursor-pointer"
+                    >
+                      🏫 Official Vector SVG
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSchoolLogoUrl('/school_logo.png')}
+                      className="px-3 py-1.5 bg-white hover:bg-blue-50 text-gray-800 hover:text-[#1E3A8A] font-bold rounded-lg transition-all text-[11px] border border-gray-200 cursor-pointer"
+                    >
+                      🛡️ PNG Shield Emblem
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* SECTION 3: Dashboard Background & Theme */}
-        <div className="bg-white rounded-2xl border border-blue-100 shadow-xs p-6 space-y-4">
-          <h3 className="font-bold text-sm text-gray-900 uppercase tracking-wider pb-3 border-b border-gray-100 flex items-center gap-2">
-            <Palette className="w-4 h-4 text-[#1E3A8A]" />
-            <span>3. Dashboard Background & Theme Styling</span>
-          </h3>
-
-          <div className="space-y-4 text-xs">
-            <div>
-              <label className="block font-bold text-gray-700 uppercase mb-2">Select Color Theme Preset</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                {THEME_PRESETS.map((p) => {
-                  const isSelected = dashboardBgTheme === p.id && !dashboardBgImageUrl;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      disabled={!isSuperAdmin}
-                      onClick={() => handleSelectPresetTheme(p)}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between h-20 relative overflow-hidden ${
-                        isSelected
-                          ? 'border-[#1E3A8A] ring-2 ring-[#1E3A8A] shadow-sm bg-blue-50/50'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                    >
-                      <div className={`w-full h-5 rounded-lg bg-gradient-to-r ${p.gradient}`} />
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="font-bold text-[11px] text-gray-900">{p.name}</span>
-                        {isSelected && <Sparkles className="w-3.5 h-3.5 text-[#1E3A8A]" />}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+          {/* 2B: Normal System / Dashboard Background */}
+          <div className="p-4 bg-slate-50/80 rounded-2xl border border-gray-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-extrabold text-xs text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                <Palette className="w-4 h-4 text-[#1E3A8A]" />
+                <span>System / Dashboard Background & Theme</span>
+              </h4>
+              <span className="text-[11px] font-semibold text-gray-500">Normal Application Background</span>
             </div>
 
-            <div className="pt-2 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">
-                  Custom Banner Background Image (File Upload)
-                </label>
-                <label className="cursor-pointer px-4 py-2 bg-blue-50 hover:bg-[#1E3A8A] hover:text-white text-[#1E3A8A] border border-blue-200 font-bold rounded-xl transition-all inline-flex items-center gap-2">
-                  <Upload className="w-4 h-4" />
-                  <span>Upload Background Image...</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={!isSuperAdmin}
-                    onChange={handleBgFileUpload}
-                    className="hidden"
-                  />
-                </label>
-                <p className="text-[11px] text-gray-500 mt-1">
-                  Upload a campus photo or pattern to use as the dashboard header banner background (Max 5MB).
+                <label className="block font-bold text-gray-700 uppercase mb-2">Color Theme Presets</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {THEME_PRESETS.map((p) => {
+                    const isSelected = dashboardBgTheme === p.id && !dashboardBgImageUrl;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        disabled={!isSuperAdmin}
+                        onClick={() => handleSelectPresetTheme(p)}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between h-20 relative overflow-hidden ${
+                          isSelected
+                            ? 'border-[#1E3A8A] ring-2 ring-[#1E3A8A] shadow-sm bg-blue-50/50'
+                            : 'border-gray-200 hover:border-gray-300 bg-white'
+                        }`}
+                      >
+                        <div className={`w-full h-5 rounded-lg bg-gradient-to-r ${p.gradient}`} />
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="font-bold text-[11px] text-gray-900">{p.name}</span>
+                          {isSelected && <Sparkles className="w-3.5 h-3.5 text-[#1E3A8A]" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">
+                    Upload New Dashboard Background
+                  </label>
+                  <label className="cursor-pointer px-4 py-2 bg-blue-50 hover:bg-[#1E3A8A] hover:text-white text-[#1E3A8A] border border-blue-200 font-bold rounded-xl transition-all inline-flex items-center gap-2">
+                    <Upload className="w-4 h-4" />
+                    <span>Upload Dashboard Image...</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={!isSuperAdmin}
+                      onChange={handleBgFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">Current Dashboard Background</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      disabled={!isSuperAdmin}
+                      value={dashboardBgImageUrl}
+                      onChange={(e) => {
+                        setDashboardBgImageUrl(e.target.value);
+                        if (e.target.value.trim()) setDashboardBgTheme('custom');
+                      }}
+                      placeholder="/dashboard_bg.jpg or https://..."
+                      className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl font-mono text-[11px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                    />
+                    {dashboardBgImageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setDashboardBgImageUrl('')}
+                        className="px-2.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl text-xs"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2C: Splash Screen Background (Separate & Admin-Editable) */}
+          <div className="p-4 bg-blue-50/60 rounded-2xl border border-blue-200 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h4 className="font-extrabold text-xs text-[#1E3A8A] uppercase tracking-wider flex items-center gap-2">
+                  <MonitorPlay className="w-4 h-4 text-[#1E3A8A]" />
+                  <span>Splash Screen Background (Separate Customization)</span>
+                </h4>
+                <p className="text-[11px] text-gray-600 mt-0.5">
+                  Used specifically for the full-screen institutional splash screen when users load the application.
                 </p>
               </div>
 
-              <div>
-                <label className="block font-bold text-gray-700 uppercase mb-1">Or Background Image URL</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    disabled={!isSuperAdmin}
-                    value={dashboardBgImageUrl}
-                    onChange={(e) => {
-                      setDashboardBgImageUrl(e.target.value);
-                      if (e.target.value.trim()) setDashboardBgTheme('custom');
-                    }}
-                    placeholder="https://example.com/background.jpg"
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-gray-200 rounded-xl font-mono text-[11px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
-                  />
-                  {dashboardBgImageUrl && (
+              <button
+                type="button"
+                onClick={handleResetSplashBgToDefault}
+                className="px-3 py-1.5 bg-white hover:bg-blue-100 text-[#1E3A8A] font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset to Default</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center text-xs">
+              {/* Splash Background Preview Thumbnail */}
+              <div className="flex flex-col items-center justify-center p-3 bg-white rounded-2xl border border-blue-200 text-center space-y-2 shadow-xs">
+                <div
+                  className="w-full h-28 rounded-xl bg-cover bg-center border border-gray-300 relative overflow-hidden flex items-center justify-center shadow-inner"
+                  style={{
+                    backgroundImage: `url(${splashBgImageUrl || '/dashboard_bg.jpg'})`,
+                  }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-blue-950/50 to-slate-900/60" />
+                  <div className="relative z-10 text-white text-center px-2">
+                    <p className="font-black text-xs uppercase tracking-wider text-cyan-300 drop-shadow">
+                      Splash Preview
+                    </p>
+                    <p className="text-[10px] font-semibold text-blue-100 drop-shadow">
+                      {schoolName.substring(0, 24)}...
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[10px] font-extrabold text-gray-700">Active Splash Background</p>
+              </div>
+
+              {/* Splash Background Upload Controls */}
+              <div className="md:col-span-2 space-y-3">
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">
+                    Upload New Splash Background Image (File Upload)
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="cursor-pointer px-4 py-2 bg-[#1E3A8A] hover:bg-blue-800 text-white font-bold rounded-xl transition-all inline-flex items-center gap-2 shadow-xs">
+                      <Upload className="w-4 h-4 text-cyan-300" />
+                      <span>Choose Splash Campus Image...</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={!isSuperAdmin}
+                        onChange={handleSplashBgFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    <span className="text-[11px] text-gray-500 font-medium">PNG, JPG, WebP (Max 8MB)</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-gray-700 uppercase mb-1">
+                    Splash Background Image URL
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      disabled={!isSuperAdmin}
+                      value={splashBgImageUrl}
+                      onChange={(e) => setSplashBgImageUrl(e.target.value)}
+                      placeholder="/dashboard_bg.jpg or https://..."
+                      className="w-full px-3.5 py-2 bg-white border border-gray-200 rounded-xl font-mono text-[11px] text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+                    />
                     <button
                       type="button"
-                      onClick={() => setDashboardBgImageUrl('')}
-                      className="px-2.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl text-xs"
-                      title="Clear image URL"
+                      onClick={handleResetSplashBgToDefault}
+                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-gray-700 font-bold rounded-xl text-xs"
                     >
-                      Clear
+                      Default
                     </button>
-                  )}
+                  </div>
+                  <p className="text-[11px] text-blue-900/80 mt-1">
+                    Persistent database storage ensures this background is shown to all users, new incognito tabs, and redeployments.
+                  </p>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* SECTION 4: Exam Configuration */}
+        {/* SECTION 3: Exam Configuration */}
         <div className="bg-white rounded-2xl border border-blue-100 shadow-xs p-6 space-y-4">
           <h3 className="font-bold text-sm text-gray-900 uppercase tracking-wider pb-3 border-b border-gray-100 flex items-center gap-2">
             <Award className="w-4 h-4 text-[#1E3A8A]" />
-            <span>4. Entrance Examination Rules</span>
+            <span>3. Entrance Examination Rules</span>
           </h3>
 
           <div className="max-w-md">
@@ -552,22 +784,22 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
           </div>
         </div>
 
-        {/* SECTION 5: User Accounts Reset (Keeps Logo & Background) */}
+        {/* SECTION 4: User Accounts Reset (Keeps Logo, Backgrounds & Settings) */}
         {isSuperAdmin && (
           <div className="bg-white rounded-2xl border border-amber-200 shadow-xs p-6 space-y-4">
             <h3 className="font-bold text-sm text-amber-900 uppercase tracking-wider pb-3 border-b border-gray-100 flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-amber-600" />
-              <span>5. Reset Accounts & Setup New Permanent Admin</span>
+              <span>4. Reset Accounts & Setup New Permanent Admin</span>
             </h3>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-amber-50/70 border border-amber-200/80 rounded-xl">
               <div className="space-y-1 text-xs">
                 <p className="font-extrabold text-amber-950 flex items-center gap-1.5">
                   <Shield className="w-4 h-4 text-[#1E3A8A]" />
-                  Customized Logo, School Name & Background Image Will Remain Saved!
+                  Customized Logo, School Name & Background Images Will Remain Saved!
                 </p>
                 <p className="text-gray-700 leading-relaxed">
-                  Need to recreate or reset account credentials? You can safely reset existing user accounts to trigger the administrator setup modal. <strong>Your uploaded logo emblem, school name, and dashboard background image/theme will remain completely untouched.</strong>
+                  Need to recreate or reset account credentials? You can safely reset existing user accounts to trigger the administrator setup modal. <strong>Your uploaded logo emblem, school name, dashboard background, and splash screen background will remain completely untouched.</strong>
                 </p>
               </div>
 
@@ -612,7 +844,7 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
           Confidentiality & System Governance
         </p>
         <p className="leading-relaxed">
-          All branding configurations, system rules, and applicant database records are strictly assigned to <strong>Sisters of Mary School-Girlstown, Inc.</strong>
+          All branding configurations, system rules, and applicant database records are strictly assigned to <strong>{schoolName}</strong>.
         </p>
       </div>
 
@@ -635,10 +867,10 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
             <div className="p-3.5 bg-blue-50/80 border border-blue-100 rounded-xl text-xs text-blue-950 space-y-2">
               <p className="font-extrabold flex items-center gap-1.5 text-[#1E3A8A]">
                 <Shield className="w-4 h-4 text-[#1E3A8A]" />
-                Branding & Background Will Remain Preserved!
+                Branding & Backgrounds Will Remain Preserved!
               </p>
               <p className="leading-relaxed">
-                Resetting will clear user login accounts so you can register a new administrator account. <strong>Your customized school logo, school name, and dashboard background image/theme will stay completely saved!</strong>
+                Resetting will clear user login accounts so you can register a new administrator account. <strong>Your customized school logo, school name, dashboard background, and splash screen background will stay completely saved!</strong>
               </p>
             </div>
 
@@ -688,3 +920,5 @@ export const SettingsView: React.FC<Props> = ({ userRole, onSettingsUpdated, onA
     </div>
   );
 };
+
+export default SettingsView;

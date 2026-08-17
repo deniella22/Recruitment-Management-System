@@ -43,11 +43,14 @@ const getInitialSettings = (): SystemSettings => {
   return {
     schoolName: 'Sisters of Mary School-Girlstown, Inc.',
     subTitle: 'Internal Student Recruitment & Information Management System',
+    systemName: 'MALE STUDENT RECRUITMENT MANAGEMENT SYSTEM',
+    schoolLocation: 'ADLAS, SILANG, CAVITE, PHILIPPINES',
     schoolLogoUrl: '/school_logo.png',
     maxExamScore: 100,
     dashboardBgTheme: 'custom',
     dashboardBgGradient: 'from-[#1E3A8A] via-[#1D4ED8] to-[#172554]',
     dashboardBgImageUrl: '/dashboard_bg.jpg',
+    splashBgImageUrl: '/dashboard_bg.jpg',
     academicYear: 'SY 2026-2027 Recruitment',
   };
 };
@@ -301,6 +304,9 @@ export default function App() {
         schoolName={systemSettings.schoolName}
         logoSrc={systemSettings.schoolLogoUrl || '/school_logo.png'}
         subTitle={systemSettings.subTitle}
+        systemName={systemSettings.systemName}
+        schoolLocation={systemSettings.schoolLocation}
+        splashBgImageUrl={systemSettings.splashBgImageUrl || systemSettings.dashboardBgImageUrl || '/dashboard_bg.jpg'}
       />
     );
   }
@@ -359,6 +365,7 @@ export default function App() {
           setHasUsers(false);
           localStorage.removeItem('sms_auth_token');
         }}
+        systemSettings={systemSettings}
       />
     );
   }

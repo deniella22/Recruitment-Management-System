@@ -189,6 +189,57 @@ export async function fetchSettings(): Promise<SystemSettings> {
   return res.json();
 }
 
+export async function uploadSystemLogo(
+  imageBase64: string,
+  mimeType?: string
+): Promise<{ success: boolean; logoUrl: string; settings: SystemSettings }> {
+  const res = await fetch('/api/settings/logo', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ imageBase64, mimeType }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to upload and save system logo');
+  return json;
+}
+
+export async function uploadSystemBackground(
+  imageBase64: string,
+  mimeType?: string
+): Promise<{ success: boolean; backgroundUrl: string; settings: SystemSettings }> {
+  const res = await fetch('/api/settings/background', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ imageBase64, mimeType }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to upload and save dashboard background');
+  return json;
+}
+
+export async function uploadSplashBackground(
+  imageBase64: string,
+  mimeType?: string
+): Promise<{ success: boolean; splashBackgroundUrl: string; settings: SystemSettings }> {
+  const res = await fetch('/api/settings/splash-background', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ imageBase64, mimeType }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to upload and save splash background');
+  return json;
+}
+
 export async function updateSettings(settings: Partial<SystemSettings>): Promise<SystemSettings> {
   const res = await fetch('/api/settings', {
     method: 'PUT',
