@@ -77,3 +77,14 @@ export interface DashboardStats {
   elementarySchoolsCount: number;
   averageExamScore: number;
 }
+
+export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'NOT_DETECTED';
+
+export interface OCRScanResult {
+  extractedData: Partial<StudentRecord>;
+  fieldConfidence?: Record<string, ConfidenceLevel>;
+  formTitleDetected?: string;
+  detectedNotes?: string;
+  uncertainFields?: string[];
+  rawSummary?: string;
+}

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { StudentRecord, AdmissionStatus } from '../types';
 import { createStudent, updateStudent, performOCRScan } from '../lib/api';
+import { ScanFormView } from './ScanFormView';
 
 interface Props {
   studentToEdit?: StudentRecord | null;
@@ -105,6 +106,16 @@ export const StudentFormModal: React.FC<Props> = ({
       stopCameraStream();
     };
   }, []);
+
+  if (mode === 'ocr') {
+    return (
+      <ScanFormView
+        onClose={onClose}
+        onSuccess={onSuccess}
+        maxExamScore={maxExamScore}
+      />
+    );
+  }
 
   // Stop camera when leaving OCR mode
   useEffect(() => {
@@ -241,7 +252,8 @@ export const StudentFormModal: React.FC<Props> = ({
         base64Data = readerRes;
       }
 
-      const extracted = await performOCRScan(base64Data, mimeType);
+      const result = await performOCRScan(base64Data, mimeType);
+      const extracted = result.extractedData || {};
 
       // Populate Form Fields
       if (extracted.lrn) setLrn(extracted.lrn);

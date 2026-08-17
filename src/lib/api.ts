@@ -1,4 +1,4 @@
-import { StudentRecord, User, AuditLogEntry, SystemSettings, DashboardStats, AdmissionStatus } from '../types';
+import { StudentRecord, User, AuditLogEntry, SystemSettings, DashboardStats, AdmissionStatus, OCRScanResult } from '../types';
 
 const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('sms_auth_token');
@@ -137,7 +137,7 @@ export async function deleteStudent(id: string): Promise<void> {
   if (!res.ok) throw new Error(json.error || 'Failed to delete student record');
 }
 
-export async function performOCRScan(imageBase64: string, mimeType?: string): Promise<Partial<StudentRecord>> {
+export async function performOCRScan(imageBase64: string, mimeType?: string): Promise<OCRScanResult> {
   const res = await fetch('/api/ocr-scan', {
     method: 'POST',
     headers: {
@@ -148,7 +148,14 @@ export async function performOCRScan(imageBase64: string, mimeType?: string): Pr
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Failed to extract text from document with OCR');
-  return json.extractedData || {};
+  return {
+    extractedData: json.extractedData || {},
+    fieldConfidence: json.fieldConfidence || {},
+    formTitleDetected: json.formTitleDetected || 'Personal Data Form',
+    detectedNotes: json.detectedNotes || '',
+    uncertainFields: json.uncertainFields || [],
+    rawSummary: json.rawSummary || '',
+  };
 }
 
 export { exportStudentsToExcel } from './excelExportClient';

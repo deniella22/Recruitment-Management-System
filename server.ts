@@ -467,7 +467,7 @@ async function startServer() {
     return res.status(500).json({ error: 'Failed to delete student record.' });
   });
 
-  // 10b. OCR Document Scanning (Gemini Flash Multimodal)
+  // 10b. OCR Document Scanning (Gemini 3.7 Flash Multimodal)
   app.post('/api/ocr-scan', async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
@@ -508,28 +508,64 @@ async function startServer() {
       const schema = {
         type: Type.OBJECT,
         properties: {
-          surname: { type: Type.STRING },
-          middleName: { type: Type.STRING },
-          firstName: { type: Type.STRING },
-          birthday: { type: Type.STRING, description: 'Formatted YYYY-MM-DD if recognizable' },
-          address: { type: Type.STRING },
-          lrn: { type: Type.STRING, description: 'Learner Reference Number, digits only' },
-          fatherName: { type: Type.STRING },
-          motherName: { type: Type.STRING },
-          guardianName: { type: Type.STRING },
-          numSiblings: { type: Type.NUMBER, description: 'Number of siblings' },
-          fatherOccupation: { type: Type.STRING },
-          motherOccupation: { type: Type.STRING },
-          guardianOccupation: { type: Type.STRING },
-          examScore: { type: Type.NUMBER, description: 'Score in entrance/admission exam' },
-          elementarySchool: { type: Type.STRING },
-          healthStatus: { type: Type.STRING },
-          remarks: { type: Type.STRING, description: "Either 'A - PASS' or 'B - PENDING'" },
+          extractedData: {
+            type: Type.OBJECT,
+            properties: {
+              surname: { type: Type.STRING, description: 'Surname / Last Name / SN written on the form' },
+              middleName: { type: Type.STRING, description: 'Middle Name / MN written on the form' },
+              firstName: { type: Type.STRING, description: 'First Name / Given Name / FN written on the form' },
+              birthday: { type: Type.STRING, description: 'Date of Birth in standardized YYYY-MM-DD format if recognizable, else empty string' },
+              address: { type: Type.STRING, description: 'Complete home address including Barangay, Municipality/City, Province' },
+              lrn: { type: Type.STRING, description: '12-digit Learner Reference Number (digits only, e.g. 109283746123)' },
+              fatherName: { type: Type.STRING, description: 'Full name of father (Ama/Tatay)' },
+              fatherOccupation: { type: Type.STRING, description: 'Occupation / Hanapbuhay of father' },
+              motherName: { type: Type.STRING, description: 'Full name of mother (Ina/Nanay)' },
+              motherOccupation: { type: Type.STRING, description: 'Occupation / Hanapbuhay of mother' },
+              guardianName: { type: Type.STRING, description: 'Full name of guardian (Tagapag-alaga), if any' },
+              guardianOccupation: { type: Type.STRING, description: 'Occupation / Hanapbuhay of guardian, if any' },
+              numSiblings: { type: Type.NUMBER, description: 'Number of siblings (Bilang ng kapatid). Default 0 if none or unstated' },
+              examScore: { type: Type.NUMBER, description: 'Score in Entrance/Admission Exam, if indicated on the form' },
+              elementarySchool: { type: Type.STRING, description: 'Name of Elementary School Graduated / Paaralang Elementarya' },
+              healthStatus: { type: Type.STRING, description: 'Health / Medical conditions (e.g., Normal, Asthma, Allergies, or None)' },
+              remarks: { type: Type.STRING, description: "Admission remarks: strictly either 'A - PASS' or 'B - PENDING'" },
+            },
+          },
+          fieldConfidence: {
+            type: Type.OBJECT,
+            properties: {
+              surname: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              middleName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              firstName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              birthday: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              address: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              lrn: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              fatherName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              fatherOccupation: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              motherName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              motherOccupation: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              guardianName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              guardianOccupation: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              numSiblings: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              examScore: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              elementarySchool: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              healthStatus: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              remarks: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+            },
+          },
+          formTitleDetected: { type: Type.STRING, description: 'Title or heading text detected on the form' },
+          detectedNotes: { type: Type.STRING, description: 'Any extra handwritten notes, assessor comments, or dates found on the document' },
+          uncertainFields: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: 'List of field names where the handwriting is faint, ambiguous, or requires human staff verification',
+          },
+          rawSummary: { type: Type.STRING, description: 'A brief 1-2 sentence overview of what student document was scanned' },
         },
+        required: ['extractedData'],
       };
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
+        model: 'gemini-3.7-flash',
         contents: {
           parts: [
             {
@@ -539,28 +575,34 @@ async function startServer() {
               },
             },
             {
-              text: `You are an expert OCR document reader for Sisters of Mary School-Girlstown, Inc. student recruitment forms.
-Extract all readable applicant information from the document image provided.
-Extract these exact fields:
-- surname (SN)
-- middleName (MN)
-- firstName (FN)
-- birthday (formatted YYYY-MM-DD)
-- address
-- lrn (12-digit Learner Reference Number)
-- fatherName
-- motherName
-- guardianName
-- numSiblings (number of siblings)
-- fatherOccupation
-- motherOccupation
-- guardianOccupation
-- examScore (entrance exam score)
-- elementarySchool
-- healthStatus
-- remarks ('A - PASS' or 'B - PENDING')
+              text: `You are an expert OCR and document understanding system for Sisters of Mary School-Girlstown, Inc. student recruitment forms.
+Analyze the provided document image (Personal Data Form / Applicant Form) and extract all printed and handwritten information with high fidelity.
 
-If any field is missing or unclear on the document, set it as an empty string or 0.`,
+FORM STRUCTURE AND MAPPING GUIDELINES:
+1. FORM HEADER: Look for "PERSONAL DATA FORM", "Sisters of Mary School-Girlstown, Inc.", or recruitment intake header.
+2. PERSONAL INFORMATION:
+   - Surname (SN / Apelyido / Last Name): Look for the surname field.
+   - First Name (FN / Pangalan / Given Name): Look for the applicant's first name.
+   - Middle Name (MN / Gitnang Pangalan): Look for middle name or initial.
+   - LRN (Learner Reference Number): 12-digit student reference number, often enclosed in 12 individual boxes or next to "LRN". Extract strictly digits.
+   - Birthday / Date of Birth (Kaarawan): Convert any format (e.g., "10/24/2012", "October 24, 2012", "24-Oct-2012", "2012-10-24") to standardized "YYYY-MM-DD".
+   - Address (Tirahan): Complete street address, barangay, town/city, province.
+3. FAMILY BACKGROUND:
+   - Father's Name (Pangalan ng Ama / Tatay) and Father's Occupation (Hanapbuhay)
+   - Mother's Name (Pangalan ng Ina / Nanay) and Mother's Occupation (Hanapbuhay)
+   - Guardian's Name (Tagapag-alaga) and Guardian's Occupation (Hanapbuhay)
+   - Number of Siblings (Bilang ng Kapatid): Extract integer count. If written as words (e.g. "tatlo", "three", "3"), parse to numeric 3.
+4. EDUCATIONAL & ADMISSION:
+   - Elementary School (Paaralang Elementarya / School Graduated): Elementary school name where student finished Grade 6.
+   - Exam Score: Score in the entrance examination or admission test. Extract as number.
+   - Remarks: Check if marked "A - PASS" / Passed / Admitted / Qualified, or "B - PENDING" / Pending / For evaluation. Map strictly to "A - PASS" or "B - PENDING".
+5. HEALTH STATUS:
+   - Medical conditions, allergies, asthma, normal, fit, or none.
+
+ACCURACY & INTEGRITY RULES:
+- NEVER guess unreadable handwriting or invent sample names/data.
+- If a field is blank, unmarked, or completely illegible, return an empty string "" or 0 and assign fieldConfidence as "LOW" or "NOT_DETECTED".
+- Put the names of any ambiguous/faint fields into the uncertainFields array so recruitment staff can easily review and verify them.`,
             },
           ],
         },
@@ -571,23 +613,36 @@ If any field is missing or unclear on the document, set it as an empty string or
       });
 
       const resultText = response.text || '{}';
-      let extractedData = {};
+      let parsed: any = {};
       try {
-        extractedData = JSON.parse(resultText);
-      } catch {
-        extractedData = {};
+        parsed = JSON.parse(resultText);
+      } catch (parseErr) {
+        console.error('Failed to parse Gemini OCR JSON:', parseErr, resultText);
+        parsed = { extractedData: {} };
       }
+
+      const extractedData = parsed.extractedData || parsed;
+      const fieldConfidence = parsed.fieldConfidence || {};
+      const formTitleDetected = parsed.formTitleDetected || 'Personal Data Form';
+      const detectedNotes = parsed.detectedNotes || '';
+      const uncertainFields = parsed.uncertainFields || [];
+      const rawSummary = parsed.rawSummary || '';
 
       dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'OCR Scan Performed',
-        details: 'Scanned student document with OCR to assist recruitment encoding',
+        details: `Scanned Personal Data Form with OCR: ${extractedData.surname || ''}${extractedData.firstName ? ', ' + extractedData.firstName : ''} (LRN: ${extractedData.lrn || 'N/A'})`,
       });
 
       return res.json({
         success: true,
         extractedData,
+        fieldConfidence,
+        formTitleDetected,
+        detectedNotes,
+        uncertainFields,
+        rawSummary,
       });
     } catch (err: any) {
       console.error('OCR Scanning Error:', err);
