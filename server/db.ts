@@ -13,6 +13,8 @@ interface DbSchema {
 const DATA_DIR = path.join(process.cwd(), 'data');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+const DB_BACKUP_FILE = path.join(DATA_DIR, 'db.backup.json');
+const DB_TMP_FILE = path.join(DATA_DIR, 'db.tmp.json');
 
 const DEFAULT_SETTINGS: SystemSettings = {
   id: 'system_default_settings',
@@ -29,6 +31,9 @@ const DEFAULT_SETTINGS: SystemSettings = {
   academicYear: 'SY 2026-2027 Recruitment',
   updatedAt: new Date().toISOString(),
 };
+
+// In-memory cache for ultra-fast, consistent, race-free state
+let inMemoryDb: DbSchema | null = null;
 
 function ensureUploadsDir(): void {
   if (!fs.existsSync(UPLOADS_DIR)) {
@@ -55,52 +60,124 @@ function parseBase64Image(dataString: string, fallbackMime = 'image/png'): { bas
   return { base64Data, mimeType, ext };
 }
 
-function ensureDbExists(): DbSchema {
+function validateAndSanitizeDb(raw: any): DbSchema {
+  const db: DbSchema = {
+    users: Array.isArray(raw?.users) ? raw.users : [],
+    students: Array.isArray(raw?.students) ? raw.students : [],
+    auditLogs: Array.isArray(raw?.auditLogs) ? raw.auditLogs : [],
+    settings: {
+      ...DEFAULT_SETTINGS,
+      ...(raw?.settings && typeof raw.settings === 'object' ? raw.settings : {}),
+    },
+  };
+  return db;
+}
+
+function loadDbFromDisk(): DbSchema {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
 
-  if (!fs.existsSync(DB_FILE)) {
-    const initialDb: DbSchema = {
-      users: [],
-      students: [],
-      auditLogs: [],
-      settings: DEFAULT_SETTINGS,
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialDb, null, 2), 'utf-8');
-    return initialDb;
+  // 1. Try reading primary DB_FILE
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      const content = fs.readFileSync(DB_FILE, 'utf-8');
+      if (content && content.trim().length > 0) {
+        const parsed = JSON.parse(content);
+        const valid = validateAndSanitizeDb(parsed);
+        // Successful read -> keep memory copy & backup
+        inMemoryDb = valid;
+        try {
+          fs.writeFileSync(DB_BACKUP_FILE, JSON.stringify(valid, null, 2), 'utf-8');
+        } catch (bErr) {
+          // Backup write warning
+        }
+        return valid;
+      }
+    } catch (err) {
+      console.error('[DB] Error reading primary db.json, attempting backup restoration:', err);
+    }
   }
 
-  try {
-    const data = fs.readFileSync(DB_FILE, 'utf-8');
-    const db: DbSchema = JSON.parse(data);
-    if (!db.users) db.users = [];
-    if (!db.students) db.students = [];
-    if (!db.auditLogs) db.auditLogs = [];
-    if (!db.settings) {
-      db.settings = DEFAULT_SETTINGS;
-    } else {
-      db.settings = { ...DEFAULT_SETTINGS, ...db.settings };
+  // 2. Try recovering from DB_BACKUP_FILE if primary failed
+  if (fs.existsSync(DB_BACKUP_FILE)) {
+    try {
+      const backupContent = fs.readFileSync(DB_BACKUP_FILE, 'utf-8');
+      if (backupContent && backupContent.trim().length > 0) {
+        const parsedBackup = JSON.parse(backupContent);
+        const validBackup = validateAndSanitizeDb(parsedBackup);
+        console.warn('[DB] Restored database state from db.backup.json successfully.');
+        inMemoryDb = validBackup;
+        // Save back to primary DB_FILE
+        fs.writeFileSync(DB_FILE, JSON.stringify(validBackup, null, 2), 'utf-8');
+        return validBackup;
+      }
+    } catch (backupErr) {
+      console.error('[DB] Backup restoration also failed:', backupErr);
     }
-    return db;
-  } catch (error) {
-    console.error('Error reading DB file, reinitializing:', error);
-    const fallbackDb: DbSchema = {
-      users: [],
-      students: [],
-      auditLogs: [],
-      settings: DEFAULT_SETTINGS,
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(fallbackDb, null, 2), 'utf-8');
-    return fallbackDb;
   }
+
+  // 3. If in-memory copy already exists with data, NEVER wipe it
+  if (inMemoryDb && inMemoryDb.users && inMemoryDb.users.length > 0) {
+    console.warn('[DB] Using existing in-memory database to prevent data loss.');
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(inMemoryDb, null, 2), 'utf-8');
+    } catch (e) {}
+    return inMemoryDb;
+  }
+
+  // 4. Initial brand new setup
+  console.log('[DB] Initializing new database storage.');
+  const initialDb: DbSchema = {
+    users: [],
+    students: [],
+    auditLogs: [],
+    settings: DEFAULT_SETTINGS,
+  };
+  inMemoryDb = initialDb;
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(initialDb, null, 2), 'utf-8');
+    fs.writeFileSync(DB_BACKUP_FILE, JSON.stringify(initialDb, null, 2), 'utf-8');
+  } catch (initErr) {
+    console.error('[DB] Error writing initial database file:', initErr);
+  }
+  return initialDb;
+}
+
+function ensureDbExists(): DbSchema {
+  if (inMemoryDb) {
+    return inMemoryDb;
+  }
+  return loadDbFromDisk();
 }
 
 function saveDb(db: DbSchema): void {
+  // Update in-memory copy immediately
+  inMemoryDb = db;
+
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
+
+  const jsonString = JSON.stringify(db, null, 2);
+
+  try {
+    // 1. Atomic write via temporary file
+    fs.writeFileSync(DB_TMP_FILE, jsonString, 'utf-8');
+    fs.renameSync(DB_TMP_FILE, DB_FILE);
+
+    // 2. Update persistent backup file
+    fs.writeFileSync(DB_BACKUP_FILE, jsonString, 'utf-8');
+  } catch (err) {
+    console.error('[DB] Critical error saving database file:', err);
+    // Direct fallback write
+    try {
+      fs.writeFileSync(DB_FILE, jsonString, 'utf-8');
+    } catch (directErr) {
+      console.error('[DB] Fallback direct write failed:', directErr);
+      throw new Error('Database write failure: Unable to persist data to disk.');
+    }
+  }
 }
 
 export const dbService = {
@@ -116,22 +193,27 @@ export const dbService = {
 
   getUserByUsername(username: string): (User & { passwordHash: string }) | undefined {
     const db = ensureDbExists();
-    const clean = username.trim().toLowerCase();
+    const clean = (username || '').trim().toLowerCase();
+    if (!clean) return undefined;
     return db.users.find((u) => u.username.toLowerCase() === clean);
   },
 
   getUserByUsernameOrEmail(identifier: string): (User & { passwordHash: string }) | undefined {
     const db = ensureDbExists();
-    const cleanId = identifier.trim().toLowerCase();
+    const cleanId = (identifier || '').trim().toLowerCase();
+    if (!cleanId) return undefined;
     return db.users.find(
-      (u) => u.username.toLowerCase() === cleanId || u.email.toLowerCase() === cleanId
+      (u) =>
+        u.username.toLowerCase() === cleanId ||
+        u.email.toLowerCase() === cleanId ||
+        u.id.toLowerCase() === cleanId
     );
   },
 
   checkUserExists(email: string, username: string): { exists: boolean; matchedField?: 'email' | 'username'; existingUser?: User } {
     const db = ensureDbExists();
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanUsername = username.trim().toLowerCase();
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanUsername = (username || '').trim().toLowerCase();
 
     const match = db.users.find((u) => {
       const uEmail = u.email.toLowerCase();
@@ -149,6 +231,7 @@ export const dbService = {
 
   getUserById(id: string): User | undefined {
     const db = ensureDbExists();
+    if (!id) return undefined;
     const user = db.users.find((u) => u.id === id);
     if (!user) return undefined;
     const { passwordHash, ...userClean } = user;
@@ -180,16 +263,19 @@ export const dbService = {
     const newUser: User & { passwordHash: string } = {
       id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       fullName: userData.fullName.trim(),
-      email: userData.email.trim().toLowerCase(),
-      username: userData.username.trim().toLowerCase(),
+      email: cleanEmail,
+      username: cleanUsername,
       passwordHash,
       role: userData.role,
       status: 'Active',
       createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString(),
     };
 
     db.users.push(newUser);
     saveDb(db);
+
+    console.log(`[DB] Successfully created and persisted account for: ${newUser.fullName} (@${newUser.username}, ${newUser.email}) - Total Users in DB: ${db.users.length}`);
 
     const { passwordHash: _, ...cleanUser } = newUser;
     return cleanUser;
@@ -439,7 +525,6 @@ export const dbService = {
         const candFull = `${candSurname} ${candFirst}`;
         const exFull = `${exSurname} ${exFirst}`;
         if (candFull.length >= 6 && exFull.length >= 6) {
-          // Check substring or Levenshtein similarity
           let diffCount = 0;
           const maxL = Math.max(candFull.length, exFull.length);
           const minL = Math.min(candFull.length, exFull.length);
@@ -474,7 +559,7 @@ export const dbService = {
         }
       }
 
-      // 6. POSSIBLE DUPLICATE: Same Surname + Birthday + School (e.g. twins or same student with minor first name typo)
+      // 6. POSSIBLE DUPLICATE: Same Surname + Birthday + School
       if (candSurname && candBirth && candSchool && exSurname && exBirth && exSchool && candSchool.length > 5) {
         if (candSurname === exSurname && candBirth === exBirth && candSchool === exSchool) {
           return {
@@ -525,6 +610,7 @@ export const dbService = {
     const db = ensureDbExists();
     db.users = [];
     saveDb(db);
+    console.log('[DB] All users reset. Database file and backup updated.');
   },
 
   getSettings(): SystemSettings {
