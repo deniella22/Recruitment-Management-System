@@ -16,7 +16,7 @@ import {
   exportSchoolsSummaryPdf,
 } from './lib/api';
 import { AdminRegistrationModal } from './components/AdminRegistrationModal';
-import { LoginForm } from './components/LoginForm';
+import { AuthScreen } from './components/AuthScreen';
 import { SplashScreen } from './components/common/SplashScreen';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -151,16 +151,24 @@ export default function App() {
     }
   }, [currentUser, searchQuery, statusFilter, sortBy, sortOrder]);
 
-  const handleAuthSuccess = (user: User, token: string) => {
+  const handleAuthSuccess = (user: User, token: string, isNewAccount?: boolean) => {
     localStorage.setItem('sms_auth_token', token);
+    setStudents([]);
+    setDashboardStats(null);
     setCurrentUser(user);
     setHasUsers(true);
-    showToast(`Welcome back, ${user.fullName}! Logged in as ${user.role}.`);
+    if (isNewAccount) {
+      showToast(`Welcome, ${user.fullName}!`);
+    } else {
+      showToast(`Welcome back, ${user.fullName}!`);
+    }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('sms_auth_token');
     setCurrentUser(null);
+    setStudents([]);
+    setDashboardStats(null);
     setSelectedStudentForProfile(null);
     setActiveTab('dashboard');
     showToast('Signed out of system successfully.');
@@ -355,10 +363,10 @@ export default function App() {
     return <AdminRegistrationModal onSuccess={handleAuthSuccess} systemSettings={systemSettings} />;
   }
 
-  // 2. Not logged in -> LoginForm
+  // 2. Not logged in -> AuthScreen (Login / Register / Remembered Accounts)
   if (!currentUser) {
     return (
-      <LoginForm
+      <AuthScreen
         onSuccess={handleAuthSuccess}
         onResetAccounts={() => {
           setCurrentUser(null);

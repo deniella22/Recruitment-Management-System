@@ -29,7 +29,7 @@ import {
   AlertTriangle,
   Zap,
 } from 'lucide-react';
-import { StudentRecord, AdmissionStatus, OCRScanResult, ConfidenceLevel } from '../types';
+import { StudentRecord, AdmissionStatus, OCRScanResult, ConfidenceLevel, OCRCorrectionRecord } from '../types';
 import { performOCRScan, createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
 
 interface Props {
@@ -84,6 +84,11 @@ export const ScanFormView: React.FC<Props> = ({
   const [elementarySchool, setElementarySchool] = useState<string>('');
   const [remarks, setRemarks] = useState<AdmissionStatus>('B - PENDING');
   const [healthStatus, setHealthStatus] = useState<string>('');
+
+  // Smart OCR Auto-Correction State
+  const [corrections, setCorrections] = useState<OCRCorrectionRecord[]>([]);
+  const [originalOcrData, setOriginalOcrData] = useState<Partial<StudentRecord> | null>(null);
+  const [showCorrectionsDrawer, setShowCorrectionsDrawer] = useState<boolean>(false);
 
   // Review UI State
   const [saving, setSaving] = useState<boolean>(false);
@@ -465,6 +470,8 @@ export const ScanFormView: React.FC<Props> = ({
       clearTimeout(timer3);
 
       setScanResult(result);
+      setCorrections(result.corrections || []);
+      setOriginalOcrData(result.originalOcrData || result.extractedData || {});
       const data = result.extractedData || {};
 
       // Map Extracted Data into State
@@ -504,6 +511,63 @@ export const ScanFormView: React.FC<Props> = ({
       setOcrError(err?.message || 'Failed to scan document with OCR. You can try retaking the photo or upload another file.');
       setStage('capture');
     }
+  };
+
+  const handleRevertCorrection = (fieldKey: string) => {
+    const corr = corrections.find((c) => c.field === fieldKey);
+    if (!corr) return;
+
+    switch (fieldKey) {
+      case 'lrn':
+        setLrn(corr.originalValue);
+        break;
+      case 'surname':
+        setSurname(corr.originalValue.toUpperCase());
+        break;
+      case 'firstName':
+        setFirstName(corr.originalValue.toUpperCase());
+        break;
+      case 'middleName':
+        setMiddleName(corr.originalValue.toUpperCase());
+        break;
+      case 'birthday':
+        setBirthday(corr.originalValue);
+        break;
+      case 'address':
+        setAddress(corr.originalValue);
+        break;
+      case 'fatherName':
+        setFatherName(corr.originalValue.toUpperCase());
+        break;
+      case 'fatherOccupation':
+        setFatherOccupation(corr.originalValue);
+        break;
+      case 'motherName':
+        setMotherName(corr.originalValue.toUpperCase());
+        break;
+      case 'motherOccupation':
+        setMotherOccupation(corr.originalValue);
+        break;
+      case 'guardianName':
+        setGuardianName(corr.originalValue.toUpperCase());
+        break;
+      case 'guardianOccupation':
+        setGuardianOccupation(corr.originalValue);
+        break;
+      case 'elementarySchool':
+        setElementarySchool(corr.originalValue.toUpperCase());
+        break;
+      case 'healthStatus':
+        setHealthStatus(corr.originalValue);
+        break;
+      case 'remarks':
+        if (corr.originalValue === 'A - PASS' || corr.originalValue === 'B - PENDING') {
+          setRemarks(corr.originalValue as AdmissionStatus);
+        }
+        break;
+    }
+
+    setCorrections((prev) => prev.filter((c) => c.field !== fieldKey));
   };
 
   const handleSaveToDatabase = async () => {
@@ -567,32 +631,44 @@ export const ScanFormView: React.FC<Props> = ({
         healthStatus: healthStatus.trim(),
       };
 
-      // Check duplicates before creating new record
-      if (!duplicateWarning) {
-        const dupCheck = await checkStudentDuplicate(studentPayload);
-        if (dupCheck.duplicateStatus !== 'NONE' && dupCheck.existingRecord) {
-          setDuplicateWarning({
-            duplicateStatus: dupCheck.duplicateStatus,
-            existingRecord: dupCheck.existingRecord,
-            matchReason: dupCheck.matchReason,
-            message: dupCheck.message,
-          });
-          setSaving(false);
-          return;
-        }
+      // Strict duplicate check before creating record
+      const dupCheck = await checkStudentDuplicate(studentPayload);
+      if (dupCheck.duplicateStatus === 'EXACT' && dupCheck.existingRecord) {
+        setDuplicateWarning({
+          duplicateStatus: 'EXACT',
+          existingRecord: dupCheck.existingRecord,
+          matchReason: dupCheck.matchReason,
+          message: dupCheck.message || 'Exact duplicate found: A record for this student already exists in your database. The record will not be saved again.',
+        });
+        setSaving(false);
+        return;
+      } else if (dupCheck.duplicateStatus === 'POSSIBLE' && dupCheck.existingRecord && !duplicateWarning) {
+        setDuplicateWarning({
+          duplicateStatus: 'POSSIBLE',
+          existingRecord: dupCheck.existingRecord,
+          matchReason: dupCheck.matchReason,
+          message: dupCheck.message,
+        });
+        setSaving(false);
+        return;
       }
 
       const created = await createStudent(studentPayload);
       onSuccess(created);
       onClose();
     } catch (err: any) {
-      setSaveError(err.message || 'Failed to save student record to database.');
+      if (err.message && err.message.toLowerCase().includes('duplicate')) {
+        setSaveError(err.message);
+      } else {
+        setSaveError(err.message || 'Failed to save student record to database.');
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  const handleForceSaveToDatabase = async () => {
+  const handleUpdateExistingRecord = async () => {
+    if (!duplicateWarning?.existingRecord) return;
     try {
       setSaving(true);
       const scoreNum = Number(examScore) || 0;
@@ -617,50 +693,76 @@ export const ScanFormView: React.FC<Props> = ({
         healthStatus: healthStatus.trim(),
       };
 
-      const created = await createStudent(studentPayload);
+      const updated = await updateStudent(duplicateWarning.existingRecord.id, studentPayload);
       setDuplicateWarning(null);
-      onSuccess(created);
+      onSuccess(updated);
       onClose();
     } catch (err: any) {
-      setSaveError(err.message || 'Failed to save student record to database.');
+      setSaveError(err.message || 'Failed to update existing student record.');
       setDuplicateWarning(null);
     } finally {
       setSaving(false);
     }
   };
 
+  const handleViewExistingRecord = () => {
+    if (!duplicateWarning?.existingRecord) return;
+    const existing = duplicateWarning.existingRecord;
+    setDuplicateWarning(null);
+    onSuccess(existing);
+    onClose();
+  };
+
+  // Helper for auto-correction badge
+  const getAutoCorrectionBadge = (fieldKey: string) => {
+    const corr = corrections.find((c) => c.field === fieldKey);
+    if (!corr) return null;
+
+    return (
+      <span className="px-2 py-0.5 bg-violet-50 text-violet-900 text-[10px] font-black rounded-full border border-violet-300 flex items-center gap-1">
+        <Sparkles className="w-2.5 h-2.5 text-violet-600" />
+        <span>Auto-corrected from "{corr.originalValue}"</span>
+        <button
+          type="button"
+          onClick={() => handleRevertCorrection(fieldKey)}
+          className="text-violet-700 hover:text-violet-950 underline font-bold ml-1 cursor-pointer"
+          title={`Undo auto-correction and restore "${corr.originalValue}"`}
+        >
+          Undo
+        </button>
+      </span>
+    );
+  };
+
   // Helper for confidence badge
   const getConfidenceBadge = (fieldKey: string) => {
+    const corrBadge = getAutoCorrectionBadge(fieldKey);
     const conf = scanResult?.fieldConfidence?.[fieldKey] || 'MEDIUM';
     const isUncertain = scanResult?.uncertainFields?.includes(fieldKey);
 
-    if (isUncertain || conf === 'LOW') {
-      return (
-        <span className="px-2 py-0.5 bg-amber-50 text-amber-800 text-[10px] font-black rounded-full border border-amber-300 flex items-center gap-1">
-          <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
-          Review Needed
-        </span>
-      );
-    }
-    if (conf === 'HIGH') {
-      return (
-        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[10px] font-black rounded-full border border-emerald-300 flex items-center gap-1">
-          <Check className="w-2.5 h-2.5 text-emerald-600" />
-          OCR Verified
-        </span>
-      );
-    }
-    if (conf === 'NOT_DETECTED') {
-      return (
-        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full border border-slate-300">
-          Not Found
-        </span>
-      );
-    }
     return (
-      <span className="px-2 py-0.5 bg-blue-50 text-[#1E3A8A] text-[10px] font-bold rounded-full border border-blue-200">
-        Extracted
-      </span>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {corrBadge}
+        {isUncertain || conf === 'LOW' ? (
+          <span className="px-2 py-0.5 bg-amber-50 text-amber-800 text-[10px] font-black rounded-full border border-amber-300 flex items-center gap-1">
+            <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+            Review Needed
+          </span>
+        ) : conf === 'HIGH' ? (
+          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[10px] font-black rounded-full border border-emerald-300 flex items-center gap-1">
+            <Check className="w-2.5 h-2.5 text-emerald-600" />
+            OCR Verified
+          </span>
+        ) : conf === 'NOT_DETECTED' ? (
+          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full border border-slate-300">
+            Not Found
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 bg-blue-50 text-[#1E3A8A] text-[10px] font-bold rounded-full border border-blue-200">
+            Extracted
+          </span>
+        )}
+      </div>
     );
   };
 
@@ -1117,6 +1219,48 @@ export const ScanFormView: React.FC<Props> = ({
                 </button>
               </div>
             </div>
+
+            {corrections.length > 0 && (
+              <div className="mx-4 mt-2 p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs space-y-1.5 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold text-violet-950">
+                    <Sparkles className="w-4 h-4 text-violet-600 shrink-0" />
+                    <span>Smart OCR Auto-Correction Applied ({corrections.length} mistake{corrections.length > 1 ? 's' : ''} corrected)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCorrectionsDrawer(!showCorrectionsDrawer)}
+                    className="text-[11px] font-bold text-violet-700 hover:text-violet-900 underline cursor-pointer"
+                  >
+                    {showCorrectionsDrawer ? 'Hide Details' : 'View Corrections'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-violet-800 leading-relaxed">
+                  Automatic spelling corrections were safely applied to common OCR errors while preserving student names, addresses, and identifiers. You can review or undo each change.
+                </p>
+                {showCorrectionsDrawer && (
+                  <div className="pt-2 border-t border-violet-200 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                    {corrections.map((c) => (
+                      <div key={c.field} className="p-2 bg-white rounded-lg border border-violet-200 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-violet-900 capitalize">{c.field.replace(/([A-Z])/g, ' $1')}:</span>{' '}
+                          <span className="line-through text-red-500 font-mono text-[10px]">{c.originalValue}</span>{' '}
+                          <span className="text-gray-400">→</span>{' '}
+                          <span className="font-bold text-emerald-700 font-mono text-[10px]">{c.correctedValue}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRevertCorrection(c.field)}
+                          className="px-2 py-0.5 bg-violet-100 hover:bg-violet-200 text-violet-800 font-bold text-[10px] rounded cursor-pointer ml-2"
+                        >
+                          Undo
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {saveError && (
               <div className="mx-4 mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
@@ -1671,15 +1815,23 @@ export const ScanFormView: React.FC<Props> = ({
                 onClick={() => setDuplicateWarning(null)}
                 className="w-full sm:w-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
               >
-                Review & Edit Details
+                Review / Edit Scanned Form
+              </button>
+              <button
+                type="button"
+                onClick={handleViewExistingRecord}
+                className="w-full sm:w-auto px-4 py-2 bg-blue-50 hover:bg-blue-100 text-[#1E3A8A] font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>View Existing Record</span>
               </button>
               <button
                 type="button"
                 disabled={saving}
-                onClick={handleForceSaveToDatabase}
-                className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                onClick={handleUpdateExistingRecord}
+                className="w-full sm:w-auto px-4 py-2 bg-[#1E3A8A] hover:bg-[#172554] text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                {saving ? 'Saving...' : 'Save Anyway (Override)'}
+                {saving ? 'Updating...' : 'Update Existing Record'}
               </button>
             </div>
           </div>

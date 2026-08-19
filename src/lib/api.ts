@@ -124,14 +124,21 @@ export async function resetAllUsers(): Promise<{ success: boolean; message: stri
 export async function loginUser(
   usernameOrEmail: string,
   password: string
-): Promise<{ user: User; token: string; isFirstLogin?: boolean }> {
+): Promise<{ user: User; token: string; isNewAccount?: boolean; isFirstLogin?: boolean }> {
   const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username: usernameOrEmail, identifier: usernameOrEmail, password }),
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Invalid credentials');
+  if (!res.ok) {
+    const err: any = new Error(json.error || 'Invalid credentials');
+    err.accountNotFound = json.accountNotFound;
+    err.wrongPassword = json.wrongPassword;
+    err.deactivated = json.deactivated;
+    err.identifier = json.identifier;
+    throw err;
+  }
   return json;
 }
 
@@ -224,6 +231,8 @@ export async function performOCRScan(imageBase64: string, mimeType?: string): Pr
   if (!res.ok) throw new Error(json.error || 'Failed to extract text from document with OCR');
   return {
     extractedData: json.extractedData || {},
+    originalOcrData: json.originalOcrData || json.extractedData || {},
+    corrections: json.corrections || [],
     fieldConfidence: json.fieldConfidence || {},
     formTitleDetected: json.formTitleDetected || 'Personal Data Form',
     detectedNotes: json.detectedNotes || '',

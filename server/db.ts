@@ -116,7 +116,8 @@ export const dbService = {
 
   getUserByUsername(username: string): (User & { passwordHash: string }) | undefined {
     const db = ensureDbExists();
-    return db.users.find((u) => u.username.toLowerCase() === username.toLowerCase());
+    const clean = username.trim().toLowerCase();
+    return db.users.find((u) => u.username.toLowerCase() === clean);
   },
 
   getUserByUsernameOrEmail(identifier: string): (User & { passwordHash: string }) | undefined {
@@ -132,13 +133,15 @@ export const dbService = {
     const cleanEmail = email.trim().toLowerCase();
     const cleanUsername = username.trim().toLowerCase();
 
-    const match = db.users.find(
-      (u) => u.username.toLowerCase() === cleanUsername || u.email.toLowerCase() === cleanEmail
-    );
+    const match = db.users.find((u) => {
+      const uEmail = u.email.toLowerCase();
+      const uUser = u.username.toLowerCase();
+      return (cleanUsername && uUser === cleanUsername) || (cleanEmail && uEmail === cleanEmail);
+    });
 
     if (match) {
       const { passwordHash: _, ...cleanMatch } = match;
-      const matchedField = match.username.toLowerCase() === cleanUsername ? 'username' : 'email';
+      const matchedField = (cleanUsername && match.username.toLowerCase() === cleanUsername) ? 'username' : 'email';
       return { exists: true, matchedField, existingUser: cleanMatch };
     }
     return { exists: false };
@@ -168,17 +171,17 @@ export const dbService = {
     );
     if (existing) {
       if (existing.username.toLowerCase() === cleanUsername) {
-        throw new Error('Username already exists');
+        throw new Error('An account with this username already exists. Please log in to your existing account.');
       }
-      throw new Error('Email address already exists');
+      throw new Error('An account with this email address already exists. Please log in to your existing account.');
     }
 
     const passwordHash = bcrypt.hashSync(userData.password, 10);
     const newUser: User & { passwordHash: string } = {
       id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       fullName: userData.fullName.trim(),
-      email: userData.email.trim(),
-      username: userData.username.trim(),
+      email: userData.email.trim().toLowerCase(),
+      username: userData.username.trim().toLowerCase(),
       passwordHash,
       role: userData.role,
       status: 'Active',
@@ -200,7 +203,7 @@ export const dbService = {
     }
 
     if (updates.fullName) db.users[userIdx].fullName = updates.fullName.trim();
-    if (updates.email) db.users[userIdx].email = updates.email.trim();
+    if (updates.email) db.users[userIdx].email = updates.email.trim().toLowerCase();
     if (updates.role) db.users[userIdx].role = updates.role;
     if (updates.status) db.users[userIdx].status = updates.status;
     if (updates.password) {
@@ -256,22 +259,24 @@ export const dbService = {
     }
   },
 
-  // STUDENTS (Account-based isolation)
+  // STUDENTS (Account-based strict isolation)
   getStudents(userId?: string): StudentRecord[] {
     const db = ensureDbExists();
-    if (!userId) return db.students;
-    return db.students.filter((s) => !s.userId || s.userId === userId);
+    if (!userId) return [];
+    return db.students.filter((s) => s.userId === userId);
   },
 
   getStudentById(id: string, userId?: string): StudentRecord | undefined {
     const db = ensureDbExists();
-    return db.students.find((s) => s.id === id && (!userId || !s.userId || s.userId === userId));
+    if (!userId) return undefined;
+    return db.students.find((s) => s.id === id && s.userId === userId);
   },
 
   getStudentByLrn(lrn: string, userId?: string): StudentRecord | undefined {
     const db = ensureDbExists();
+    if (!userId) return undefined;
     const cleanLrn = lrn.trim();
-    return db.students.find((s) => s.lrn.trim() === cleanLrn && (!userId || !s.userId || s.userId === userId));
+    return db.students.find((s) => s.lrn.trim() === cleanLrn && s.userId === userId);
   },
 
   createStudent(
@@ -280,17 +285,13 @@ export const dbService = {
   ): StudentRecord {
     const db = ensureDbExists();
 
-    // Check duplicate LRN within user's owned records
-    const cleanLrn = studentData.lrn.trim();
-    if (cleanLrn) {
-      const existing = db.students.find(
-        (s) => s.lrn.trim() === cleanLrn && (!studentData.userId || !s.userId || s.userId === studentData.userId)
-      );
-      if (existing) {
-        throw new Error(`This LRN (${cleanLrn}) already exists for student: ${existing.surname}, ${existing.firstName}.`);
-      }
+    // Strict duplicate check before creating a record
+    const dupCheck = this.checkDuplicate(studentData, studentData.userId);
+    if (dupCheck.duplicateStatus === 'EXACT') {
+      throw new Error(dupCheck.message || `Duplicate student record: ${dupCheck.existingRecord?.surname}, ${dupCheck.existingRecord?.firstName} (LRN: ${dupCheck.existingRecord?.lrn || 'N/A'}) already exists in your database.`);
     }
 
+    const cleanLrn = studentData.lrn.trim();
     const now = new Date().toISOString();
     const newStudent: StudentRecord = {
       ...studentData,
@@ -316,7 +317,7 @@ export const dbService = {
     userId?: string
   ): StudentRecord {
     const db = ensureDbExists();
-    const idx = db.students.findIndex((s) => s.id === id && (!userId || !s.userId || s.userId === userId));
+    const idx = db.students.findIndex((s) => s.id === id && (!userId || s.userId === userId));
     if (idx === -1) {
       throw new Error('Student record not found');
     }
@@ -325,7 +326,7 @@ export const dbService = {
     if (updates.lrn && updates.lrn.trim() !== db.students[idx].lrn.trim()) {
       const cleanLrn = updates.lrn.trim();
       const duplicate = db.students.find(
-        (s) => s.id !== id && s.lrn.trim() === cleanLrn && (!userId || !s.userId || s.userId === userId)
+        (s) => s.id !== id && s.lrn.trim() === cleanLrn && (!userId || s.userId === userId)
       );
       if (duplicate) {
         throw new Error(`This LRN (${cleanLrn}) already exists for student: ${duplicate.surname}, ${duplicate.firstName}.`);
@@ -348,8 +349,9 @@ export const dbService = {
 
   deleteStudent(id: string, userId?: string): boolean {
     const db = ensureDbExists();
+    if (!userId) return false;
     const initialLen = db.students.length;
-    db.students = db.students.filter((s) => !(s.id === id && (!userId || !s.userId || s.userId === userId)));
+    db.students = db.students.filter((s) => !(s.id === id && s.userId === userId));
     if (db.students.length !== initialLen) {
       saveDb(db);
       return true;
@@ -371,7 +373,7 @@ export const dbService = {
   } {
     const db = ensureDbExists();
     const userStudents = db.students.filter(
-      (s) => (!userId || !s.userId || s.userId === userId) && (!excludeId || s.id !== excludeId)
+      (s) => (!userId || s.userId === userId) && (!excludeId || s.id !== excludeId)
     );
 
     const norm = (str?: string) =>
@@ -432,7 +434,34 @@ export const dbService = {
         }
       }
 
-      // 4. POSSIBLE DUPLICATE: Same Surname + First Name (different or missing birthday)
+      // 4. EXACT DUPLICATE: Fuzzy Name (OCR minor typo) + Exact Birthday
+      if (candSurname && candFirst && candBirth && exSurname && exFirst && exBirth && candBirth === exBirth) {
+        const candFull = `${candSurname} ${candFirst}`;
+        const exFull = `${exSurname} ${exFirst}`;
+        if (candFull.length >= 6 && exFull.length >= 6) {
+          // Check substring or Levenshtein similarity
+          let diffCount = 0;
+          const maxL = Math.max(candFull.length, exFull.length);
+          const minL = Math.min(candFull.length, exFull.length);
+          if (Math.abs(candFull.length - exFull.length) <= 2) {
+            for (let i = 0; i < minL; i++) {
+              if (candFull[i] !== exFull[i]) diffCount++;
+            }
+            diffCount += maxL - minL;
+            if (diffCount <= 2) {
+              return {
+                duplicateStatus: 'EXACT',
+                existingRecord: existing,
+                matchedFields: ['surname', 'firstName', 'birthday'],
+                matchReason: `High-confidence Name match with identical Date of Birth (${existing.birthday})`,
+                message: `Exact duplicate found: Student "${existing.surname}, ${existing.firstName}" (DOB: ${existing.birthday}) already exists in your database.`,
+              };
+            }
+          }
+        }
+      }
+
+      // 5. POSSIBLE DUPLICATE: Same Surname + First Name (different or missing birthday)
       if (candSurname && candFirst && exSurname && exFirst) {
         if (candSurname === exSurname && candFirst === exFirst) {
           return {
@@ -445,7 +474,7 @@ export const dbService = {
         }
       }
 
-      // 5. POSSIBLE DUPLICATE: Same Surname + Birthday + School (e.g. twins or same student with minor first name typo)
+      // 6. POSSIBLE DUPLICATE: Same Surname + Birthday + School (e.g. twins or same student with minor first name typo)
       if (candSurname && candBirth && candSchool && exSurname && exBirth && exSchool && candSchool.length > 5) {
         if (candSurname === exSurname && candBirth === exBirth && candSchool === exSchool) {
           return {

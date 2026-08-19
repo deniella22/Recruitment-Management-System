@@ -5,6 +5,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { dbService } from './server/db.js';
 import { generateStudentRecordsExcel } from './server/excelExport.js';
+import { applySmartOcrCorrection } from './server/ocrCorrection.js';
 import { User, StudentRecord, AdmissionStatus, SystemSettings } from './src/types.js';
 
 async function startServer() {
@@ -238,7 +239,7 @@ async function startServer() {
     }
   });
 
-  // 3. User Login (Supports Username or Email)
+  // 3. User Login (Supports Username or Email with Distinct Error Diagnostics)
   app.post('/api/auth/login', (req, res) => {
     const { username, identifier, password } = req.body;
     const loginId = (identifier || username || '').trim();
@@ -249,16 +250,29 @@ async function startServer() {
 
     const userWithHash = dbService.getUserByUsernameOrEmail(loginId);
     if (!userWithHash) {
-      return res.status(401).json({ error: 'Invalid username/email or password.' });
+      return res.status(401).json({
+        error: "We couldn't find an account using those credentials.",
+        accountNotFound: true,
+        identifier: loginId,
+        message: "We couldn't find an account using those credentials.",
+      });
     }
 
     if (userWithHash.status !== 'Active') {
-      return res.status(403).json({ error: 'Account is deactivated. Please contact an administrator.' });
+      return res.status(403).json({
+        error: 'Account is deactivated. Please contact an administrator.',
+        deactivated: true,
+      });
     }
 
     const isMatch = dbService.verifyPassword(password, userWithHash.passwordHash);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid username/email or password.' });
+      return res.status(401).json({
+        error: 'Incorrect password. Please try again.',
+        wrongPassword: true,
+        accountExists: true,
+        message: 'Incorrect password. Please try again.',
+      });
     }
 
     const isFirstLogin = !userWithHash.lastLoginAt;
@@ -275,7 +289,9 @@ async function startServer() {
     return res.json({
       user: cleanUser,
       token: cleanUser.id,
+      isNewAccount: false,
       isFirstLogin,
+      message: 'Logged in successfully.',
     });
   });
 
@@ -439,6 +455,31 @@ async function startServer() {
       return res.status(400).json({ error: 'Admission status must be either "A - PASS" or "B - PENDING".' });
     }
 
+    // Explicit duplicate check before saving
+    const dupCheck = dbService.checkDuplicate(
+      {
+        lrn: lrn.trim(),
+        surname: surname.trim(),
+        middleName: (middleName || '').trim(),
+        firstName: firstName.trim(),
+        birthday,
+        address: (address || '').trim(),
+        elementarySchool: (elementarySchool || '').trim(),
+      },
+      currentUser.id
+    );
+
+    if (dupCheck.duplicateStatus === 'EXACT') {
+      return res.status(409).json({
+        error: 'DUPLICATE_RECORD',
+        duplicateStatus: 'EXACT',
+        existingRecord: dupCheck.existingRecord,
+        matchedFields: dupCheck.matchedFields,
+        matchReason: dupCheck.matchReason,
+        message: dupCheck.message || 'This student/applicant record already exists in the system. The record will not be saved again.',
+      });
+    }
+
     try {
       const newStudent = dbService.createStudent(
         {
@@ -475,6 +516,13 @@ async function startServer() {
 
       return res.status(201).json(newStudent);
     } catch (err: any) {
+      if (err.message && err.message.toLowerCase().includes('duplicate')) {
+        return res.status(409).json({
+          error: 'DUPLICATE_RECORD',
+          duplicateStatus: 'EXACT',
+          message: err.message,
+        });
+      }
       return res.status(400).json({ error: err.message || 'Failed to save student record.' });
     }
   });
@@ -784,7 +832,9 @@ ACCURACY & INTEGRITY RULES:
         parsed = { extractedData: {} };
       }
 
-      const extractedData = parsed.extractedData || parsed;
+      const rawExtractedData = parsed.extractedData || parsed;
+      const { correctedData, originalOcrData, corrections } = applySmartOcrCorrection(rawExtractedData);
+
       const fieldConfidence = parsed.fieldConfidence || {};
       const formTitleDetected = parsed.formTitleDetected || 'Personal Data Form';
       const detectedNotes = parsed.detectedNotes || '';
@@ -795,12 +845,14 @@ ACCURACY & INTEGRITY RULES:
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'OCR Scan Performed',
-        details: `Scanned Personal Data Form with OCR: ${extractedData.surname || ''}${extractedData.firstName ? ', ' + extractedData.firstName : ''} (LRN: ${extractedData.lrn || 'N/A'})`,
+        details: `Scanned Personal Data Form with OCR (${corrections.length} smart auto-correction(s) applied): ${correctedData.surname || ''}${correctedData.firstName ? ', ' + correctedData.firstName : ''} (LRN: ${correctedData.lrn || 'N/A'})`,
       });
 
       return res.json({
         success: true,
-        extractedData,
+        extractedData: correctedData,
+        originalOcrData,
+        corrections,
         fieldConfidence,
         formTitleDetected,
         detectedNotes,
@@ -873,7 +925,7 @@ ACCURACY & INTEGRITY RULES:
   app.get('/api/students/export/excel', async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
-      const students = dbService.getStudents();
+      const students = dbService.getStudents(currentUser?.id);
 
       const excelBuffer = await generateStudentRecordsExcel(students);
 

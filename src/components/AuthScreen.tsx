@@ -9,10 +9,10 @@ import {
   LogIn,
   Eye,
   EyeOff,
-  ArrowRight,
-  Sparkles,
   CheckCircle2,
   RefreshCw,
+  Users,
+  ChevronRight,
 } from 'lucide-react';
 import { loginUser, registerAccount, resetAllUsers, fetchSettings } from '../lib/api';
 import { User as UserType, SystemSettings, SavedAccountInfo } from '../types';
@@ -39,20 +39,32 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
-  // Saved remembered account on this device
+  // Saved remembered accounts on this device
   const [savedAccount, setSavedAccount] = useState<SavedAccountInfo | null>(null);
+  const [savedAccountsList, setSavedAccountsList] = useState<SavedAccountInfo[]>([]);
   const [useManualLogin, setUseManualLogin] = useState(false);
 
-  // Status & errors
+  // Status & error banners
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 1. Existing Account Found Alert (during register)
   const [existingAccountWarning, setExistingAccountWarning] = useState<{
     message: string;
     username?: string;
     email?: string;
   } | null>(null);
 
-  // Reset confirmation
+  // 2. Account Not Found Alert (during login)
+  const [accountNotFoundWarning, setAccountNotFoundWarning] = useState<{
+    message: string;
+    identifier: string;
+  } | null>(null);
+
+  // 3. Incorrect Password Alert
+  const [wrongPasswordWarning, setWrongPasswordWarning] = useState<boolean>(false);
+
+  // Reset confirmation modal
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -79,7 +91,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
         .catch(() => {});
     }
 
-    // Load saved remembered account from localStorage if available
+    // Load saved remembered account and recent accounts list
     try {
       const saved = localStorage.getItem('sms_last_account');
       if (saved) {
@@ -89,8 +101,16 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
           setLoginIdentifier(parsed.username);
         }
       }
+
+      const listSaved = localStorage.getItem('sms_saved_accounts');
+      if (listSaved) {
+        const parsedList = JSON.parse(listSaved);
+        if (Array.isArray(parsedList)) {
+          setSavedAccountsList(parsedList);
+        }
+      }
     } catch (e) {
-      // Ignore cache error
+      // Ignore cache parsing error
     }
   }, [systemSettings]);
 
@@ -105,15 +125,51 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
       };
       localStorage.setItem('sms_last_account', JSON.stringify(accountInfo));
       setSavedAccount(accountInfo);
+
+      // Update recent accounts list
+      const existingList = [...savedAccountsList.filter((a) => a.id !== user.id)];
+      const updatedList = [accountInfo, ...existingList].slice(0, 4);
+      localStorage.setItem('sms_saved_accounts', JSON.stringify(updatedList));
+      setSavedAccountsList(updatedList);
     } catch (e) {
       // Ignore storage error
     }
   };
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const removeSavedAccount = (usernameOrEmail: string) => {
+    try {
+      const clean = usernameOrEmail.toLowerCase();
+      const updatedList = savedAccountsList.filter(
+        (a) => a.username.toLowerCase() !== clean && a.email.toLowerCase() !== clean
+      );
+      setSavedAccountsList(updatedList);
+      localStorage.setItem('sms_saved_accounts', JSON.stringify(updatedList));
+
+      if (
+        savedAccount &&
+        (savedAccount.username.toLowerCase() === clean || savedAccount.email.toLowerCase() === clean)
+      ) {
+        localStorage.removeItem('sms_last_account');
+        setSavedAccount(updatedList.length > 0 ? updatedList[0] : null);
+        if (updatedList.length > 0) {
+          setLoginIdentifier(updatedList[0].username);
+        }
+      }
+    } catch (e) {
+      // Ignore storage error
+    }
+  };
+
+  const clearAllWarnings = () => {
     setError(null);
     setExistingAccountWarning(null);
+    setAccountNotFoundWarning(null);
+    setWrongPasswordWarning(false);
+  };
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearAllWarnings();
 
     const identifierToUse = loginIdentifier.trim();
     if (!identifierToUse || !loginPassword) {
@@ -127,7 +183,20 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
       saveRememberedAccount(res.user);
       onSuccess(res.user, res.token, false);
     } catch (err: any) {
-      setError(err.message || 'Invalid username/email or password. Please verify your credentials.');
+      if (err.accountNotFound) {
+        // Backend confirms account does not exist
+        removeSavedAccount(identifierToUse);
+        setAccountNotFoundWarning({
+          message: err.message || "We couldn't find an account using those credentials.",
+          identifier: identifierToUse,
+        });
+      } else if (err.wrongPassword) {
+        // Account exists, but password was wrong
+        setWrongPasswordWarning(true);
+        setLoginPassword('');
+      } else {
+        setError(err.message || 'Invalid username/email or password. Please verify your credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -135,8 +204,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setExistingAccountWarning(null);
+    clearAllWarnings();
 
     if (!regFullName.trim()) {
       setError('Please enter your full name.');
@@ -187,8 +255,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
   };
 
   const switchToLoginWithExisting = (usernameOrEmail?: string) => {
-    setExistingAccountWarning(null);
-    setError(null);
+    clearAllWarnings();
     setMode('login');
     setUseManualLogin(true);
     if (usernameOrEmail) {
@@ -198,6 +265,15 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     } else if (regEmail) {
       setLoginIdentifier(regEmail);
     }
+    setLoginPassword('');
+  };
+
+  const selectSavedAccount = (acc: SavedAccountInfo) => {
+    clearAllWarnings();
+    setSavedAccount(acc);
+    setLoginIdentifier(acc.username);
+    setLoginPassword('');
+    setUseManualLogin(false);
   };
 
   const logoSrc = settings.schoolLogoUrl || '/school_logo.png';
@@ -209,8 +285,8 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
       <div className="max-w-md w-full space-y-4">
         {/* Main Authentication Card */}
         <div className="bg-white rounded-3xl shadow-2xl border border-blue-100/80 p-7 space-y-6 relative overflow-hidden">
-          {/* Subtle Top Decorative Accent */}
-          <div className="absolute top-0 left-0 right-0 h-2 bg-linear-to-r from-[#1E3A8A] via-[#2563EB] to-[#1E3A8A]" />
+          {/* Top Decorative Accent */}
+          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-[#1E3A8A] via-[#2563EB] to-[#1E3A8A]" />
 
           {/* School Branding Header */}
           <div className="text-center space-y-3 pt-2">
@@ -245,8 +321,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
               type="button"
               onClick={() => {
                 setMode('login');
-                setError(null);
-                setExistingAccountWarning(null);
+                clearAllWarnings();
               }}
               className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 mode === 'login'
@@ -262,8 +337,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
               type="button"
               onClick={() => {
                 setMode('register');
-                setError(null);
-                setExistingAccountWarning(null);
+                clearAllWarnings();
               }}
               className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                 mode === 'register'
@@ -276,15 +350,17 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
             </button>
           </div>
 
-          {/* Existing Account Conflict Alert */}
+          {/* 1. Existing Account Conflict Alert (During Register) */}
           {existingAccountWarning && (
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs space-y-3 animate-in fade-in slide-in-from-top-2">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs space-y-3 animate-in fade-in">
               <div className="flex items-start gap-2.5">
                 <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="font-extrabold text-amber-900">Existing Account Found</h4>
+                  <h4 className="font-extrabold text-amber-900 text-xs uppercase tracking-wide">
+                    Existing Account Found
+                  </h4>
                   <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed font-medium">
-                    {existingAccountWarning.message}
+                    An account with this email/username already exists. Please log in to your existing account.
                   </p>
                 </div>
               </div>
@@ -293,10 +369,10 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                 <button
                   type="button"
                   onClick={() => switchToLoginWithExisting(existingAccountWarning.username || existingAccountWarning.email)}
-                  className="flex-1 py-2 px-3 bg-[#1E3A8A] hover:bg-blue-900 text-white font-black text-[11px] rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                  className="flex-1 py-2.5 px-3 bg-[#1E3A8A] hover:bg-blue-900 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <LogIn className="w-3.5 h-3.5" />
-                  <span>Log In to Existing Account</span>
+                  <span>Log In to This Account</span>
                 </button>
                 <button
                   type="button"
@@ -304,17 +380,79 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                     setExistingAccountWarning(null);
                     setRegUsername('');
                     setRegEmail('');
+                    setRegPassword('');
+                    setRegConfirmPassword('');
                   }}
-                  className="py-2 px-3 bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-300 font-bold text-[11px] rounded-xl transition-all cursor-pointer text-center"
+                  className="py-2.5 px-3 bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
                 >
-                  Use Different Details
+                  Use a Different Account
                 </button>
               </div>
             </div>
           )}
 
+          {/* 2. Account Not Found Alert (During Login) */}
+          {accountNotFoundWarning && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs space-y-3 animate-in fade-in">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-extrabold text-amber-900 text-xs uppercase tracking-wide">
+                    Account Not Found
+                  </h4>
+                  <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed font-medium">
+                    We couldn't find an account using those credentials.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = accountNotFoundWarning.identifier;
+                    setMode('register');
+                    clearAllWarnings();
+                    if (id.includes('@')) {
+                      setRegEmail(id);
+                    } else {
+                      setRegUsername(id);
+                    }
+                  }}
+                  className="flex-1 py-2.5 px-3 bg-[#1E3A8A] hover:bg-blue-900 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Create New Account</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountNotFoundWarning(null);
+                    setLoginPassword('');
+                  }}
+                  className="py-2.5 px-3 bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 3. Incorrect Password Alert */}
+          {wrongPasswordWarning && (
+            <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-800 text-xs space-y-1 animate-in fade-in">
+              <div className="flex items-center gap-2 font-extrabold text-red-900 text-xs uppercase tracking-wide">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>Incorrect Password</span>
+              </div>
+              <p className="text-[11px] text-red-700 pl-6 font-medium">
+                Incorrect password. Please try again.
+              </p>
+            </div>
+          )}
+
           {/* General Error Message */}
-          {error && (
+          {error && !wrongPasswordWarning && !accountNotFoundWarning && !existingAccountWarning && (
             <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-xs font-semibold flex items-center gap-2.5 animate-in fade-in">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
               <span>{error}</span>
@@ -324,7 +462,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
           {/* 1. LOGIN MODE */}
           {mode === 'login' && (
             <div className="space-y-4">
-              {/* Remembered Account Quick Card (If available and user didn't request manual switch) */}
+              {/* Remembered Account Quick Card */}
               {savedAccount && !useManualLogin && (
                 <div className="p-4 bg-blue-50/70 border border-blue-200/80 rounded-2xl space-y-3">
                   <div className="flex items-center gap-3">
@@ -332,7 +470,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                       {savedAccount.fullName.charAt(0) || 'U'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[11px] text-blue-900 font-bold uppercase tracking-wider">
+                      <p className="text-[10px] text-blue-900 font-bold uppercase tracking-wider">
                         Saved Account on this device
                       </p>
                       <h3 className="text-xs font-extrabold text-gray-900 truncate">
@@ -359,7 +497,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                           autoFocus
                           value={loginPassword}
                           onChange={(e) => setLoginPassword(e.target.value)}
-                          placeholder="Enter your account password"
+                          placeholder="Enter your password"
                           className="w-full pl-10 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all"
                         />
                         <button
@@ -388,17 +526,49 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                     </button>
                   </form>
 
+                  {/* Switch to other saved accounts if multiple exist */}
+                  {savedAccountsList.length > 1 && (
+                    <div className="pt-2 border-t border-blue-100 space-y-1.5">
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                        Other saved accounts:
+                      </p>
+                      <div className="flex flex-col gap-1">
+                        {savedAccountsList
+                          .filter((acc) => acc.id !== savedAccount.id)
+                          .map((acc) => (
+                            <button
+                              key={acc.id}
+                              type="button"
+                              onClick={() => selectSavedAccount(acc)}
+                              className="text-left px-2.5 py-1.5 rounded-lg bg-white hover:bg-blue-100/50 border border-blue-100 text-xs text-gray-700 flex items-center justify-between cursor-pointer transition-all"
+                            >
+                              <span className="font-bold truncate">{acc.fullName} (@{acc.username})</span>
+                              <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between text-[11px] pt-1 text-gray-500 font-bold border-t border-blue-100">
                     <button
                       type="button"
-                      onClick={() => setUseManualLogin(true)}
+                      onClick={() => {
+                        setUseManualLogin(true);
+                        setLoginIdentifier('');
+                        setLoginPassword('');
+                        clearAllWarnings();
+                      }}
                       className="text-blue-800 hover:underline cursor-pointer"
                     >
-                      Use a different account
+                      Use another account
                     </button>
                     <button
                       type="button"
-                      onClick={() => setMode('register')}
+                      onClick={() => {
+                        setMode('register');
+                        clearAllWarnings();
+                      }}
                       className="text-blue-800 hover:underline cursor-pointer"
                     >
                       Create new account
@@ -682,7 +852,9 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                     setResetting(true);
                     await resetAllUsers();
                     localStorage.removeItem('sms_last_account');
+                    localStorage.removeItem('sms_saved_accounts');
                     setSavedAccount(null);
+                    setSavedAccountsList([]);
                     setShowResetConfirm(false);
                     if (onResetAccounts) onResetAccounts();
                   } catch (err: any) {

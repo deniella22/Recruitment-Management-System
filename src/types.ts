@@ -99,8 +99,20 @@ export interface DashboardStats {
 
 export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'NOT_DETECTED';
 
+export interface OCRCorrectionRecord {
+  field: string;
+  fieldLabel: string;
+  originalValue: string;
+  correctedValue: string;
+  confidence: ConfidenceLevel;
+  reason: string;
+  applied: boolean;
+}
+
 export interface OCRScanResult {
   extractedData: Partial<StudentRecord>;
+  originalOcrData?: Partial<StudentRecord>;
+  corrections?: OCRCorrectionRecord[];
   fieldConfidence?: Record<string, ConfidenceLevel>;
   formTitleDetected?: string;
   detectedNotes?: string;

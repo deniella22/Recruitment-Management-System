@@ -400,7 +400,8 @@ export const StudentFormModal: React.FC<Props> = ({
     }
   };
 
-  const handleForceSave = async () => {
+  const handleUpdateExisting = async () => {
+    if (!duplicateWarning?.existingRecord) return;
     try {
       setLoading(true);
       const scoreNum = Number(examScore) || 0;
@@ -425,15 +426,22 @@ export const StudentFormModal: React.FC<Props> = ({
         healthStatus: healthStatus.trim(),
       };
 
-      const result = await createStudent(payload);
+      const result = await updateStudent(duplicateWarning.existingRecord.id, payload);
       setDuplicateWarning(null);
       onSuccess(result);
     } catch (err: any) {
-      setError(err.message || 'Failed to force save student record.');
+      setError(err.message || 'Failed to update existing student record.');
       setDuplicateWarning(null);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleViewExisting = () => {
+    if (!duplicateWarning?.existingRecord) return;
+    const existing = duplicateWarning.existingRecord;
+    setDuplicateWarning(null);
+    onSuccess(existing);
   };
 
   return (
@@ -1332,11 +1340,19 @@ export const StudentFormModal: React.FC<Props> = ({
               </button>
               <button
                 type="button"
-                disabled={loading}
-                onClick={handleForceSave}
-                className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                onClick={handleViewExisting}
+                className="w-full sm:w-auto px-4 py-2 bg-blue-50 hover:bg-blue-100 text-[#1E3A8A] font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                {loading ? 'Saving...' : 'Save Anyway (Override)'}
+                <FileSearch className="w-3.5 h-3.5" />
+                <span>View Existing Record</span>
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleUpdateExisting}
+                className="w-full sm:w-auto px-4 py-2 bg-[#1E3A8A] hover:bg-[#172554] text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {loading ? 'Updating...' : 'Update Existing Record'}
               </button>
             </div>
           </div>
