@@ -119,6 +119,31 @@ export const dbService = {
     return db.users.find((u) => u.username.toLowerCase() === username.toLowerCase());
   },
 
+  getUserByUsernameOrEmail(identifier: string): (User & { passwordHash: string }) | undefined {
+    const db = ensureDbExists();
+    const cleanId = identifier.trim().toLowerCase();
+    return db.users.find(
+      (u) => u.username.toLowerCase() === cleanId || u.email.toLowerCase() === cleanId
+    );
+  },
+
+  checkUserExists(email: string, username: string): { exists: boolean; matchedField?: 'email' | 'username'; existingUser?: User } {
+    const db = ensureDbExists();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = username.trim().toLowerCase();
+
+    const match = db.users.find(
+      (u) => u.username.toLowerCase() === cleanUsername || u.email.toLowerCase() === cleanEmail
+    );
+
+    if (match) {
+      const { passwordHash: _, ...cleanMatch } = match;
+      const matchedField = match.username.toLowerCase() === cleanUsername ? 'username' : 'email';
+      return { exists: true, matchedField, existingUser: cleanMatch };
+    }
+    return { exists: false };
+  },
+
   getUserById(id: string): User | undefined {
     const db = ensureDbExists();
     const user = db.users.find((u) => u.id === id);
@@ -135,17 +160,25 @@ export const dbService = {
     role: User['role'];
   }): User {
     const db = ensureDbExists();
-    const existing = db.users.find((u) => u.username.toLowerCase() === userData.username.toLowerCase());
+    const cleanEmail = userData.email.trim().toLowerCase();
+    const cleanUsername = userData.username.trim().toLowerCase();
+
+    const existing = db.users.find(
+      (u) => u.username.toLowerCase() === cleanUsername || u.email.toLowerCase() === cleanEmail
+    );
     if (existing) {
-      throw new Error('Username already exists');
+      if (existing.username.toLowerCase() === cleanUsername) {
+        throw new Error('Username already exists');
+      }
+      throw new Error('Email address already exists');
     }
 
     const passwordHash = bcrypt.hashSync(userData.password, 10);
     const newUser: User & { passwordHash: string } = {
       id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-      fullName: userData.fullName,
-      email: userData.email,
-      username: userData.username,
+      fullName: userData.fullName.trim(),
+      email: userData.email.trim(),
+      username: userData.username.trim(),
       passwordHash,
       role: userData.role,
       status: 'Active',
@@ -166,8 +199,8 @@ export const dbService = {
       throw new Error('User not found');
     }
 
-    if (updates.fullName) db.users[userIdx].fullName = updates.fullName;
-    if (updates.email) db.users[userIdx].email = updates.email;
+    if (updates.fullName) db.users[userIdx].fullName = updates.fullName.trim();
+    if (updates.email) db.users[userIdx].email = updates.email.trim();
     if (updates.role) db.users[userIdx].role = updates.role;
     if (updates.status) db.users[userIdx].status = updates.status;
     if (updates.password) {
@@ -190,6 +223,26 @@ export const dbService = {
     return false;
   },
 
+  deleteUserAccount(userId: string): { success: boolean; deletedStudentsCount: number } {
+    const db = ensureDbExists();
+    const initialUsersCount = db.users.length;
+    db.users = db.users.filter((u) => u.id !== userId);
+
+    const initialStudentsCount = db.students.length;
+    // Remove all student records owned by this user
+    db.students = db.students.filter((s) => s.userId !== userId);
+    const deletedStudentsCount = initialStudentsCount - db.students.length;
+
+    // Remove audit logs for this user
+    db.auditLogs = db.auditLogs.filter((log) => log.userId !== userId);
+
+    saveDb(db);
+    return {
+      success: db.users.length !== initialUsersCount,
+      deletedStudentsCount,
+    };
+  },
+
   verifyPassword(password: string, passwordHash: string): boolean {
     return bcrypt.compareSync(password, passwordHash);
   },
@@ -203,39 +256,47 @@ export const dbService = {
     }
   },
 
-  // STUDENTS
-  getStudents(): StudentRecord[] {
+  // STUDENTS (Account-based isolation)
+  getStudents(userId?: string): StudentRecord[] {
     const db = ensureDbExists();
-    return db.students;
+    if (!userId) return db.students;
+    return db.students.filter((s) => !s.userId || s.userId === userId);
   },
 
-  getStudentById(id: string): StudentRecord | undefined {
+  getStudentById(id: string, userId?: string): StudentRecord | undefined {
     const db = ensureDbExists();
-    return db.students.find((s) => s.id === id);
+    return db.students.find((s) => s.id === id && (!userId || !s.userId || s.userId === userId));
   },
 
-  getStudentByLrn(lrn: string): StudentRecord | undefined {
+  getStudentByLrn(lrn: string, userId?: string): StudentRecord | undefined {
     const db = ensureDbExists();
-    return db.students.find((s) => s.lrn.trim() === lrn.trim());
+    const cleanLrn = lrn.trim();
+    return db.students.find((s) => s.lrn.trim() === cleanLrn && (!userId || !s.userId || s.userId === userId));
   },
 
   createStudent(
-    studentData: Omit<StudentRecord, 'id' | 'createdAt' | 'updatedAt'>,
+    studentData: Omit<StudentRecord, 'id' | 'createdAt' | 'updatedAt'> & { userId?: string },
     operatorName: string
   ): StudentRecord {
     const db = ensureDbExists();
 
-    // Check duplicate LRN
-    const existing = db.students.find((s) => s.lrn.trim() === studentData.lrn.trim());
-    if (existing) {
-      throw new Error("This LRN already exists. Please verify the student's information.");
+    // Check duplicate LRN within user's owned records
+    const cleanLrn = studentData.lrn.trim();
+    if (cleanLrn) {
+      const existing = db.students.find(
+        (s) => s.lrn.trim() === cleanLrn && (!studentData.userId || !s.userId || s.userId === studentData.userId)
+      );
+      if (existing) {
+        throw new Error(`This LRN (${cleanLrn}) already exists for student: ${existing.surname}, ${existing.firstName}.`);
+      }
     }
 
     const now = new Date().toISOString();
     const newStudent: StudentRecord = {
       ...studentData,
       id: 'std_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-      lrn: studentData.lrn.trim(),
+      userId: studentData.userId,
+      lrn: cleanLrn,
       createdAt: now,
       updatedAt: now,
       createdBy: operatorName,
@@ -251,21 +312,23 @@ export const dbService = {
   updateStudent(
     id: string,
     updates: Partial<Omit<StudentRecord, 'id' | 'createdAt' | 'createdBy'>>,
-    operatorName: string
+    operatorName: string,
+    userId?: string
   ): StudentRecord {
     const db = ensureDbExists();
-    const idx = db.students.findIndex((s) => s.id === id);
+    const idx = db.students.findIndex((s) => s.id === id && (!userId || !s.userId || s.userId === userId));
     if (idx === -1) {
       throw new Error('Student record not found');
     }
 
-    // If LRN is being changed, check if new LRN exists on ANOTHER record
+    // If LRN is being changed, check if new LRN exists on ANOTHER record belonging to this user
     if (updates.lrn && updates.lrn.trim() !== db.students[idx].lrn.trim()) {
+      const cleanLrn = updates.lrn.trim();
       const duplicate = db.students.find(
-        (s) => s.id !== id && s.lrn.trim() === updates.lrn?.trim()
+        (s) => s.id !== id && s.lrn.trim() === cleanLrn && (!userId || !s.userId || s.userId === userId)
       );
       if (duplicate) {
-        throw new Error("This LRN already exists. Please verify the student's information.");
+        throw new Error(`This LRN (${cleanLrn}) already exists for student: ${duplicate.surname}, ${duplicate.firstName}.`);
       }
     }
 
@@ -283,15 +346,123 @@ export const dbService = {
     return updated;
   },
 
-  deleteStudent(id: string): boolean {
+  deleteStudent(id: string, userId?: string): boolean {
     const db = ensureDbExists();
     const initialLen = db.students.length;
-    db.students = db.students.filter((s) => s.id !== id);
+    db.students = db.students.filter((s) => !(s.id === id && (!userId || !s.userId || s.userId === userId)));
     if (db.students.length !== initialLen) {
       saveDb(db);
       return true;
     }
     return false;
+  },
+
+  // DUPLICATE DETECTION ENGINE (Normalization & Multi-factor matching)
+  checkDuplicate(
+    candidate: Partial<StudentRecord>,
+    userId?: string,
+    excludeId?: string
+  ): {
+    duplicateStatus: 'EXACT' | 'POSSIBLE' | 'NONE';
+    existingRecord?: StudentRecord;
+    matchedFields?: string[];
+    matchReason?: string;
+    message: string;
+  } {
+    const db = ensureDbExists();
+    const userStudents = db.students.filter(
+      (s) => (!userId || !s.userId || s.userId === userId) && (!excludeId || s.id !== excludeId)
+    );
+
+    const norm = (str?: string) =>
+      (str || '')
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .trim();
+
+    const normLrn = (candidate.lrn || '').trim().replace(/[^0-9]/g, '');
+    const candSurname = norm(candidate.surname);
+    const candFirst = norm(candidate.firstName);
+    const candBirth = (candidate.birthday || '').trim();
+    const candSchool = norm(candidate.elementarySchool);
+    const candAddress = norm(candidate.address);
+
+    for (const existing of userStudents) {
+      const exLrn = existing.lrn.trim().replace(/[^0-9]/g, '');
+      const exSurname = norm(existing.surname);
+      const exFirst = norm(existing.firstName);
+      const exBirth = (existing.birthday || '').trim();
+      const exSchool = norm(existing.elementarySchool);
+      const exAddress = norm(existing.address);
+
+      // 1. EXACT DUPLICATE: Same LRN (at least 6 digits)
+      if (normLrn && exLrn && normLrn.length >= 6 && normLrn === exLrn) {
+        return {
+          duplicateStatus: 'EXACT',
+          existingRecord: existing,
+          matchedFields: ['lrn'],
+          matchReason: `Exact LRN Match: ${existing.lrn}`,
+          message: `Exact duplicate found: Student "${existing.surname}, ${existing.firstName}" already has the same LRN (${existing.lrn}) in your records.`,
+        };
+      }
+
+      // 2. EXACT DUPLICATE: Same Surname + First Name + Birthday
+      if (candSurname && candFirst && candBirth && exSurname && exFirst && exBirth) {
+        if (candSurname === exSurname && candFirst === exFirst && candBirth === exBirth) {
+          return {
+            duplicateStatus: 'EXACT',
+            existingRecord: existing,
+            matchedFields: ['surname', 'firstName', 'birthday'],
+            matchReason: 'Exact Name and Birthday Match',
+            message: `Exact duplicate found: Student "${existing.surname}, ${existing.firstName}" (DOB: ${existing.birthday}) is already registered in your account.`,
+          };
+        }
+      }
+
+      // 3. EXACT DUPLICATE: Same Surname + First Name + Address (when address is detailed)
+      if (candSurname && candFirst && candAddress && exSurname && exFirst && exAddress && candAddress.length > 8) {
+        if (candSurname === exSurname && candFirst === exFirst && candAddress === exAddress) {
+          return {
+            duplicateStatus: 'EXACT',
+            existingRecord: existing,
+            matchedFields: ['surname', 'firstName', 'address'],
+            matchReason: 'Exact Name and Address Match',
+            message: `Exact duplicate found: Student "${existing.surname}, ${existing.firstName}" from "${existing.address}" is already registered.`,
+          };
+        }
+      }
+
+      // 4. POSSIBLE DUPLICATE: Same Surname + First Name (different or missing birthday)
+      if (candSurname && candFirst && exSurname && exFirst) {
+        if (candSurname === exSurname && candFirst === exFirst) {
+          return {
+            duplicateStatus: 'POSSIBLE',
+            existingRecord: existing,
+            matchedFields: ['surname', 'firstName'],
+            matchReason: 'Matching Full Name with different birthday or school',
+            message: `Possible duplicate found: A student named "${existing.surname}, ${existing.firstName}" already exists (LRN: ${existing.lrn}, School: ${existing.elementarySchool || 'N/A'}). Please verify if this is the same student.`,
+          };
+        }
+      }
+
+      // 5. POSSIBLE DUPLICATE: Same Surname + Birthday + School (e.g. twins or same student with minor first name typo)
+      if (candSurname && candBirth && candSchool && exSurname && exBirth && exSchool && candSchool.length > 5) {
+        if (candSurname === exSurname && candBirth === exBirth && candSchool === exSchool) {
+          return {
+            duplicateStatus: 'POSSIBLE',
+            existingRecord: existing,
+            matchedFields: ['surname', 'birthday', 'elementarySchool'],
+            matchReason: 'Matching Surname, Birthday, and Elementary School',
+            message: `Possible duplicate found: Another student with surname "${existing.surname}", birthday "${existing.birthday}", and school "${existing.elementarySchool}" was found (Record: ${existing.firstName} ${existing.surname}).`,
+          };
+        }
+      }
+    }
+
+    return {
+      duplicateStatus: 'NONE',
+      message: 'No duplicate records found in your database.',
+    };
   },
 
   // AUDIT LOGS

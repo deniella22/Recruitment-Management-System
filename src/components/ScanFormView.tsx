@@ -30,7 +30,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { StudentRecord, AdmissionStatus, OCRScanResult, ConfidenceLevel } from '../types';
-import { performOCRScan, createStudent, updateStudent } from '../lib/api';
+import { performOCRScan, createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
 
 interface Props {
   onClose: () => void;
@@ -88,6 +88,12 @@ export const ScanFormView: React.FC<Props> = ({
   // Review UI State
   const [saving, setSaving] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    duplicateStatus: 'EXACT' | 'POSSIBLE';
+    existingRecord: StudentRecord;
+    matchReason?: string;
+    message: string;
+  } | null>(null);
   const [imageZoom, setImageZoom] = useState<number>(1);
   const [imageRotation, setImageRotation] = useState<number>(0);
   const [activeReviewTab, setActiveReviewTab] = useState<'personal' | 'family' | 'educational' | 'health'>('personal');
@@ -561,11 +567,63 @@ export const ScanFormView: React.FC<Props> = ({
         healthStatus: healthStatus.trim(),
       };
 
+      // Check duplicates before creating new record
+      if (!duplicateWarning) {
+        const dupCheck = await checkStudentDuplicate(studentPayload);
+        if (dupCheck.duplicateStatus !== 'NONE' && dupCheck.existingRecord) {
+          setDuplicateWarning({
+            duplicateStatus: dupCheck.duplicateStatus,
+            existingRecord: dupCheck.existingRecord,
+            matchReason: dupCheck.matchReason,
+            message: dupCheck.message,
+          });
+          setSaving(false);
+          return;
+        }
+      }
+
       const created = await createStudent(studentPayload);
       onSuccess(created);
       onClose();
     } catch (err: any) {
       setSaveError(err.message || 'Failed to save student record to database.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleForceSaveToDatabase = async () => {
+    try {
+      setSaving(true);
+      const scoreNum = Number(examScore) || 0;
+      const sibNum = Math.max(0, Math.floor(Number(numSiblings) || 0));
+      const studentPayload = {
+        lrn: lrn.trim(),
+        surname: surname.trim(),
+        middleName: middleName.trim(),
+        firstName: firstName.trim(),
+        birthday,
+        address: address.trim(),
+        fatherName: fatherName.trim(),
+        fatherOccupation: fatherOccupation.trim(),
+        motherName: motherName.trim(),
+        motherOccupation: motherOccupation.trim(),
+        guardianName: guardianName.trim(),
+        guardianOccupation: guardianOccupation.trim(),
+        numSiblings: sibNum,
+        examScore: scoreNum,
+        elementarySchool: elementarySchool.trim(),
+        remarks,
+        healthStatus: healthStatus.trim(),
+      };
+
+      const created = await createStudent(studentPayload);
+      setDuplicateWarning(null);
+      onSuccess(created);
+      onClose();
+    } catch (err: any) {
+      setSaveError(err.message || 'Failed to save student record to database.');
+      setDuplicateWarning(null);
     } finally {
       setSaving(false);
     }
@@ -1516,6 +1574,86 @@ export const ScanFormView: React.FC<Props> = ({
           </div>
         )}
       </div>
+
+      {/* Duplicate Candidate Detection Warning Modal */}
+      {duplicateWarning && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-amber-300 max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center border border-amber-300 shrink-0 text-amber-700">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 bg-amber-200 text-amber-950 font-black text-[10px] uppercase tracking-wider rounded-md">
+                    {duplicateWarning.duplicateStatus === 'EXACT' ? 'Exact Duplicate Match' : 'Possible Duplicate Match'}
+                  </span>
+                </div>
+                <h3 className="font-black text-base text-gray-900 mt-1">
+                  Duplicate Scanned Document / Record Detected
+                </h3>
+                <p className="text-xs text-gray-600 mt-0.5 leading-relaxed font-medium">
+                  {duplicateWarning.message}
+                </p>
+              </div>
+            </div>
+
+            {/* Existing Student Card */}
+            <div className="p-4 bg-slate-50 border border-gray-200 rounded-xl text-xs space-y-2">
+              <div className="flex justify-between items-start border-b border-gray-200 pb-2">
+                <div>
+                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Existing Record in Database</span>
+                  <h4 className="font-black text-sm text-[#1E3A8A]">
+                    {duplicateWarning.existingRecord.surname}, {duplicateWarning.existingRecord.firstName} {duplicateWarning.existingRecord.middleName}
+                  </h4>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                  duplicateWarning.existingRecord.remarks === 'A - PASS' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {duplicateWarning.existingRecord.remarks}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                <div>
+                  <span className="text-gray-500 font-bold">LRN:</span>{' '}
+                  <span className="font-mono font-bold text-gray-900">{duplicateWarning.existingRecord.lrn}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500 font-bold">Birthday:</span>{' '}
+                  <span className="font-bold text-gray-900">{duplicateWarning.existingRecord.birthday}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-gray-500 font-bold">Elementary School:</span>{' '}
+                  <span className="font-bold text-gray-900">{duplicateWarning.existingRecord.elementarySchool || 'None specified'}</span>
+                </div>
+                <div className="col-span-2 text-[10px] text-gray-500 font-medium">
+                  Encoded by {duplicateWarning.existingRecord.createdBy} on {new Date(duplicateWarning.existingRecord.createdAt).toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setDuplicateWarning(null)}
+                className="w-full sm:w-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
+              >
+                Review & Edit Details
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleForceSaveToDatabase}
+                className="w-full sm:w-auto px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {saving ? 'Saving...' : 'Save Anyway (Override)'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

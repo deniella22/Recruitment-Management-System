@@ -17,13 +17,87 @@ export async function fetchAuthStatus(): Promise<{
   return res.json();
 }
 
+export async function registerAccount(data: {
+  fullName: string;
+  email: string;
+  username: string;
+  password: string;
+  confirmPassword: string;
+}): Promise<{ user: User; token: string; isNewAccount?: boolean }> {
+  const res = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    const err: any = new Error(json.error || 'Failed to create account');
+    err.existingAccount = json.existingAccount;
+    err.existingUsername = json.existingUsername;
+    err.existingEmail = json.existingEmail;
+    throw err;
+  }
+  return json;
+}
+
+export async function checkAccountExists(identifier: string): Promise<{
+  exists: boolean;
+  accountName?: string;
+  username?: string;
+  email?: string;
+  message?: string;
+}> {
+  const res = await fetch('/api/auth/check-account', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier }),
+  });
+  return res.json();
+}
+
+export async function deleteMyAccount(): Promise<{ success: boolean; message: string }> {
+  const res = await fetch('/api/auth/account', {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete account');
+  return json;
+}
+
+export async function checkStudentDuplicate(
+  candidate: Partial<StudentRecord>,
+  excludeId?: string
+): Promise<{
+  duplicateStatus: 'EXACT' | 'POSSIBLE' | 'NONE';
+  existingRecord?: StudentRecord;
+  matchedFields?: string[];
+  matchReason?: string;
+  message: string;
+}> {
+  const res = await fetch('/api/students/check-duplicate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ ...candidate, excludeId }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to check duplicate status');
+  return json;
+}
+
 export async function registerInitialAdmin(data: {
   fullName: string;
   email: string;
   username: string;
   password: string;
   confirmPassword: string;
-}): Promise<{ user: User; token: string }> {
+}): Promise<{ user: User; token: string; isNewAccount?: boolean }> {
   const res = await fetch('/api/auth/register-admin', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -48,13 +122,13 @@ export async function resetAllUsers(): Promise<{ success: boolean; message: stri
 }
 
 export async function loginUser(
-  username: string,
+  usernameOrEmail: string,
   password: string
-): Promise<{ user: User; token: string }> {
+): Promise<{ user: User; token: string; isFirstLogin?: boolean }> {
   const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username: usernameOrEmail, identifier: usernameOrEmail, password }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Invalid credentials');

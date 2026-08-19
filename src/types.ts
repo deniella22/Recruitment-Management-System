@@ -15,6 +15,7 @@ export type AdmissionStatus = 'A - PASS' | 'B - PENDING';
 
 export interface StudentRecord {
   id: string;
+  userId?: string;              // Account owner ID
   lrn: string;                  // Learner Reference Number (Unique string)
   surname: string;              // SN
   middleName: string;           // MN
@@ -36,6 +37,24 @@ export interface StudentRecord {
   updatedAt: string;
   createdBy: string;
   updatedBy: string;
+}
+
+export type DuplicateStatus = 'EXACT' | 'POSSIBLE' | 'NONE';
+
+export interface DuplicateCheckResult {
+  duplicateStatus: DuplicateStatus;
+  existingRecord?: StudentRecord;
+  matchedFields?: string[];
+  matchReason?: string;
+  message: string;
+}
+
+export interface SavedAccountInfo {
+  id: string;
+  fullName: string;
+  username: string;
+  email: string;
+  lastLoginAt?: string;
 }
 
 export interface AuditLogEntry {

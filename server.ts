@@ -49,12 +49,92 @@ async function startServer() {
     });
   });
 
-  // 2. Initial Admin Creation (First Use Only)
+  // 1b. Check if Username or Email Exists
+  app.post('/api/auth/check-account', (req, res) => {
+    const { identifier, email, username } = req.body;
+    const checkEmail = (email || identifier || '').trim();
+    const checkUsername = (username || identifier || '').trim();
+
+    const result = dbService.checkUserExists(checkEmail, checkUsername);
+    if (result.exists && result.existingUser) {
+      return res.json({
+        exists: true,
+        matchedField: result.matchedField,
+        accountName: result.existingUser.fullName,
+        username: result.existingUser.username,
+        email: result.existingUser.email,
+        message: 'An account with this email/username already exists. Please log in to your existing account.',
+      });
+    }
+    return res.json({ exists: false });
+  });
+
+  // 2. User Registration (Admin or Staff Account Creation)
+  app.post('/api/auth/register', (req, res) => {
+    try {
+      const { fullName, email, username, password, confirmPassword, role } = req.body;
+
+      if (!fullName || !email || !username || !password) {
+        return res.status(400).json({ error: 'All fields are required.' });
+      }
+
+      if (password !== confirmPassword) {
+        return res.status(400).json({ error: 'Passwords do not match.' });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+      }
+
+      // Check for existing account first
+      const check = dbService.checkUserExists(email, username);
+      if (check.exists && check.existingUser) {
+        return res.status(409).json({
+          error: 'An account with this email/username already exists. Please log in to your existing account.',
+          existingAccount: true,
+          existingUsername: check.existingUser.username,
+          existingEmail: check.existingUser.email,
+          matchedField: check.matchedField,
+        });
+      }
+
+      const users = dbService.getUsers();
+      // First user becomes Super Admin, subsequent users get specified role or Recruitment Staff
+      const userRole = users.length === 0 ? 'Super Administrator' : (role || 'Recruitment Staff');
+
+      const newUser = dbService.createUser({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        username: username.trim(),
+        password,
+        role: userRole,
+      });
+
+      dbService.updateLastLogin(newUser.id);
+      dbService.addAuditLog({
+        userId: newUser.id,
+        userName: newUser.fullName,
+        action: 'Account Created',
+        details: `Created new account: ${newUser.fullName} (@${newUser.username}) - Role: ${newUser.role}`,
+      });
+
+      return res.status(201).json({
+        user: newUser,
+        token: newUser.id,
+        isNewAccount: true,
+        message: 'Account created successfully.',
+      });
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to create account.' });
+    }
+  });
+
+  // 2a. Initial Admin Creation (First Use Alias)
   app.post('/api/auth/register-admin', (req, res) => {
     try {
       const users = dbService.getUsers();
       if (users.length > 0) {
-        return res.status(400).json({ error: 'System already has an administrator account.' });
+        return res.status(400).json({ error: 'System already has an administrator account. Please log in or create a staff account.' });
       }
 
       const { fullName, email, username, password, confirmPassword } = req.body;
@@ -90,6 +170,7 @@ async function startServer() {
       return res.json({
         user: newUser,
         token: newUser.id,
+        isNewAccount: true,
         message: 'Administrator account created successfully.',
       });
     } catch (err: any) {
@@ -116,17 +197,59 @@ async function startServer() {
     }
   });
 
-  // 3. User Login
-  app.post('/api/auth/login', (req, res) => {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required.' });
+  // 2c. Delete Current User Account & Associated Student Records
+  app.delete('/api/auth/account', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ error: 'Authentication required to delete account.' });
     }
 
-    const userWithHash = dbService.getUserByUsername(username);
+    try {
+      const result = dbService.deleteUserAccount(currentUser.id);
+      if (result.success) {
+        return res.json({
+          success: true,
+          message: `Account for ${currentUser.fullName} and ${result.deletedStudentsCount} associated student record(s) deleted permanently.`,
+        });
+      }
+      return res.status(500).json({ error: 'Failed to delete account.' });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Failed to delete account.' });
+    }
+  });
+
+  app.post('/api/auth/delete-account', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ error: 'Authentication required to delete account.' });
+    }
+
+    try {
+      const result = dbService.deleteUserAccount(currentUser.id);
+      if (result.success) {
+        return res.json({
+          success: true,
+          message: `Account for ${currentUser.fullName} and ${result.deletedStudentsCount} associated student record(s) deleted permanently.`,
+        });
+      }
+      return res.status(500).json({ error: 'Failed to delete account.' });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Failed to delete account.' });
+    }
+  });
+
+  // 3. User Login (Supports Username or Email)
+  app.post('/api/auth/login', (req, res) => {
+    const { username, identifier, password } = req.body;
+    const loginId = (identifier || username || '').trim();
+
+    if (!loginId || !password) {
+      return res.status(400).json({ error: 'Username/email and password are required.' });
+    }
+
+    const userWithHash = dbService.getUserByUsernameOrEmail(loginId);
     if (!userWithHash) {
-      return res.status(401).json({ error: 'Invalid username or password.' });
+      return res.status(401).json({ error: 'Invalid username/email or password.' });
     }
 
     if (userWithHash.status !== 'Active') {
@@ -135,15 +258,16 @@ async function startServer() {
 
     const isMatch = dbService.verifyPassword(password, userWithHash.passwordHash);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid username or password.' });
+      return res.status(401).json({ error: 'Invalid username/email or password.' });
     }
 
+    const isFirstLogin = !userWithHash.lastLoginAt;
     dbService.updateLastLogin(userWithHash.id);
     dbService.addAuditLog({
       userId: userWithHash.id,
       userName: userWithHash.fullName,
       action: 'Login',
-      details: `User ${userWithHash.username} logged in successfully`,
+      details: `User ${userWithHash.username} (${userWithHash.fullName}) logged in successfully`,
     });
 
     const { passwordHash, ...cleanUser } = userWithHash;
@@ -151,6 +275,7 @@ async function startServer() {
     return res.json({
       user: cleanUser,
       token: cleanUser.id,
+      isFirstLogin,
     });
   });
 
@@ -163,9 +288,10 @@ async function startServer() {
     return res.json({ user });
   });
 
-  // 5. Dashboard Statistics
+  // 5. Dashboard Statistics (Account-isolated)
   app.get('/api/dashboard/stats', (req, res) => {
-    const students = dbService.getStudents();
+    const currentUser = getCurrentUser(req);
+    const students = dbService.getStudents(currentUser?.id);
     const totalStudents = students.length;
     const totalPass = students.filter((s) => s.remarks === 'A - PASS').length;
     const totalPending = students.filter((s) => s.remarks === 'B - PENDING').length;
@@ -188,9 +314,10 @@ async function startServer() {
     });
   });
 
-  // 6. Get All Students
+  // 6. Get Students (Account-isolated)
   app.get('/api/students', (req, res) => {
-    let students = dbService.getStudents();
+    const currentUser = getCurrentUser(req);
+    let students = dbService.getStudents(currentUser?.id);
     const { search, status, sortBy, sortOrder } = req.query;
 
     if (search && typeof search === 'string') {
@@ -230,9 +357,20 @@ async function startServer() {
     return res.json(students);
   });
 
+  // 6b. Check Duplicate Record
+  app.post('/api/students/check-duplicate', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    const candidate = req.body || {};
+    const excludeId = req.body?.excludeId;
+
+    const result = dbService.checkDuplicate(candidate, currentUser?.id, excludeId);
+    return res.json(result);
+  });
+
   // 7. Get Single Student
   app.get('/api/students/:id', (req, res) => {
-    const student = dbService.getStudentById(req.params.id);
+    const currentUser = getCurrentUser(req);
+    const student = dbService.getStudentById(req.params.id, currentUser?.id);
     if (!student) {
       return res.status(404).json({ error: 'Student record not found.' });
     }
@@ -304,6 +442,7 @@ async function startServer() {
     try {
       const newStudent = dbService.createStudent(
         {
+          userId: currentUser.id,
           lrn: lrn.trim(),
           surname: surname.trim(),
           middleName: (middleName || '').trim(),
@@ -348,7 +487,7 @@ async function startServer() {
     }
 
     const studentId = req.params.id;
-    const existing = dbService.getStudentById(studentId);
+    const existing = dbService.getStudentById(studentId, currentUser.id);
     if (!existing) {
       return res.status(404).json({ error: 'Student record not found.' });
     }
@@ -420,7 +559,8 @@ async function startServer() {
           ...(remarks !== undefined && { remarks }),
           ...(healthStatus !== undefined && { healthStatus: healthStatus.trim() }),
         },
-        currentUser.fullName
+        currentUser.fullName,
+        currentUser.id
       );
 
       dbService.addAuditLog({
@@ -449,12 +589,12 @@ async function startServer() {
       return res.status(403).json({ error: 'Viewer role is not authorized to delete student records.' });
     }
 
-    const student = dbService.getStudentById(req.params.id);
+    const student = dbService.getStudentById(req.params.id, currentUser.id);
     if (!student) {
       return res.status(404).json({ error: 'Student record not found.' });
     }
 
-    const success = dbService.deleteStudent(req.params.id);
+    const success = dbService.deleteStudent(req.params.id, currentUser.id);
     if (success) {
       dbService.addAuditLog({
         userId: currentUser.id,

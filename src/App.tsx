@@ -492,7 +492,15 @@ export default function App() {
                 setCurrentUser(null);
                 setHasUsers(false);
                 localStorage.removeItem('sms_auth_token');
+                localStorage.removeItem('sms_last_account');
                 showToast('Accounts reset successfully. Setup your new permanent administrator account.');
+              }}
+              onAccountDeleted={() => {
+                setCurrentUser(null);
+                localStorage.removeItem('sms_auth_token');
+                localStorage.removeItem('sms_last_account');
+                showToast('Your account and associated student records have been permanently deleted.');
+                checkAuth();
               }}
             />
           )}
