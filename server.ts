@@ -607,7 +607,7 @@ async function startServer() {
     return res.status(500).json({ error: 'Failed to delete student record.' });
   });
 
-  // 10b. OCR Document Scanning (Gemini 3.7 Flash Multimodal)
+  // 10b. OCR Document Scanning (Gemini 3.6 Flash Multimodal Document Processing)
   app.post('/api/ocr-scan', async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
@@ -615,7 +615,7 @@ async function startServer() {
     }
 
     const { imageBase64, mimeType } = req.body;
-    if (!imageBase64) {
+    if (!imageBase64 || typeof imageBase64 !== 'string' || imageBase64.trim().length === 0) {
       return res.status(400).json({ error: 'Image file or camera scan data is required for OCR processing.' });
     }
 
@@ -623,7 +623,7 @@ async function startServer() {
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.status(500).json({
-          error: 'Gemini API key is not configured on the server. Ensure GEMINI_API_KEY is available.',
+          error: 'OCR configuration error. Please contact the system administrator.',
         });
       }
 
@@ -705,7 +705,8 @@ async function startServer() {
       };
 
       let responseText = '';
-      const candidateModels = ['gemini-3.7-flash', 'gemini-2.5-flash'];
+      // Primary model: gemini-3.6-flash as specified by project requirements, with modern fallback aliases
+      const candidateModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-flash-latest'];
       let lastErr: any = null;
 
       for (const modelName of candidateModels) {
@@ -764,9 +765,9 @@ ACCURACY & INTEGRITY RULES:
           }
         } catch (modelErr: any) {
           lastErr = modelErr;
-          console.warn(`OCR attempt with ${modelName} encountered error:`, modelErr?.message || modelErr);
-          // Wait 300ms before trying fallback model if 503 or 429
-          await new Promise((r) => setTimeout(r, 300));
+          console.warn(`OCR attempt with model ${modelName} returned error:`, modelErr?.message || modelErr);
+          // Small pause before trying fallback model if 503 or 429
+          await new Promise((r) => setTimeout(r, 200));
         }
       }
 
@@ -807,25 +808,63 @@ ACCURACY & INTEGRITY RULES:
         rawSummary,
       });
     } catch (err: any) {
-      console.error('OCR Scanning Error:', err);
+      console.error('OCR Scanning Error Details:', err);
       const errMsg = err?.message || String(err);
-      const is503OrBusy =
+
+      let userFriendlyError = 'OCR temporarily unavailable. The document image was preserved. Please retry OCR.';
+      let statusCode = 500;
+
+      if (
+        errMsg.includes('API_KEY') ||
+        errMsg.includes('apiKey') ||
+        errMsg.includes('API key') ||
+        errMsg.includes('UNAUTHENTICATED') ||
+        errMsg.includes('401') ||
+        errMsg.includes('403') ||
+        errMsg.includes('PERMISSION_DENIED')
+      ) {
+        userFriendlyError = 'OCR configuration error. Please contact the system administrator.';
+        statusCode = 500;
+      } else if (
         errMsg.includes('503') ||
         errMsg.includes('UNAVAILABLE') ||
         errMsg.includes('high demand') ||
         errMsg.includes('Resource has been exhausted') ||
         errMsg.includes('rate limit') ||
-        errMsg.includes('429');
-
-      if (is503OrBusy) {
-        return res.status(503).json({
-          error: 'The scanning service is temporarily busy. Please try again.',
-          isTemporary: true,
-        });
+        errMsg.includes('429')
+      ) {
+        userFriendlyError = 'The scanning service is temporarily busy. Please retry in a moment.';
+        statusCode = 503;
+      } else if (
+        errMsg.includes('ECONNREFUSED') ||
+        errMsg.includes('fetch failed') ||
+        errMsg.includes('network') ||
+        errMsg.includes('ENOTFOUND') ||
+        errMsg.includes('ETIMEDOUT')
+      ) {
+        userFriendlyError = 'Connection problem. Check your internet connection and retry OCR.';
+        statusCode = 502;
+      } else if (
+        errMsg.includes('400') ||
+        errMsg.includes('INVALID_ARGUMENT') ||
+        errMsg.includes('image format') ||
+        errMsg.includes('corrupted') ||
+        errMsg.includes('cannot decode')
+      ) {
+        userFriendlyError = 'Unable to process this image. Please try a clearer document image.';
+        statusCode = 400;
+      } else if (
+        errMsg.includes('404') ||
+        errMsg.includes('NOT_FOUND') ||
+        errMsg.includes('is no longer available') ||
+        errMsg.includes('not found')
+      ) {
+        userFriendlyError = 'OCR service unavailable. Please try OCR again.';
+        statusCode = 503;
       }
 
-      return res.status(500).json({
-        error: errMsg || 'Failed to scan document image with OCR. Please try again.',
+      return res.status(statusCode).json({
+        error: userFriendlyError,
       });
     }
   });

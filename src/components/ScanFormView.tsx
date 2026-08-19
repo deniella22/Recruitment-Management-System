@@ -708,57 +708,88 @@ export const ScanFormView: React.FC<Props> = ({
         {stage === 'capture' && (
           <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
             {ocrError && (
-              <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-amber-950 text-xs font-medium space-y-3 animate-in fade-in shadow-xs">
-                <div className="flex items-start gap-2.5">
-                  <AlertCircle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-bold text-amber-900 text-sm">
-                      {ocrError.includes('busy') || ocrError.includes('503')
-                        ? 'The scanning service is temporarily busy. Please try again.'
-                        : ocrError}
+              <div className="p-5 bg-amber-50/90 border-2 border-amber-300 rounded-2xl text-amber-950 text-xs font-medium space-y-4 animate-in fade-in shadow-md">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700 shrink-0 mt-0.5">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-amber-950 text-sm">
+                      {ocrError.includes('configuration error')
+                        ? 'OCR Configuration Error'
+                        : ocrError.includes('Connection problem')
+                        ? 'Connection Problem'
+                        : ocrError.includes('busy')
+                        ? 'OCR Service Temporarily Busy'
+                        : ocrError.includes('Unable to process')
+                        ? 'Unable to Process This Image'
+                        : 'OCR Processing Failed'}
                     </p>
-                    <p className="text-amber-800 text-xs mt-0.5">
-                      Your captured document image has been preserved. You can retry OCR immediately without taking another photo.
+                    <p className="text-amber-900 text-xs mt-0.5 font-semibold">
+                      {ocrError}
+                    </p>
+                    <p className="text-amber-800 text-[11px] mt-1 font-medium bg-amber-100/70 p-2 rounded-lg border border-amber-200/80 inline-block">
+                      ✓ Your captured document image has been preserved. You can retry OCR immediately without taking another photo.
                     </p>
                   </div>
                   <button
                     onClick={() => setOcrError(null)}
-                    className="text-amber-700 hover:text-amber-950 p-1 rounded-lg hover:bg-amber-100"
+                    className="text-amber-700 hover:text-amber-950 p-1.5 rounded-lg hover:bg-amber-100 cursor-pointer"
+                    title="Dismiss"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
                 {imagePreview && (
-                  <div className="flex flex-wrap items-center gap-2.5 pt-1 border-t border-amber-200/80">
-                    <button
-                      type="button"
-                      onClick={() => runOCR(imagePreview)}
-                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      <span>[ 🔄 TRY AGAIN ]</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImagePreview(null);
-                        setOcrError(null);
-                        startCamera('environment');
-                      }}
-                      className="px-3.5 py-2 bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span>Retake Photo</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3.5 py-2 bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Choose Different File</span>
-                    </button>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t border-amber-200">
+                    {/* Preserved Thumbnail */}
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-12 h-14 bg-slate-900 rounded-lg overflow-hidden border border-amber-300 shadow-2xs shrink-0">
+                        <img
+                          src={imagePreview}
+                          alt="Preserved Capture"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="text-[11px]">
+                        <span className="font-bold text-amber-950 block">Preserved Document Photo</span>
+                        <span className="text-amber-700 text-[10px]">Ready to process with Gemini 3.6 Flash</span>
+                      </div>
+                    </div>
+
+                    {/* Action Controls */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => runOCR(imagePreview)}
+                        className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer border border-emerald-600"
+                      >
+                        <RefreshCw className="w-4 h-4 text-emerald-200" />
+                        <span>[ RETRY OCR ]</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImagePreview(null);
+                          setOcrError(null);
+                          startCamera('environment');
+                        }}
+                        className="px-3.5 py-2.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Take New Photo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3.5 py-2.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Choose File</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1002,7 +1033,7 @@ export const ScanFormView: React.FC<Props> = ({
 
               <div className="flex items-center justify-between text-[10px] text-blue-900 font-bold opacity-60">
                 <span>Personal Data Form</span>
-                <span>Gemini 3.7</span>
+                <span>Gemini 3.6 Flash</span>
               </div>
             </div>
 
