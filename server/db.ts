@@ -61,16 +61,84 @@ function parseBase64Image(dataString: string, fallbackMime = 'image/png'): { bas
 }
 
 function validateAndSanitizeDb(raw: any): DbSchema {
-  const db: DbSchema = {
-    users: Array.isArray(raw?.users) ? raw.users : [],
-    students: Array.isArray(raw?.students) ? raw.students : [],
-    auditLogs: Array.isArray(raw?.auditLogs) ? raw.auditLogs : [],
+  const rawUsers: (User & { passwordHash: string })[] = Array.isArray(raw?.users) ? raw.users : [];
+  const rawStudents: StudentRecord[] = Array.isArray(raw?.students) ? raw.students : [];
+  const rawLogs: AuditLogEntry[] = Array.isArray(raw?.auditLogs) ? raw.auditLogs : [];
+
+  // Deduplicate and sanitize users strictly by id, normalized username, and normalized email
+  const seenUserIds = new Set<string>();
+  const seenUsernames = new Set<string>();
+  const seenEmails = new Set<string>();
+  const cleanUsers: (User & { passwordHash: string })[] = [];
+  const idRemap = new Map<string, string>(); // oldDuplicateId -> primaryId
+
+  for (const u of rawUsers) {
+    if (!u || !u.id) continue;
+    const cleanId = u.id.trim();
+    const cleanUsername = (u.username || '').trim().toLowerCase();
+    const cleanEmail = (u.email || '').trim().toLowerCase();
+
+    // Check if duplicate of an already processed user
+    const existing = cleanUsers.find(
+      (existingUser) =>
+        existingUser.id === cleanId ||
+        (cleanUsername && existingUser.username.toLowerCase() === cleanUsername) ||
+        (cleanEmail && existingUser.email.toLowerCase() === cleanEmail)
+    );
+
+    if (existing) {
+      // Map duplicate user ID to the primary user ID
+      idRemap.set(cleanId, existing.id);
+      // If the duplicate had newer login date or information, preserve it
+      if (u.lastLoginAt && (!existing.lastLoginAt || new Date(u.lastLoginAt) > new Date(existing.lastLoginAt))) {
+        existing.lastLoginAt = u.lastLoginAt;
+      }
+      if (u.role === 'Super Administrator' && existing.role !== 'Super Administrator') {
+        existing.role = 'Super Administrator';
+      }
+      continue;
+    }
+
+    seenUserIds.add(cleanId);
+    if (cleanUsername) seenUsernames.add(cleanUsername);
+    if (cleanEmail) seenEmails.add(cleanEmail);
+
+    cleanUsers.push({
+      ...u,
+      id: cleanId,
+      fullName: (u.fullName || '').trim(),
+      username: (u.username || '').trim(),
+      email: (u.email || '').trim(),
+      role: u.role || 'Recruitment Staff',
+      status: u.status || 'Active',
+      createdAt: u.createdAt || new Date().toISOString(),
+    });
+  }
+
+  // Remap student records and audit logs if any duplicate IDs were merged
+  const cleanStudents = rawStudents.map((s) => {
+    if (s.userId && idRemap.has(s.userId)) {
+      return { ...s, userId: idRemap.get(s.userId)! };
+    }
+    return s;
+  });
+
+  const cleanLogs = rawLogs.map((log) => {
+    if (log.userId && idRemap.has(log.userId)) {
+      return { ...log, userId: idRemap.get(log.userId)! };
+    }
+    return log;
+  });
+
+  return {
+    users: cleanUsers,
+    students: cleanStudents,
+    auditLogs: cleanLogs,
     settings: {
       ...DEFAULT_SETTINGS,
       ...(raw?.settings && typeof raw.settings === 'object' ? raw.settings : {}),
     },
   };
-  return db;
 }
 
 function loadDbFromDisk(): DbSchema {
@@ -289,7 +357,22 @@ export const dbService = {
     }
 
     if (updates.fullName) db.users[userIdx].fullName = updates.fullName.trim();
-    if (updates.email) db.users[userIdx].email = updates.email.trim().toLowerCase();
+    if (updates.username) {
+      const cleanUsername = updates.username.trim().toLowerCase();
+      const duplicate = db.users.find((u) => u.id !== id && u.username.toLowerCase() === cleanUsername);
+      if (duplicate) {
+        throw new Error('An account with this username already exists.');
+      }
+      db.users[userIdx].username = cleanUsername;
+    }
+    if (updates.email) {
+      const cleanEmail = updates.email.trim().toLowerCase();
+      const duplicate = db.users.find((u) => u.id !== id && u.email.toLowerCase() === cleanEmail);
+      if (duplicate) {
+        throw new Error('An account with this email address already exists.');
+      }
+      db.users[userIdx].email = cleanEmail;
+    }
     if (updates.role) db.users[userIdx].role = updates.role;
     if (updates.status) db.users[userIdx].status = updates.status;
     if (updates.password) {

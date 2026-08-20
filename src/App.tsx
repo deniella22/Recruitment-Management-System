@@ -15,6 +15,7 @@ import {
   exportStudentsToPdf,
   exportSchoolsSummaryPdf,
 } from './lib/api';
+import { saveAccountToDevice } from './lib/accountStorage';
 import { AdminRegistrationModal } from './components/AdminRegistrationModal';
 import { AuthScreen } from './components/AuthScreen';
 import { SplashScreen } from './components/common/SplashScreen';
@@ -153,6 +154,7 @@ export default function App() {
 
   const handleAuthSuccess = (user: User, token: string, isNewAccount?: boolean) => {
     localStorage.setItem('sms_auth_token', token);
+    saveAccountToDevice(user);
     setStudents([]);
     setDashboardStats(null);
     setCurrentUser(user);

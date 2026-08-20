@@ -13,8 +13,16 @@ import {
   RefreshCw,
   Users,
   ChevronRight,
+  X,
+  Trash2,
 } from 'lucide-react';
 import { loginUser, registerAccount, resetAllUsers, fetchSettings } from '../lib/api';
+import {
+  getSavedAccountsFromDevice,
+  saveAccountToDevice,
+  removeAccountFromDevice,
+  clearAllSavedAccountsFromDevice,
+} from '../lib/accountStorage';
 import { User as UserType, SystemSettings, SavedAccountInfo } from '../types';
 
 interface Props {
@@ -41,8 +49,9 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
 
   // Saved remembered accounts on this device
   const [savedAccount, setSavedAccount] = useState<SavedAccountInfo | null>(null);
-  const [savedAccountsList, setSavedAccountsList] = useState<SavedAccountInfo[]>([]);
+  const [otherSavedAccounts, setOtherSavedAccounts] = useState<SavedAccountInfo[]>([]);
   const [useManualLogin, setUseManualLogin] = useState(false);
+  const [deviceStorageNotice, setDeviceStorageNotice] = useState<string | null>(null);
 
   // Status & error banners
   const [loading, setLoading] = useState(false);
@@ -80,6 +89,15 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     };
   });
 
+  const loadSavedAccounts = () => {
+    const { primaryAccount, otherAccounts } = getSavedAccountsFromDevice();
+    setSavedAccount(primaryAccount);
+    setOtherSavedAccounts(otherAccounts);
+    if (primaryAccount && !loginIdentifier) {
+      setLoginIdentifier(primaryAccount.username || primaryAccount.email);
+    }
+  };
+
   useEffect(() => {
     if (systemSettings && systemSettings.schoolName) {
       setSettings(systemSettings);
@@ -91,80 +109,31 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
         .catch(() => {});
     }
 
-    // Load saved remembered account and recent accounts list
-    try {
-      const saved = localStorage.getItem('sms_last_account');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.username) {
-          setSavedAccount(parsed);
-          setLoginIdentifier(parsed.username);
-        }
-      }
-
-      const listSaved = localStorage.getItem('sms_saved_accounts');
-      if (listSaved) {
-        const parsedList = JSON.parse(listSaved);
-        if (Array.isArray(parsedList)) {
-          setSavedAccountsList(parsedList);
-        }
-      }
-    } catch (e) {
-      // Ignore cache parsing error
-    }
+    loadSavedAccounts();
   }, [systemSettings]);
-
-  const saveRememberedAccount = (user: UserType) => {
-    try {
-      const accountInfo: SavedAccountInfo = {
-        id: user.id,
-        fullName: user.fullName,
-        username: user.username,
-        email: user.email,
-        lastLoginAt: new Date().toISOString(),
-      };
-      localStorage.setItem('sms_last_account', JSON.stringify(accountInfo));
-      setSavedAccount(accountInfo);
-
-      // Update recent accounts list
-      const existingList = [...savedAccountsList.filter((a) => a.id !== user.id)];
-      const updatedList = [accountInfo, ...existingList].slice(0, 4);
-      localStorage.setItem('sms_saved_accounts', JSON.stringify(updatedList));
-      setSavedAccountsList(updatedList);
-    } catch (e) {
-      // Ignore storage error
-    }
-  };
-
-  const removeSavedAccount = (usernameOrEmail: string) => {
-    try {
-      const clean = usernameOrEmail.toLowerCase();
-      const updatedList = savedAccountsList.filter(
-        (a) => a.username.toLowerCase() !== clean && a.email.toLowerCase() !== clean
-      );
-      setSavedAccountsList(updatedList);
-      localStorage.setItem('sms_saved_accounts', JSON.stringify(updatedList));
-
-      if (
-        savedAccount &&
-        (savedAccount.username.toLowerCase() === clean || savedAccount.email.toLowerCase() === clean)
-      ) {
-        localStorage.removeItem('sms_last_account');
-        setSavedAccount(updatedList.length > 0 ? updatedList[0] : null);
-        if (updatedList.length > 0) {
-          setLoginIdentifier(updatedList[0].username);
-        }
-      }
-    } catch (e) {
-      // Ignore storage error
-    }
-  };
 
   const clearAllWarnings = () => {
     setError(null);
+    setDeviceStorageNotice(null);
     setExistingAccountWarning(null);
     setAccountNotFoundWarning(null);
     setWrongPasswordWarning(false);
+  };
+
+  const handleRemoveFromDevice = (identifierOrId: string, accountName: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    clearAllWarnings();
+    const { primaryAccount, otherAccounts } = removeAccountFromDevice(identifierOrId);
+    setSavedAccount(primaryAccount);
+    setOtherSavedAccounts(otherAccounts);
+    if (primaryAccount) {
+      setLoginIdentifier(primaryAccount.username || primaryAccount.email);
+    } else {
+      setLoginIdentifier('');
+      setUseManualLogin(true);
+    }
+    setLoginPassword('');
+    setDeviceStorageNotice(`Account '${accountName}' removed from this device. (Your account and data remain safe on the server)`);
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -180,12 +149,15 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     try {
       setLoading(true);
       const res = await loginUser(identifierToUse, loginPassword);
-      saveRememberedAccount(res.user);
+      // Persist saved account on device without duplication
+      saveAccountToDevice(res.user);
       onSuccess(res.user, res.token, false);
     } catch (err: any) {
       if (err.accountNotFound) {
-        // Backend confirms account does not exist
-        removeSavedAccount(identifierToUse);
+        // Backend confirms account does not exist -> remove from device saved accounts
+        const { primaryAccount, otherAccounts } = removeAccountFromDevice(identifierToUse);
+        setSavedAccount(primaryAccount);
+        setOtherSavedAccounts(otherAccounts);
         setAccountNotFoundWarning({
           message: err.message || "We couldn't find an account using those credentials.",
           identifier: identifierToUse,
@@ -237,7 +209,8 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
         confirmPassword: regConfirmPassword,
       });
 
-      saveRememberedAccount(res.user);
+      // Save to device storage without duplication
+      saveAccountToDevice(res.user);
       onSuccess(res.user, res.token, true);
     } catch (err: any) {
       if (err.existingAccount) {
@@ -270,8 +243,19 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
 
   const selectSavedAccount = (acc: SavedAccountInfo) => {
     clearAllWarnings();
-    setSavedAccount(acc);
-    setLoginIdentifier(acc.username);
+    // Switch primary account in storage and UI
+    const { primaryAccount, otherAccounts } = saveAccountToDevice({
+      id: acc.id,
+      fullName: acc.fullName,
+      username: acc.username,
+      email: acc.email,
+      role: 'Recruitment Staff',
+      status: 'Active',
+      createdAt: new Date().toISOString(),
+    });
+    setSavedAccount(primaryAccount);
+    setOtherSavedAccounts(otherAccounts);
+    setLoginIdentifier(primaryAccount.username || primaryAccount.email);
     setLoginPassword('');
     setUseManualLogin(false);
   };
@@ -451,6 +435,23 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
             </div>
           )}
 
+          {/* Device Storage Notice (e.g. after removing account from device) */}
+          {deviceStorageNotice && (
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl text-blue-900 text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>{deviceStorageNotice}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeviceStorageNotice(null)}
+                className="text-blue-500 hover:text-blue-700 p-0.5 rounded cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* General Error Message */}
           {error && !wrongPasswordWarning && !accountNotFoundWarning && !existingAccountWarning && (
             <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-xs font-semibold flex items-center gap-2.5 animate-in fade-in">
@@ -465,21 +466,31 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
               {/* Remembered Account Quick Card */}
               {savedAccount && !useManualLogin && (
                 <div className="p-4 bg-blue-50/70 border border-blue-200/80 rounded-2xl space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#1E3A8A] text-white rounded-xl flex items-center justify-center font-black text-sm uppercase shadow-xs">
-                      {savedAccount.fullName.charAt(0) || 'U'}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 bg-[#1E3A8A] text-white rounded-xl flex items-center justify-center font-black text-sm uppercase shadow-xs shrink-0">
+                        {savedAccount.fullName.charAt(0) || 'U'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-blue-900 font-bold uppercase tracking-wider">
+                          Saved Account on this device
+                        </p>
+                        <h3 className="text-xs font-extrabold text-gray-900 truncate">
+                          {savedAccount.fullName}
+                        </h3>
+                        <p className="text-[11px] text-gray-500 font-medium truncate">
+                          @{savedAccount.username} &bull; {savedAccount.email}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-blue-900 font-bold uppercase tracking-wider">
-                        Saved Account on this device
-                      </p>
-                      <h3 className="text-xs font-extrabold text-gray-900 truncate">
-                        {savedAccount.fullName}
-                      </h3>
-                      <p className="text-[11px] text-gray-500 font-medium truncate">
-                        @{savedAccount.username} &bull; {savedAccount.email}
-                      </p>
-                    </div>
+                    <button
+                      type="button"
+                      title="Remove saved account from this device (Account stays safe on server)"
+                      onClick={(e) => handleRemoveFromDevice(savedAccount.id || savedAccount.username, savedAccount.fullName, e)}
+                      className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-all cursor-pointer shrink-0 ml-2"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
                   <form onSubmit={handleLoginSubmit} className="space-y-3 pt-1">
@@ -526,26 +537,51 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                     </button>
                   </form>
 
-                  {/* Switch to other saved accounts if multiple exist */}
-                  {savedAccountsList.length > 1 && (
-                    <div className="pt-2 border-t border-blue-100 space-y-1.5">
+                  {/* Switch to other saved accounts if genuinely distinct accounts exist */}
+                  {otherSavedAccounts.length > 0 && (
+                    <div className="pt-2.5 border-t border-blue-100 space-y-1.5">
                       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                         Other saved accounts:
                       </p>
-                      <div className="flex flex-col gap-1">
-                        {savedAccountsList
-                          .filter((acc) => acc.id !== savedAccount.id)
-                          .map((acc) => (
+                      <div className="flex flex-col gap-1.5">
+                        {otherSavedAccounts.map((acc) => (
+                          <div
+                            key={acc.id || acc.username}
+                            className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-white hover:bg-blue-50 border border-blue-100 text-xs transition-all"
+                          >
                             <button
-                              key={acc.id}
                               type="button"
                               onClick={() => selectSavedAccount(acc)}
-                              className="text-left px-2.5 py-1.5 rounded-lg bg-white hover:bg-blue-100/50 border border-blue-100 text-xs text-gray-700 flex items-center justify-between cursor-pointer transition-all"
+                              className="text-left flex-1 min-w-0 cursor-pointer flex items-center gap-2"
                             >
-                              <span className="font-bold truncate">{acc.fullName} (@{acc.username})</span>
-                              <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                              <div className="w-6 h-6 rounded-md bg-blue-100 text-blue-900 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                {acc.fullName.charAt(0) || 'U'}
+                              </div>
+                              <div className="truncate">
+                                <span className="font-bold text-gray-800">{acc.fullName}</span>
+                                <span className="text-gray-500 text-[11px] ml-1">(@{acc.username})</span>
+                              </div>
                             </button>
-                          ))}
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                title="Log in as this user"
+                                onClick={() => selectSavedAccount(acc)}
+                                className="p-1 text-blue-700 hover:bg-blue-100 rounded cursor-pointer"
+                              >
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                title="Remove from this device"
+                                onClick={(e) => handleRemoveFromDevice(acc.id || acc.username, acc.fullName, e)}
+                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -851,10 +887,9 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                   try {
                     setResetting(true);
                     await resetAllUsers();
-                    localStorage.removeItem('sms_last_account');
-                    localStorage.removeItem('sms_saved_accounts');
+                    clearAllSavedAccountsFromDevice();
                     setSavedAccount(null);
-                    setSavedAccountsList([]);
+                    setOtherSavedAccounts([]);
                     setShowResetConfirm(false);
                     if (onResetAccounts) onResetAccounts();
                   } catch (err: any) {
