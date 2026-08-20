@@ -20,7 +20,7 @@ export const Header: React.FC<Props> = ({
   onBackToLists,
 }) => {
   const logoSrc = systemSettings?.schoolLogoUrl || '/school_logo.png';
-  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Minglanilla, Cebu';
+  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
 
   const getPageTitle = (tab: string) => {
     switch (tab) {
