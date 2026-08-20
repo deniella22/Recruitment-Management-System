@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="100%" height="100%">
+  <defs>
+    <!-- Text path for top text: Sisters of Mary School-Girlstown, Inc. -->
+    <path id="topTextArc" d="M 68, 300 A 232,232 0 1,1 532, 300" fill="none" />
+    <!-- Text path for bottom text: * 1990 * -->
+    <path id="bottomTextArc" d="M 532, 300 A 232,232 0 0,1 68, 300" fill="none" />
+  </defs>
+
+  <style>
+    .logo-blue { fill: #001FD1; stroke: #001FD1; }
+    .logo-text-top {
+      font-family: 'Times New Roman', Times, 'Georgia', serif;
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: 3.5px;
+      fill: #001FD1;
+    }
+    .logo-text-bottom {
+      font-family: 'Times New Roman', Times, 'Georgia', serif;
+      font-size: 38px;
+      font-weight: 900;
+      letter-spacing: 6px;
+      fill: #001FD1;
+    }
+  </style>
+
+  <!-- Background Canvas -->
+  <rect width="600" height="600" fill="#FFFFFF" />
+
+  <!-- Outer Double Ring -->
+  <!-- Outermost thick circle -->
+  <circle cx="300" cy="300" r="282" fill="none" stroke="#001FD1" stroke-width="8" />
+  
+  <!-- Outer thin boundary circle -->
+  <circle cx="300" cy="300" r="270" fill="none" stroke="#001FD1" stroke-width="3" />
+
+  <!-- Inner boundary circle -->
+  <circle cx="300" cy="300" r="186" fill="none" stroke="#001FD1" stroke-width="4" />
+
+  <!-- Curved Text: SISTERS OF MARY SCHOOL-GIRLSTOWN, INC. -->
+  <text class="logo-text-top">
+    <textPath href="#topTextArc" startOffset="50%" text-anchor="middle">SISTERS OF MARY SCHOOL-GIRLSTOWN, INC.</textPath>
+  </text>
+
+  <!-- Curved Text: * 1990 * -->
+  <text class="logo-text-bottom">
+    <textPath href="#bottomTextArc" startOffset="50%" text-anchor="middle">✶ 1990 ✶</textPath>
+  </text>
+
+  <!-- Center Emblem (Sisters of Mary Official Symbol) -->
+  <g class="logo-blue">
+    <!-- Top circle (head) -->
+    <circle cx="300" cy="180" r="42" fill="#001FD1" stroke="none" />
+
+    <!-- Middle horizontal bar -->
+    <path d="M 122,228 L 478,228 L 478,290 L 122,290 Z" fill="#001FD1" stroke="none" />
+
+    <!-- Lower inner circle -->
+    <circle cx="300" cy="326" r="42" fill="#001FD1" stroke="none" />
+
+    <!-- Lower thick crescent/U-bowl -->
+    <!-- Formed by outer semicircle arc from 122 to 478 (radius 178) and inner semicircle arc (radius 116) -->
+    <path d="
+      M 122, 304
+      A 178,178 0 0,0 478, 304
+      L 416, 304
+      A 116,116 0 0,1 184, 304
+      Z
+    " fill="#001FD1" stroke="none" />
+  </g>
+</svg>
