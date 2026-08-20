@@ -61,7 +61,7 @@ export const RecruitmentListsView: React.FC<Props> = ({
   // Form states
   const [listName, setListName] = useState<string>('');
   const [schoolName, setSchoolName] = useState<string>('Sisters of Mary School');
-  const [branch, setBranch] = useState<string>('Minglanilla, Cebu');
+  const [branch, setBranch] = useState<string>('Talisay, Cebu');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -95,7 +95,7 @@ export const RecruitmentListsView: React.FC<Props> = ({
     const currentYear = new Date().getFullYear();
     setListName(defaultName || `RECRUITMENT ${currentYear}`);
     setSchoolName(systemSettings.schoolName || 'Sisters of Mary School');
-    setBranch(systemSettings.schoolLocation ? 'Minglanilla, Cebu' : 'Minglanilla, Cebu');
+    setBranch(systemSettings.schoolLocation ? 'Talisay, Cebu' : 'Talisay, Cebu');
     setFormError(null);
     setIsAddModalOpen(true);
   };
@@ -113,7 +113,7 @@ export const RecruitmentListsView: React.FC<Props> = ({
       const created = await createRecruitmentList({
         name: listName.trim(),
         schoolName: schoolName.trim() || 'Sisters of Mary School',
-        branch: branch.trim() || 'Minglanilla, Cebu',
+        branch: branch.trim() || 'Talisay, Cebu',
       });
       showNotification(`Recruitment list "${created.name}" created successfully!`);
       setIsAddModalOpen(false);
@@ -232,7 +232,7 @@ export const RecruitmentListsView: React.FC<Props> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-black uppercase tracking-wider text-cyan-400">
-                  SISTERS OF MARY SCHOOL – MINGLANILLA, CEBU
+                  SISTERS OF MARY SCHOOL – TALISAY, CEBU
                 </span>
               </div>
               <h1 className="text-2xl font-black text-white tracking-tight leading-tight">

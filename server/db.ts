@@ -20,10 +20,10 @@ const DB_TMP_FILE = path.join(DATA_DIR, 'db.tmp.json');
 const DEFAULT_SETTINGS: SystemSettings = {
   id: 'system_default_settings',
   setupCompleted: false,
-  schoolName: 'Sisters of Mary School – Minglanilla, Cebu',
+  schoolName: 'Sisters of Mary School – Talisay, Cebu',
   subTitle: 'Internal Student Recruitment & Information Management System',
   systemName: 'Student Recruitment Management System',
-  schoolLocation: 'Minglanilla, Cebu, Philippines',
+  schoolLocation: 'Talisay, Cebu, Philippines',
   schoolLogoUrl: '/school_logo.png',
   maxExamScore: 100,
   dashboardBgTheme: 'custom',
@@ -128,7 +128,7 @@ function validateAndSanitizeDb(raw: any): DbSchema {
         userId: cleanUserId,
         name: r.name.trim(),
         schoolName: (r.schoolName || 'Sisters of Mary School').trim(),
-        branch: (r.branch || 'Minglanilla, Cebu').trim(),
+        branch: (r.branch || 'Talisay, Cebu').trim(),
         archived: Boolean(r.archived),
         createdAt: r.createdAt || new Date().toISOString(),
         updatedAt: r.updatedAt || new Date().toISOString(),
@@ -545,7 +545,7 @@ export const dbService = {
     if (!cleanName) throw new Error('Recruitment list name is required');
 
     const cleanSchool = (data.schoolName || 'Sisters of Mary School').trim();
-    const cleanBranch = (data.branch || 'Minglanilla, Cebu').trim();
+    const cleanBranch = (data.branch || 'Talisay, Cebu').trim();
 
     const duplicate = db.recruitmentLists.find(
       (r) =>

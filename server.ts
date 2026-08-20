@@ -333,7 +333,7 @@ async function startServer() {
           userId: currentUser.id,
           name: name.trim(),
           schoolName: (schoolName || 'Sisters of Mary School').trim(),
-          branch: (branch || 'Minglanilla, Cebu').trim(),
+          branch: (branch || 'Talisay, Cebu').trim(),
         },
         currentUser.fullName
       );

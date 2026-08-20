@@ -44,10 +44,10 @@ const getInitialSettings = (): SystemSettings => {
     // Ignore cache error
   }
   return {
-    schoolName: 'Sisters of Mary School – Minglanilla, Cebu',
+    schoolName: 'Sisters of Mary School – Talisay, Cebu',
     subTitle: 'Internal Student Recruitment & Information Management System',
     systemName: 'STUDENT RECRUITMENT MANAGEMENT SYSTEM',
-    schoolLocation: 'MINGLANILLA, CEBU, PHILIPPINES',
+    schoolLocation: 'TALISAY, CEBU, PHILIPPINES',
     schoolLogoUrl: '/school_logo.png',
     maxExamScore: 100,
     dashboardBgTheme: 'custom',
@@ -405,7 +405,7 @@ export default function App() {
             id: '',
             name: 'System Settings',
             schoolName: systemSettings.schoolName,
-            branch: 'Minglanilla, Cebu',
+            branch: 'Talisay, Cebu',
             createdAt: '',
             lastUpdated: '',
             totalApplicants: 0,

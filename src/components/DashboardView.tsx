@@ -73,7 +73,7 @@ export const DashboardView: React.FC<Props> = ({
   const recentStudents = stats?.recentStudents ?? [];
 
   const logoSrc = systemSettings?.schoolLogoUrl || '/school_logo.png';
-  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Minglanilla, Cebu';
+  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
   const subTitle = systemSettings?.subTitle || 'Internal Student Information Management System';
   const academicYear = systemSettings?.academicYear || 'SY 2026-2027 Recruitment';
   const themeClass = getThemeGradientClass(

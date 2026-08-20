@@ -18,7 +18,7 @@ export interface RecruitmentList {
   userId?: string;              // Account owner ID
   name: string;                // e.g. "Recruitment 2026–2027"
   schoolName: string;          // "Sisters of Mary School"
-  branch: string;              // "Minglanilla, Cebu"
+  branch: string;              // "Talisay, Cebu"
   archived?: boolean;
   createdAt: string;
   updatedAt: string;
