@@ -9,8 +9,10 @@ import {
   History,
   Settings,
   Camera,
+  Layers,
+  ArrowLeft,
 } from 'lucide-react';
-import { UserRole, SystemSettings } from '../types';
+import { UserRole, SystemSettings, RecruitmentListWithStats } from '../types';
 
 interface Props {
   activeTab: string;
@@ -19,6 +21,8 @@ interface Props {
   onExportExcel: () => void;
   userRole: UserRole;
   systemSettings?: SystemSettings;
+  selectedRecruitmentList?: RecruitmentListWithStats | null;
+  onBackToLists?: () => void;
 }
 
 export const Sidebar: React.FC<Props> = ({
@@ -28,11 +32,13 @@ export const Sidebar: React.FC<Props> = ({
   onExportExcel,
   userRole,
   systemSettings,
+  selectedRecruitmentList,
+  onBackToLists,
 }) => {
   const isSuperAdmin = userRole === 'Super Administrator';
   const logoSrc = systemSettings?.schoolLogoUrl || '/school_logo.png';
-  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School-Girlstown, Inc.';
-  const subTitle = systemSettings?.academicYear || 'Recruitment System';
+  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Minglanilla, Cebu';
+  const listName = selectedRecruitmentList?.name || systemSettings?.academicYear || 'Recruitment Workspace';
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -59,11 +65,28 @@ export const Sidebar: React.FC<Props> = ({
           <h2 className="font-extrabold text-xs leading-snug tracking-tight text-white truncate" title={schoolName}>
             {schoolName}
           </h2>
-          <p className="text-[10px] uppercase font-bold text-blue-200 tracking-wider mt-0.5 truncate">
-            {subTitle}
+          <p className="text-[10px] uppercase font-bold text-cyan-300 tracking-wider mt-0.5 truncate flex items-center gap-1">
+            <Layers className="w-3 h-3 text-cyan-400 shrink-0" />
+            <span>{listName}</span>
           </p>
         </div>
       </div>
+
+      {/* Switch Recruitment List Button */}
+      {onBackToLists && (
+        <div className="px-4 pt-3 pb-1">
+          <button
+            onClick={onBackToLists}
+            className="w-full py-2 px-3 bg-blue-950/80 hover:bg-blue-900 text-cyan-300 hover:text-white font-bold text-xs rounded-xl transition-all flex items-center justify-between cursor-pointer border border-blue-700/60 shadow-xs"
+            title="Return to Recruitment Lists Dashboard"
+          >
+            <span className="flex items-center gap-1.5 truncate">
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>All Recruitment Lists</span>
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Quick Action Buttons */}
       <div className="p-4 space-y-2 border-b border-blue-800/80">
@@ -119,8 +142,8 @@ export const Sidebar: React.FC<Props> = ({
 
       {/* Footer System Info */}
       <div className="p-4 border-t border-blue-800/80 text-[11px] text-blue-200/80 bg-blue-950/80">
-        <p className="font-bold text-white">Girlstown Admission Office</p>
-        <p className="text-[10px] text-blue-300/80 mt-0.5">Authorized Internal Personnel Only</p>
+        <p className="font-bold text-white">Minglanilla Admission Office</p>
+        <p className="text-[10px] text-cyan-300/80 mt-0.5">Sisters of Mary School – Cebu</p>
       </div>
     </aside>
   );

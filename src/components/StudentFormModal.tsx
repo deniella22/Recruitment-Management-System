@@ -29,6 +29,7 @@ interface Props {
   studentToEdit?: StudentRecord | null;
   initialMode?: 'selection' | 'ocr' | 'form';
   maxExamScore: number;
+  recruitmentListId?: string;
   onClose: () => void;
   onSuccess: (student: StudentRecord) => void;
 }
@@ -37,6 +38,7 @@ export const StudentFormModal: React.FC<Props> = ({
   studentToEdit,
   initialMode = 'selection',
   maxExamScore,
+  recruitmentListId,
   onClose,
   onSuccess,
 }) => {
@@ -351,6 +353,7 @@ export const StudentFormModal: React.FC<Props> = ({
     try {
       setLoading(true);
       const payload = {
+        recruitmentListId: studentToEdit?.recruitmentListId || recruitmentListId,
         lrn: lrn.trim(),
         surname: surname.trim(),
         middleName: middleName.trim(),
@@ -372,7 +375,7 @@ export const StudentFormModal: React.FC<Props> = ({
 
       // Check duplicates on new records
       if (!isEditing && !duplicateWarning) {
-        const dupCheck = await checkStudentDuplicate(payload);
+        const dupCheck = await checkStudentDuplicate(payload, undefined, recruitmentListId);
         if (dupCheck.duplicateStatus !== 'NONE' && dupCheck.existingRecord) {
           setDuplicateWarning({
             duplicateStatus: dupCheck.duplicateStatus,

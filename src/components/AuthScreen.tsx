@@ -261,7 +261,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
   };
 
   const logoSrc = settings.schoolLogoUrl || '/school_logo.png';
-  const schoolName = settings.schoolName || 'Sisters of Mary School-Girlstown, Inc.';
+  const schoolName = settings.schoolName || 'Sisters of Mary School – Minglanilla, Cebu';
   const subTitle = settings.subTitle || 'Internal Student Recruitment & Information Management System';
 
   return (

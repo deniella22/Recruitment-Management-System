@@ -13,9 +13,28 @@ export interface User {
 
 export type AdmissionStatus = 'A - PASS' | 'B - PENDING';
 
+export interface RecruitmentList {
+  id: string;
+  userId?: string;              // Account owner ID
+  name: string;                // e.g. "Recruitment 2026–2027"
+  schoolName: string;          // "Sisters of Mary School"
+  branch: string;              // "Minglanilla, Cebu"
+  archived?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecruitmentListWithStats extends RecruitmentList {
+  totalApplicants: number;
+  passedApplicants: number;
+  pendingApplicants: number;
+  lastUpdated: string;
+}
+
 export interface StudentRecord {
   id: string;
   userId?: string;              // Account owner ID
+  recruitmentListId?: string;   // Associated recruitment year list
   lrn: string;                  // Learner Reference Number (Unique string)
   surname: string;              // SN
   middleName: string;           // MN

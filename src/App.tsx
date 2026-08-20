@@ -4,6 +4,7 @@ import {
   StudentRecord,
   DashboardStats,
   SystemSettings,
+  RecruitmentListWithStats,
 } from './types';
 import {
   fetchAuthStatus,
@@ -19,6 +20,7 @@ import { saveAccountToDevice } from './lib/accountStorage';
 import { AdminRegistrationModal } from './components/AdminRegistrationModal';
 import { AuthScreen } from './components/AuthScreen';
 import { SplashScreen } from './components/common/SplashScreen';
+import { RecruitmentListsView } from './components/RecruitmentListsView';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
@@ -42,10 +44,10 @@ const getInitialSettings = (): SystemSettings => {
     // Ignore cache error
   }
   return {
-    schoolName: 'Sisters of Mary School-Girlstown, Inc.',
+    schoolName: 'Sisters of Mary School – Minglanilla, Cebu',
     subTitle: 'Internal Student Recruitment & Information Management System',
-    systemName: 'MALE STUDENT RECRUITMENT MANAGEMENT SYSTEM',
-    schoolLocation: 'ADLAS, SILANG, CAVITE, PHILIPPINES',
+    systemName: 'STUDENT RECRUITMENT MANAGEMENT SYSTEM',
+    schoolLocation: 'MINGLANILLA, CEBU, PHILIPPINES',
     schoolLogoUrl: '/school_logo.png',
     maxExamScore: 100,
     dashboardBgTheme: 'custom',
@@ -64,7 +66,10 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [systemSettings, setSystemSettings] = useState<SystemSettings>(getInitialSettings);
 
-  // Navigation State
+  // Active Recruitment List Workspace Selection (Home Page after Login)
+  const [selectedRecruitmentList, setSelectedRecruitmentList] = useState<RecruitmentListWithStats | null>(null);
+
+  // Navigation State inside the Active Workspace
   const [activeTab, setActiveTab] = useState<string>('dashboard');
 
   // Student Records Data
@@ -124,18 +129,19 @@ export default function App() {
     checkAuth();
   }, []);
 
-  // Load Students and Dashboard Stats
+  // Load Students and Dashboard Stats scoped to active recruitmentList
   const loadStudentData = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !selectedRecruitmentList) return;
     try {
       setLoadingStudents(true);
       const [statsData, studentsData] = await Promise.all([
-        fetchDashboardStats(),
+        fetchDashboardStats(selectedRecruitmentList.id),
         fetchStudents({
           search: searchQuery,
           status: statusFilter,
           sortBy,
           sortOrder,
+          recruitmentListId: selectedRecruitmentList.id,
         }),
       ]);
       setDashboardStats(statsData);
@@ -148,16 +154,17 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && selectedRecruitmentList) {
       loadStudentData();
     }
-  }, [currentUser, searchQuery, statusFilter, sortBy, sortOrder]);
+  }, [currentUser, selectedRecruitmentList, searchQuery, statusFilter, sortBy, sortOrder]);
 
   const handleAuthSuccess = (user: User, token: string, isNewAccount?: boolean) => {
     localStorage.setItem('sms_auth_token', token);
     saveAccountToDevice(user);
     setStudents([]);
     setDashboardStats(null);
+    setSelectedRecruitmentList(null); // Return to Recruitment Lists Dashboard after Login
     setCurrentUser(user);
     setHasUsers(true);
     if (isNewAccount) {
@@ -170,6 +177,7 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('sms_auth_token');
     setCurrentUser(null);
+    setSelectedRecruitmentList(null);
     setStudents([]);
     setDashboardStats(null);
     setSelectedStudentForProfile(null);
@@ -232,8 +240,8 @@ export default function App() {
 
       if (typeof customListOrAll === 'boolean') {
         if (customListOrAll) {
-          // Export all from database
-          targetStudents = await fetchStudents();
+          // Export all from database scoped to current list
+          targetStudents = await fetchStudents({ recruitmentListId: selectedRecruitmentList?.id });
           label = 'All_Records';
         } else {
           // Export currently filtered/searched list
@@ -263,7 +271,7 @@ export default function App() {
 
       if (typeof customListOrAll === 'boolean') {
         if (customListOrAll) {
-          targetStudents = await fetchStudents();
+          targetStudents = await fetchStudents({ recruitmentListId: selectedRecruitmentList?.id });
           label = 'All_Records';
         } else {
           targetStudents = students;
@@ -285,7 +293,7 @@ export default function App() {
 
   const handleExportSchools = async (type: 'excel' | 'pdf') => {
     try {
-      const targetList = await fetchStudents();
+      const targetList = await fetchStudents({ recruitmentListId: selectedRecruitmentList?.id });
       if (type === 'pdf') {
         showToast('Generating Feeder Schools PDF summary...');
         await exportSchoolsSummaryPdf(targetList, systemSettings);
@@ -381,7 +389,36 @@ export default function App() {
     );
   }
 
-  // 3. Logged in -> Main Application Interface
+  // 3. Logged in -> If NO Recruitment List is selected, display Recruitment Lists Dashboard as Home Page
+  if (!selectedRecruitmentList) {
+    return (
+      <RecruitmentListsView
+        currentUser={currentUser}
+        systemSettings={systemSettings}
+        onSelectList={(list) => {
+          setSelectedRecruitmentList(list);
+          setActiveTab('dashboard');
+        }}
+        onLogout={handleLogout}
+        onOpenSettings={() => {
+          setSelectedRecruitmentList({
+            id: '',
+            name: 'System Settings',
+            schoolName: systemSettings.schoolName,
+            branch: 'Minglanilla, Cebu',
+            createdAt: '',
+            lastUpdated: '',
+            totalApplicants: 0,
+            passedApplicants: 0,
+            pendingApplicants: 0,
+          });
+          setActiveTab('settings');
+        }}
+      />
+    );
+  }
+
+  // 4. Logged in and inside a Recruitment List Workspace -> Main Application Interface
   return (
     <div className="min-h-screen bg-gray-100/70 flex font-sans text-gray-900 antialiased">
       {/* Toast Notification Banner */}
@@ -415,6 +452,11 @@ export default function App() {
         onExportExcel={handleExportExcel}
         userRole={currentUser.role}
         systemSettings={systemSettings}
+        selectedRecruitmentList={selectedRecruitmentList}
+        onBackToLists={() => {
+          setSelectedRecruitmentList(null);
+          setActiveTab('dashboard');
+        }}
       />
 
       {/* Main Content Workspace */}
@@ -424,6 +466,11 @@ export default function App() {
           activeTab={activeTab}
           onLogout={handleLogout}
           systemSettings={systemSettings}
+          selectedRecruitmentList={selectedRecruitmentList}
+          onBackToLists={() => {
+            setSelectedRecruitmentList(null);
+            setActiveTab('dashboard');
+          }}
         />
 
         <main className="p-6 flex-1">
@@ -502,12 +549,14 @@ export default function App() {
               onAccountsResetNeeded={() => {
                 setCurrentUser(null);
                 setHasUsers(false);
+                setSelectedRecruitmentList(null);
                 localStorage.removeItem('sms_auth_token');
                 localStorage.removeItem('sms_last_account');
                 showToast('Accounts reset successfully. Setup your new permanent administrator account.');
               }}
               onAccountDeleted={() => {
                 setCurrentUser(null);
+                setSelectedRecruitmentList(null);
                 localStorage.removeItem('sms_auth_token');
                 localStorage.removeItem('sms_last_account');
                 showToast('Your account and associated student records have been permanently deleted.');
@@ -524,6 +573,7 @@ export default function App() {
           studentToEdit={studentToEdit}
           initialMode={modalInitialMode}
           maxExamScore={systemSettings.maxExamScore}
+          recruitmentListId={selectedRecruitmentList.id}
           onClose={() => {
             setIsFormModalOpen(false);
             setStudentToEdit(null);

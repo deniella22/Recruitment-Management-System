@@ -1,10 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
-import { User, StudentRecord, AuditLogEntry, SystemSettings } from '../src/types.js';
+import { User, StudentRecord, AuditLogEntry, SystemSettings, RecruitmentList, RecruitmentListWithStats } from '../src/types.js';
 
 interface DbSchema {
   users: (User & { passwordHash: string })[];
+  recruitmentLists: RecruitmentList[];
   students: StudentRecord[];
   auditLogs: AuditLogEntry[];
   settings: SystemSettings;
@@ -19,10 +20,10 @@ const DB_TMP_FILE = path.join(DATA_DIR, 'db.tmp.json');
 const DEFAULT_SETTINGS: SystemSettings = {
   id: 'system_default_settings',
   setupCompleted: false,
-  schoolName: 'Sisters of Mary School-Girlstown, Inc.',
+  schoolName: 'Sisters of Mary School – Minglanilla, Cebu',
   subTitle: 'Internal Student Recruitment & Information Management System',
-  systemName: 'Male Student Recruitment Management System',
-  schoolLocation: 'Adlas, Silang, Cavite, Philippines',
+  systemName: 'Student Recruitment Management System',
+  schoolLocation: 'Minglanilla, Cebu, Philippines',
   schoolLogoUrl: '/school_logo.png',
   maxExamScore: 100,
   dashboardBgTheme: 'custom',
@@ -63,6 +64,7 @@ function parseBase64Image(dataString: string, fallbackMime = 'image/png'): { bas
 
 function validateAndSanitizeDb(raw: any): DbSchema {
   const rawUsers: (User & { passwordHash: string })[] = Array.isArray(raw?.users) ? raw.users : [];
+  const rawRecruitmentLists: RecruitmentList[] = Array.isArray(raw?.recruitmentLists) ? raw.recruitmentLists : [];
   const rawStudents: StudentRecord[] = Array.isArray(raw?.students) ? raw.students : [];
   const rawLogs: AuditLogEntry[] = Array.isArray(raw?.auditLogs) ? raw.auditLogs : [];
 
@@ -116,12 +118,33 @@ function validateAndSanitizeDb(raw: any): DbSchema {
     });
   }
 
-  // Remap student records and audit logs if any duplicate IDs were merged
+  // Remap recruitment lists and students if any duplicate IDs were merged
+  const cleanRecruitmentLists: RecruitmentList[] = rawRecruitmentLists
+    .filter((r) => r && r.id && r.name)
+    .map((r) => {
+      const cleanUserId = r.userId && idRemap.has(r.userId) ? idRemap.get(r.userId)! : r.userId;
+      return {
+        id: r.id.trim(),
+        userId: cleanUserId,
+        name: r.name.trim(),
+        schoolName: (r.schoolName || 'Sisters of Mary School').trim(),
+        branch: (r.branch || 'Minglanilla, Cebu').trim(),
+        archived: Boolean(r.archived),
+        createdAt: r.createdAt || new Date().toISOString(),
+        updatedAt: r.updatedAt || new Date().toISOString(),
+      };
+    });
+
   const cleanStudents = rawStudents.map((s) => {
+    let cleanUserId = s.userId;
     if (s.userId && idRemap.has(s.userId)) {
-      return { ...s, userId: idRemap.get(s.userId)! };
+      cleanUserId = idRemap.get(s.userId)!;
     }
-    return s;
+    return {
+      ...s,
+      userId: cleanUserId,
+      recruitmentListId: s.recruitmentListId ? s.recruitmentListId.trim() : undefined,
+    };
   });
 
   const cleanLogs = rawLogs.map((log) => {
@@ -137,6 +160,7 @@ function validateAndSanitizeDb(raw: any): DbSchema {
 
   return {
     users: cleanUsers,
+    recruitmentLists: cleanRecruitmentLists,
     students: cleanStudents,
     auditLogs: cleanLogs,
     settings: {
@@ -205,6 +229,7 @@ function loadDbFromDisk(): DbSchema {
   console.log('[DB] Initializing new database storage.');
   const initialDb: DbSchema = {
     users: [],
+    recruitmentLists: [],
     students: [],
     auditLogs: [],
     settings: DEFAULT_SETTINGS,
@@ -435,6 +460,11 @@ export const dbService = {
     db.students = db.students.filter((s) => s.userId !== userId);
     const deletedStudentsCount = initialStudentsCount - db.students.length;
 
+    // Remove recruitment lists owned by this user
+    if (db.recruitmentLists) {
+      db.recruitmentLists = db.recruitmentLists.filter((r) => r.userId !== userId);
+    }
+
     // Remove audit logs for this user
     db.auditLogs = db.auditLogs.filter((log) => log.userId !== userId);
 
@@ -458,24 +488,182 @@ export const dbService = {
     }
   },
 
-  // STUDENTS (Account-based strict isolation)
-  getStudents(userId?: string): StudentRecord[] {
+  // RECRUITMENT LISTS (Workspace lists)
+  getRecruitmentLists(userId?: string, includeArchived = false): RecruitmentList[] {
     const db = ensureDbExists();
     if (!userId) return [];
-    return db.students.filter((s) => s.userId === userId);
+    const list = db.recruitmentLists || [];
+    return list.filter((r) => r.userId === userId && (includeArchived || !r.archived));
   },
 
-  getStudentById(id: string, userId?: string): StudentRecord | undefined {
+  getRecruitmentListsWithStats(userId?: string, includeArchived = false): RecruitmentListWithStats[] {
+    const db = ensureDbExists();
+    if (!userId) return [];
+    const lists = (db.recruitmentLists || []).filter(
+      (r) => r.userId === userId && (includeArchived || !r.archived)
+    );
+    const userStudents = db.students.filter((s) => s.userId === userId);
+
+    return lists.map((list) => {
+      const listStudents = userStudents.filter((s) => s.recruitmentListId === list.id);
+      const totalApplicants = listStudents.length;
+      const passedApplicants = listStudents.filter((s) => s.remarks === 'A - PASS').length;
+      const pendingApplicants = listStudents.filter((s) => s.remarks === 'B - PENDING').length;
+
+      let latestTime = new Date(list.updatedAt || list.createdAt).getTime();
+      for (const s of listStudents) {
+        const sTime = new Date(s.updatedAt || s.createdAt).getTime();
+        if (sTime > latestTime) latestTime = sTime;
+      }
+
+      return {
+        ...list,
+        totalApplicants,
+        passedApplicants,
+        pendingApplicants,
+        lastUpdated: new Date(latestTime).toISOString(),
+      };
+    });
+  },
+
+  getRecruitmentListById(id: string, userId?: string): RecruitmentList | undefined {
+    const db = ensureDbExists();
+    if (!userId || !id) return undefined;
+    const list = db.recruitmentLists || [];
+    return list.find((r) => r.id === id && r.userId === userId);
+  },
+
+  createRecruitmentList(
+    data: { name: string; schoolName?: string; branch?: string; userId?: string },
+    operatorName: string
+  ): RecruitmentList {
+    const db = ensureDbExists();
+    if (!db.recruitmentLists) db.recruitmentLists = [];
+    if (!data.userId) throw new Error('User ID is required to create a recruitment list');
+
+    const cleanName = (data.name || '').trim();
+    if (!cleanName) throw new Error('Recruitment list name is required');
+
+    const cleanSchool = (data.schoolName || 'Sisters of Mary School').trim();
+    const cleanBranch = (data.branch || 'Minglanilla, Cebu').trim();
+
+    const duplicate = db.recruitmentLists.find(
+      (r) =>
+        r.userId === data.userId &&
+        r.name.toLowerCase() === cleanName.toLowerCase() &&
+        r.branch.toLowerCase() === cleanBranch.toLowerCase()
+    );
+
+    if (duplicate) {
+      if (duplicate.archived) {
+        duplicate.archived = false;
+        duplicate.updatedAt = new Date().toISOString();
+        saveDb(db);
+        return duplicate;
+      }
+      throw new Error(`A recruitment list named "${cleanName}" for ${cleanBranch} already exists.`);
+    }
+
+    const now = new Date().toISOString();
+    const newList: RecruitmentList = {
+      id: 'rcl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      userId: data.userId,
+      name: cleanName,
+      schoolName: cleanSchool,
+      branch: cleanBranch,
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    db.recruitmentLists.push(newList);
+    saveDb(db);
+    return newList;
+  },
+
+  updateRecruitmentList(
+    id: string,
+    updates: Partial<RecruitmentList>,
+    operatorName: string,
+    userId?: string
+  ): RecruitmentList {
+    const db = ensureDbExists();
+    if (!db.recruitmentLists) db.recruitmentLists = [];
+    const idx = db.recruitmentLists.findIndex((r) => r.id === id && (!userId || r.userId === userId));
+    if (idx === -1) {
+      throw new Error('Recruitment list not found');
+    }
+
+    if (updates.name) {
+      const cleanName = updates.name.trim();
+      const existing = db.recruitmentLists.find(
+        (r) =>
+          r.id !== id &&
+          (!userId || r.userId === userId) &&
+          r.name.toLowerCase() === cleanName.toLowerCase() &&
+          r.branch.toLowerCase() === (updates.branch || db.recruitmentLists[idx].branch).toLowerCase()
+      );
+      if (existing) {
+        throw new Error(`A recruitment list named "${cleanName}" already exists.`);
+      }
+    }
+
+    const updated: RecruitmentList = {
+      ...db.recruitmentLists[idx],
+      ...updates,
+      name: updates.name ? updates.name.trim() : db.recruitmentLists[idx].name,
+      schoolName: updates.schoolName ? updates.schoolName.trim() : db.recruitmentLists[idx].schoolName,
+      branch: updates.branch ? updates.branch.trim() : db.recruitmentLists[idx].branch,
+      updatedAt: new Date().toISOString(),
+    };
+
+    db.recruitmentLists[idx] = updated;
+    saveDb(db);
+    return updated;
+  },
+
+  deleteRecruitmentList(id: string, userId?: string): { success: boolean; deletedStudentsCount: number } {
+    const db = ensureDbExists();
+    if (!userId || !db.recruitmentLists) return { success: false, deletedStudentsCount: 0 };
+    const list = db.recruitmentLists.find((r) => r.id === id && r.userId === userId);
+    if (!list) return { success: false, deletedStudentsCount: 0 };
+
+    db.recruitmentLists = db.recruitmentLists.filter((r) => !(r.id === id && r.userId === userId));
+    
+    const beforeCount = db.students.length;
+    db.students = db.students.filter((s) => !(s.recruitmentListId === id && s.userId === userId));
+    const deletedStudentsCount = beforeCount - db.students.length;
+
+    saveDb(db);
+    return { success: true, deletedStudentsCount };
+  },
+
+  // STUDENTS (Account-based & Workspace strict isolation)
+  getStudents(userId?: string, recruitmentListId?: string): StudentRecord[] {
+    const db = ensureDbExists();
+    if (!userId) return [];
+    let list = db.students.filter((s) => s.userId === userId);
+    if (recruitmentListId) {
+      list = list.filter((s) => s.recruitmentListId === recruitmentListId);
+    }
+    return list;
+  },
+
+  getStudentById(id: string, userId?: string, recruitmentListId?: string): StudentRecord | undefined {
     const db = ensureDbExists();
     if (!userId) return undefined;
-    return db.students.find((s) => s.id === id && s.userId === userId);
+    return db.students.find(
+      (s) => s.id === id && s.userId === userId && (!recruitmentListId || s.recruitmentListId === recruitmentListId)
+    );
   },
 
-  getStudentByLrn(lrn: string, userId?: string): StudentRecord | undefined {
+  getStudentByLrn(lrn: string, userId?: string, recruitmentListId?: string): StudentRecord | undefined {
     const db = ensureDbExists();
     if (!userId) return undefined;
     const cleanLrn = lrn.trim();
-    return db.students.find((s) => s.lrn.trim() === cleanLrn && s.userId === userId);
+    return db.students.find(
+      (s) => s.lrn.trim() === cleanLrn && s.userId === userId && (!recruitmentListId || s.recruitmentListId === recruitmentListId)
+    );
   },
 
   createStudent(
@@ -485,9 +673,9 @@ export const dbService = {
     const db = ensureDbExists();
 
     // Strict duplicate check before creating a record
-    const dupCheck = this.checkDuplicate(studentData, studentData.userId);
+    const dupCheck = this.checkDuplicate(studentData, studentData.userId, undefined, studentData.recruitmentListId);
     if (dupCheck.duplicateStatus === 'EXACT') {
-      throw new Error(dupCheck.message || `Duplicate student record: ${dupCheck.existingRecord?.surname}, ${dupCheck.existingRecord?.firstName} (LRN: ${dupCheck.existingRecord?.lrn || 'N/A'}) already exists in your database.`);
+      throw new Error(dupCheck.message || `Duplicate student record: ${dupCheck.existingRecord?.surname}, ${dupCheck.existingRecord?.firstName} (LRN: ${dupCheck.existingRecord?.lrn || 'N/A'}) already exists in this recruitment list.`);
     }
 
     const cleanLrn = studentData.lrn.trim();
@@ -496,6 +684,7 @@ export const dbService = {
       ...studentData,
       id: 'std_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       userId: studentData.userId,
+      recruitmentListId: studentData.recruitmentListId,
       lrn: cleanLrn,
       createdAt: now,
       updatedAt: now,
@@ -521,11 +710,17 @@ export const dbService = {
       throw new Error('Student record not found');
     }
 
-    // If LRN is being changed, check if new LRN exists on ANOTHER record belonging to this user
+    const currentRecruitmentId = db.students[idx].recruitmentListId;
+
+    // If LRN is being changed, check if new LRN exists on ANOTHER record belonging to this user in the same list
     if (updates.lrn && updates.lrn.trim() !== db.students[idx].lrn.trim()) {
       const cleanLrn = updates.lrn.trim();
       const duplicate = db.students.find(
-        (s) => s.id !== id && s.lrn.trim() === cleanLrn && (!userId || s.userId === userId)
+        (s) =>
+          s.id !== id &&
+          s.lrn.trim() === cleanLrn &&
+          (!userId || s.userId === userId) &&
+          (!currentRecruitmentId || s.recruitmentListId === currentRecruitmentId)
       );
       if (duplicate) {
         throw new Error(`This LRN (${cleanLrn}) already exists for student: ${duplicate.surname}, ${duplicate.firstName}.`);
@@ -562,7 +757,8 @@ export const dbService = {
   checkDuplicate(
     candidate: Partial<StudentRecord>,
     userId?: string,
-    excludeId?: string
+    excludeId?: string,
+    recruitmentListId?: string
   ): {
     duplicateStatus: 'EXACT' | 'POSSIBLE' | 'NONE';
     existingRecord?: StudentRecord;
@@ -572,7 +768,10 @@ export const dbService = {
   } {
     const db = ensureDbExists();
     const userStudents = db.students.filter(
-      (s) => (!userId || s.userId === userId) && (!excludeId || s.id !== excludeId)
+      (s) =>
+        (!userId || s.userId === userId) &&
+        (!excludeId || s.id !== excludeId) &&
+        (!recruitmentListId || !s.recruitmentListId || s.recruitmentListId === recruitmentListId)
     );
 
     const norm = (str?: string) =>

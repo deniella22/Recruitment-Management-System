@@ -306,10 +306,131 @@ async function startServer() {
     return res.json({ user });
   });
 
-  // 5. Dashboard Statistics (Account-isolated)
+  // 4b. Recruitment Lists API (Workspace lists)
+  app.get('/api/recruitment-lists', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const includeArchived = req.query.includeArchived === 'true';
+    const lists = dbService.getRecruitmentListsWithStats(currentUser.id, includeArchived);
+    return res.json(lists);
+  });
+
+  app.post('/api/recruitment-lists', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const { name, schoolName, branch } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Recruitment list name is required.' });
+    }
+
+    try {
+      const newList = dbService.createRecruitmentList(
+        {
+          userId: currentUser.id,
+          name: name.trim(),
+          schoolName: (schoolName || 'Sisters of Mary School').trim(),
+          branch: (branch || 'Minglanilla, Cebu').trim(),
+        },
+        currentUser.fullName
+      );
+
+      dbService.addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        action: 'Recruitment List Created',
+        details: `Created new recruitment list: "${newList.name}" for ${newList.branch}`,
+      });
+
+      return res.status(201).json(newList);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to create recruitment list.' });
+    }
+  });
+
+  app.get('/api/recruitment-lists/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const list = dbService.getRecruitmentListById(req.params.id, currentUser.id);
+    if (!list) {
+      return res.status(404).json({ error: 'Recruitment list not found' });
+    }
+    return res.json(list);
+  });
+
+  app.put('/api/recruitment-lists/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const { name, schoolName, branch, archived } = req.body;
+
+    try {
+      const updated = dbService.updateRecruitmentList(
+        req.params.id,
+        {
+          ...(name !== undefined && { name: name.trim() }),
+          ...(schoolName !== undefined && { schoolName: schoolName.trim() }),
+          ...(branch !== undefined && { branch: branch.trim() }),
+          ...(archived !== undefined && { archived: Boolean(archived) }),
+        },
+        currentUser.fullName,
+        currentUser.id
+      );
+
+      dbService.addAuditLog({
+        userId: currentUser.id,
+        userName: currentUser.fullName,
+        action: 'Recruitment List Updated',
+        details: `Updated recruitment list: "${updated.name}" (${updated.branch})${archived !== undefined ? ` - Archived: ${archived}` : ''}`,
+      });
+
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to update recruitment list.' });
+    }
+  });
+
+  app.delete('/api/recruitment-lists/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    if (currentUser.role === 'Viewer') {
+      return res.status(403).json({ error: 'Viewer role is not authorized to delete recruitment lists.' });
+    }
+
+    try {
+      const existing = dbService.getRecruitmentListById(req.params.id, currentUser.id);
+      const result = dbService.deleteRecruitmentList(req.params.id, currentUser.id);
+      if (result.success) {
+        dbService.addAuditLog({
+          userId: currentUser.id,
+          userName: currentUser.fullName,
+          action: 'Recruitment List Deleted',
+          details: `Deleted recruitment list "${existing?.name || req.params.id}" and ${result.deletedStudentsCount} associated student records.`,
+        });
+        return res.json({
+          success: true,
+          message: `Recruitment list and ${result.deletedStudentsCount} associated records deleted.`,
+        });
+      }
+      return res.status(404).json({ error: 'Recruitment list not found.' });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Failed to delete recruitment list.' });
+    }
+  });
+
+  // 5. Dashboard Statistics (Account & Workspace isolated)
   app.get('/api/dashboard/stats', (req, res) => {
     const currentUser = getCurrentUser(req);
-    const students = dbService.getStudents(currentUser?.id);
+    const recruitmentListId = req.query.recruitmentListId as string | undefined;
+    const students = dbService.getStudents(currentUser?.id, recruitmentListId);
     const totalStudents = students.length;
     const totalPass = students.filter((s) => s.remarks === 'A - PASS').length;
     const totalPending = students.filter((s) => s.remarks === 'B - PENDING').length;
@@ -332,10 +453,11 @@ async function startServer() {
     });
   });
 
-  // 6. Get Students (Account-isolated)
+  // 6. Get Students (Account & Workspace isolated)
   app.get('/api/students', (req, res) => {
     const currentUser = getCurrentUser(req);
-    let students = dbService.getStudents(currentUser?.id);
+    const recruitmentListId = req.query.recruitmentListId as string | undefined;
+    let students = dbService.getStudents(currentUser?.id, recruitmentListId);
     const { search, status, sortBy, sortOrder } = req.query;
 
     if (search && typeof search === 'string') {
@@ -380,15 +502,17 @@ async function startServer() {
     const currentUser = getCurrentUser(req);
     const candidate = req.body || {};
     const excludeId = req.body?.excludeId;
+    const recruitmentListId = req.body?.recruitmentListId;
 
-    const result = dbService.checkDuplicate(candidate, currentUser?.id, excludeId);
+    const result = dbService.checkDuplicate(candidate, currentUser?.id, excludeId, recruitmentListId);
     return res.json(result);
   });
 
   // 7. Get Single Student
   app.get('/api/students/:id', (req, res) => {
     const currentUser = getCurrentUser(req);
-    const student = dbService.getStudentById(req.params.id, currentUser?.id);
+    const recruitmentListId = req.query.recruitmentListId as string | undefined;
+    const student = dbService.getStudentById(req.params.id, currentUser?.id, recruitmentListId);
     if (!student) {
       return res.status(404).json({ error: 'Student record not found.' });
     }
@@ -403,6 +527,7 @@ async function startServer() {
     }
 
     const {
+      recruitmentListId,
       lrn,
       surname,
       middleName,
@@ -468,7 +593,9 @@ async function startServer() {
         address: (address || '').trim(),
         elementarySchool: (elementarySchool || '').trim(),
       },
-      currentUser.id
+      currentUser.id,
+      undefined,
+      recruitmentListId
     );
 
     if (dupCheck.duplicateStatus === 'EXACT') {
@@ -478,7 +605,7 @@ async function startServer() {
         existingRecord: dupCheck.existingRecord,
         matchedFields: dupCheck.matchedFields,
         matchReason: dupCheck.matchReason,
-        message: dupCheck.message || 'This student/applicant record already exists in the system. The record will not be saved again.',
+        message: dupCheck.message || 'This student/applicant record already exists in this recruitment list.',
       });
     }
 
@@ -486,6 +613,7 @@ async function startServer() {
       const newStudent = dbService.createStudent(
         {
           userId: currentUser.id,
+          recruitmentListId: recruitmentListId ? recruitmentListId.trim() : undefined,
           lrn: lrn.trim(),
           surname: surname.trim(),
           middleName: (middleName || '').trim(),

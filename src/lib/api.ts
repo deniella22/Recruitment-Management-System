@@ -1,4 +1,14 @@
-import { StudentRecord, User, AuditLogEntry, SystemSettings, DashboardStats, AdmissionStatus, OCRScanResult } from '../types';
+import {
+  StudentRecord,
+  User,
+  AuditLogEntry,
+  SystemSettings,
+  DashboardStats,
+  AdmissionStatus,
+  OCRScanResult,
+  RecruitmentList,
+  RecruitmentListWithStats,
+} from '../types';
 
 const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('sms_auth_token');
@@ -16,6 +26,68 @@ export async function fetchAuthStatus(): Promise<{
   });
   if (!res.ok) throw new Error('Failed to fetch auth status');
   return res.json();
+}
+
+// RECRUITMENT LISTS API
+export async function fetchRecruitmentLists(includeArchived = false): Promise<RecruitmentListWithStats[]> {
+  const res = await fetch(`/api/recruitment-lists?includeArchived=${includeArchived}`, {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) throw new Error('Failed to fetch recruitment lists');
+  return res.json();
+}
+
+export async function fetchRecruitmentListById(id: string): Promise<RecruitmentList> {
+  const res = await fetch(`/api/recruitment-lists/${id}`, {
+    headers: { ...getAuthHeaders() },
+  });
+  if (!res.ok) throw new Error('Failed to fetch recruitment list');
+  return res.json();
+}
+
+export async function createRecruitmentList(data: {
+  name: string;
+  schoolName?: string;
+  branch?: string;
+}): Promise<RecruitmentList> {
+  const res = await fetch('/api/recruitment-lists', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to create recruitment list');
+  return json;
+}
+
+export async function updateRecruitmentList(
+  id: string,
+  data: Partial<RecruitmentList>
+): Promise<RecruitmentList> {
+  const res = await fetch(`/api/recruitment-lists/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(data),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update recruitment list');
+  return json;
+}
+
+export async function deleteRecruitmentList(id: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`/api/recruitment-lists/${id}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete recruitment list');
+  return json;
 }
 
 export async function registerAccount(data: {
@@ -71,7 +143,8 @@ export async function deleteMyAccount(): Promise<{ success: boolean; message: st
 
 export async function checkStudentDuplicate(
   candidate: Partial<StudentRecord>,
-  excludeId?: string
+  excludeId?: string,
+  recruitmentListId?: string
 ): Promise<{
   duplicateStatus: 'EXACT' | 'POSSIBLE' | 'NONE';
   existingRecord?: StudentRecord;
@@ -85,7 +158,7 @@ export async function checkStudentDuplicate(
       'Content-Type': 'application/json',
       ...getAuthHeaders(),
     },
-    body: JSON.stringify({ ...candidate, excludeId }),
+    body: JSON.stringify({ ...candidate, excludeId, recruitmentListId }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Failed to check duplicate status');
@@ -143,8 +216,11 @@ export async function loginUser(
   return json;
 }
 
-export async function fetchDashboardStats(): Promise<DashboardStats> {
-  const res = await fetch('/api/dashboard/stats', {
+export async function fetchDashboardStats(recruitmentListId?: string): Promise<DashboardStats> {
+  const url = recruitmentListId
+    ? `/api/dashboard/stats?recruitmentListId=${encodeURIComponent(recruitmentListId)}`
+    : '/api/dashboard/stats';
+  const res = await fetch(url, {
     headers: { ...getAuthHeaders() },
   });
   if (!res.ok) throw new Error('Failed to fetch dashboard stats');
@@ -156,12 +232,14 @@ export async function fetchStudents(params?: {
   status?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  recruitmentListId?: string;
 }): Promise<StudentRecord[]> {
   const query = new URLSearchParams();
   if (params?.search) query.set('search', params.search);
   if (params?.status) query.set('status', params.status);
   if (params?.sortBy) query.set('sortBy', params.sortBy);
   if (params?.sortOrder) query.set('sortOrder', params.sortOrder);
+  if (params?.recruitmentListId) query.set('recruitmentListId', params.recruitmentListId);
 
   const url = `/api/students${query.toString() ? `?${query.toString()}` : ''}`;
   const res = await fetch(url, { headers: { ...getAuthHeaders() } });
@@ -169,8 +247,11 @@ export async function fetchStudents(params?: {
   return res.json();
 }
 
-export async function fetchStudentById(id: string): Promise<StudentRecord> {
-  const res = await fetch(`/api/students/${id}`, {
+export async function fetchStudentById(id: string, recruitmentListId?: string): Promise<StudentRecord> {
+  const url = recruitmentListId
+    ? `/api/students/${id}?recruitmentListId=${encodeURIComponent(recruitmentListId)}`
+    : `/api/students/${id}`;
+  const res = await fetch(url, {
     headers: { ...getAuthHeaders() },
   });
   if (!res.ok) throw new Error('Student record not found');
