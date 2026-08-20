@@ -18,6 +18,7 @@ const DB_TMP_FILE = path.join(DATA_DIR, 'db.tmp.json');
 
 const DEFAULT_SETTINGS: SystemSettings = {
   id: 'system_default_settings',
+  setupCompleted: false,
   schoolName: 'Sisters of Mary School-Girlstown, Inc.',
   subTitle: 'Internal Student Recruitment & Information Management System',
   systemName: 'Male Student Recruitment Management System',
@@ -130,13 +131,19 @@ function validateAndSanitizeDb(raw: any): DbSchema {
     return log;
   });
 
+  const rawSettings = raw?.settings && typeof raw.settings === 'object' ? raw.settings : {};
+  const isSetupCompleted = cleanUsers.length > 0 || Boolean(rawSettings.setupCompleted);
+  const superAdmin = cleanUsers.find((u) => u.role === 'Super Administrator') || cleanUsers[0];
+
   return {
     users: cleanUsers,
     students: cleanStudents,
     auditLogs: cleanLogs,
     settings: {
       ...DEFAULT_SETTINGS,
-      ...(raw?.settings && typeof raw.settings === 'object' ? raw.settings : {}),
+      ...rawSettings,
+      setupCompleted: isSetupCompleted,
+      ...(superAdmin ? { administratorUserId: superAdmin.id } : {}),
     },
   };
 }
@@ -341,6 +348,13 @@ export const dbService = {
     };
 
     db.users.push(newUser);
+    db.settings = {
+      ...DEFAULT_SETTINGS,
+      ...db.settings,
+      setupCompleted: true,
+      administratorUserId: newUser.role === 'Super Administrator' ? newUser.id : (db.settings?.administratorUserId || newUser.id),
+      updatedAt: new Date().toISOString(),
+    };
     saveDb(db);
 
     console.log(`[DB] Successfully created and persisted account for: ${newUser.fullName} (@${newUser.username}, ${newUser.email}) - Total Users in DB: ${db.users.length}`);
@@ -389,10 +403,26 @@ export const dbService = {
     const initialLen = db.users.length;
     db.users = db.users.filter((u) => u.id !== id);
     if (db.users.length !== initialLen) {
+      if (db.users.length === 0 && db.settings) {
+        db.settings.setupCompleted = false;
+        delete db.settings.administratorUserId;
+      }
       saveDb(db);
       return true;
     }
     return false;
+  },
+
+  resetUsers(): void {
+    const db = ensureDbExists();
+    db.users = [];
+    if (db.settings) {
+      db.settings.setupCompleted = false;
+      delete db.settings.administratorUserId;
+      db.settings.updatedAt = new Date().toISOString();
+    }
+    saveDb(db);
+    console.log('[DB] All user accounts have been reset. Settings and logo preserved.');
   },
 
   deleteUserAccount(userId: string): { success: boolean; deletedStudentsCount: number } {
@@ -689,13 +719,6 @@ export const dbService = {
   },
 
   // SETTINGS
-  resetUsers(): void {
-    const db = ensureDbExists();
-    db.users = [];
-    saveDb(db);
-    console.log('[DB] All users reset. Database file and backup updated.');
-  },
-
   getSettings(): SystemSettings {
     const db = ensureDbExists();
     const settings = db.settings || DEFAULT_SETTINGS;

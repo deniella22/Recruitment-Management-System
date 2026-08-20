@@ -68,6 +68,8 @@ export interface AuditLogEntry {
 
 export interface SystemSettings {
   id?: string;
+  setupCompleted?: boolean;
+  administratorUserId?: string;
   schoolName: string;
   subTitle?: string;
   systemName?: string;

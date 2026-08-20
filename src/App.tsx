@@ -101,7 +101,8 @@ export default function App() {
     try {
       setAuthError(null);
       const status = await fetchAuthStatus();
-      setHasUsers(status.hasUsers);
+      const isConfigured = Boolean(status.setupCompleted !== undefined ? status.setupCompleted : status.hasUsers);
+      setHasUsers(isConfigured);
       setCurrentUser(status.currentUser);
       if (status.settings) {
         setSystemSettings(status.settings);

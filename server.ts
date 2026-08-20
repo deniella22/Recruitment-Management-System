@@ -43,8 +43,10 @@ async function startServer() {
     const users = dbService.getUsers();
     const settings = dbService.getSettings();
     const currentUser = getCurrentUser(req);
+    const isConfigured = users.length > 0 || Boolean(settings.setupCompleted);
     res.json({
-      hasUsers: users.length > 0,
+      hasUsers: isConfigured,
+      setupCompleted: isConfigured,
       currentUser,
       settings,
     });

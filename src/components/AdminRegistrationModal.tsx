@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldCheck, User, Mail, Lock, AlertCircle, Building2 } from 'lucide-react';
 import { registerInitialAdmin } from '../lib/api';
+import { saveAccountToDevice } from '../lib/accountStorage';
 import { User as UserType, SystemSettings } from '../types';
 
 interface Props {
@@ -42,6 +43,7 @@ export const AdminRegistrationModal: React.FC<Props> = ({ onSuccess, systemSetti
         password,
         confirmPassword,
       });
+      saveAccountToDevice(res.user);
       onSuccess(res.user, res.token);
     } catch (err: any) {
       setError(err.message || 'Failed to create administrator account.');

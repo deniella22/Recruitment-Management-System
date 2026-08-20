@@ -7,6 +7,7 @@ const getAuthHeaders = (): Record<string, string> => {
 
 export async function fetchAuthStatus(): Promise<{
   hasUsers: boolean;
+  setupCompleted?: boolean;
   currentUser: User | null;
   settings: SystemSettings;
 }> {
