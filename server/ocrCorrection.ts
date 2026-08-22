@@ -1,11 +1,11 @@
-import { StudentRecord, AdmissionStatus, OCRCorrectionRecord, ConfidenceLevel } from '../src/types.js';
+import { StudentRecord, AdmissionStatus, OCRCorrectionRecord, ConfidenceLevel, SiblingRecord } from '../src/types.js';
 
-// Common Filipino and International Occupations, General Terms & Health conditions
+// Common Filipino and International Occupations & General Terms
 const OCCUPATION_DICTIONARY: Record<string, string> = {
   fonitures: 'Furniture Maker',
   foniture: 'Furniture Maker',
-  furnitures: 'Furniture',
-  furnitur: 'Furniture',
+  furnitures: 'Furniture Maker',
+  furnitur: 'Furniture Maker',
   studnt: 'Student',
   studdent: 'Student',
   studet: 'Student',
@@ -456,7 +456,7 @@ export function normalizeHealthStatus(raw: string): { corrected: string; wasChan
   return { corrected: raw.trim(), wasChanged: false, reason: '' };
 }
 
-export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
+export function applySmartOcrCorrection(rawExtracted: any): {
   correctedData: Partial<StudentRecord>;
   originalOcrData: Partial<StudentRecord>;
   corrections: OCRCorrectionRecord[];
@@ -465,14 +465,16 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
   const correctedData: Partial<StudentRecord> = { ...rawExtracted };
   const corrections: OCRCorrectionRecord[] = [];
 
-  if (rawExtracted.lrn !== undefined) {
-    const lrnResult = correctLrnDigits(String(rawExtracted.lrn));
+  // LRN
+  const lrnVal = rawExtracted.lrn || '';
+  if (lrnVal) {
+    const lrnResult = correctLrnDigits(String(lrnVal));
     correctedData.lrn = lrnResult.corrected;
     if (lrnResult.wasChanged) {
       corrections.push({
         field: 'lrn',
         fieldLabel: 'Learner Reference Number (LRN)',
-        originalValue: String(rawExtracted.lrn),
+        originalValue: String(lrnVal),
         correctedValue: lrnResult.corrected,
         confidence: 'HIGH',
         reason: lrnResult.reason,
@@ -481,14 +483,17 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
     }
   }
 
-  if (rawExtracted.surname) {
-    const snRes = sanitizeNameField(rawExtracted.surname, 'Surname');
+  // Last Name / Surname
+  const snVal = rawExtracted.lastName || rawExtracted.surname || '';
+  if (snVal) {
+    const snRes = sanitizeNameField(snVal, 'Last Name / Surname');
+    correctedData.lastName = snRes.corrected;
     correctedData.surname = snRes.corrected;
     if (snRes.wasChanged) {
       corrections.push({
-        field: 'surname',
-        fieldLabel: 'Surname (SN)',
-        originalValue: rawExtracted.surname,
+        field: 'lastName',
+        fieldLabel: 'Last Name / Surname',
+        originalValue: snVal,
         correctedValue: snRes.corrected,
         confidence: 'HIGH',
         reason: snRes.reason,
@@ -497,13 +502,14 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
     }
   }
 
+  // First Name
   if (rawExtracted.firstName) {
     const fnRes = sanitizeNameField(rawExtracted.firstName, 'First Name');
     correctedData.firstName = fnRes.corrected;
     if (fnRes.wasChanged) {
       corrections.push({
         field: 'firstName',
-        fieldLabel: 'First Name (FN)',
+        fieldLabel: 'First Name',
         originalValue: rawExtracted.firstName,
         correctedValue: fnRes.corrected,
         confidence: 'HIGH',
@@ -513,13 +519,14 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
     }
   }
 
+  // Middle Name
   if (rawExtracted.middleName) {
     const mnRes = sanitizeNameField(rawExtracted.middleName, 'Middle Name');
     correctedData.middleName = mnRes.corrected;
     if (mnRes.wasChanged) {
       corrections.push({
         field: 'middleName',
-        fieldLabel: 'Middle Name (MN)',
+        fieldLabel: 'Middle Name',
         originalValue: rawExtracted.middleName,
         correctedValue: mnRes.corrected,
         confidence: 'HIGH',
@@ -529,14 +536,17 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
     }
   }
 
-  if (rawExtracted.birthday) {
-    const bdayRes = normalizeOcrDate(rawExtracted.birthday);
+  // Birthdate / Birthday
+  const birthVal = rawExtracted.birthdate || rawExtracted.birthday || '';
+  if (birthVal) {
+    const bdayRes = normalizeOcrDate(birthVal);
+    correctedData.birthdate = bdayRes.corrected;
     correctedData.birthday = bdayRes.corrected;
     if (bdayRes.wasChanged) {
       corrections.push({
-        field: 'birthday',
-        fieldLabel: 'Date of Birth (Birthday)',
-        originalValue: rawExtracted.birthday,
+        field: 'birthdate',
+        fieldLabel: 'Date of Birth (Birthdate)',
+        originalValue: birthVal,
         correctedValue: bdayRes.corrected,
         confidence: 'HIGH',
         reason: bdayRes.reason,
@@ -545,6 +555,48 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
     }
   }
 
+  // Age calculation
+  if (!correctedData.age && correctedData.birthdate) {
+    const bDate = new Date(correctedData.birthdate);
+    if (!isNaN(bDate.getTime())) {
+      const now = new Date();
+      let calculatedAge = now.getFullYear() - bDate.getFullYear();
+      const m = now.getMonth() - bDate.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < bDate.getDate())) {
+        calculatedAge--;
+      }
+      if (calculatedAge > 0 && calculatedAge < 100) {
+        correctedData.age = calculatedAge;
+      }
+    }
+  }
+
+  // Gender
+  if (rawExtracted.gender) {
+    const gLower = String(rawExtracted.gender).trim().toLowerCase();
+    if (gLower.startsWith('f') || gLower.includes('babae') || gLower.includes('girl')) {
+      correctedData.gender = 'Female';
+    } else if (gLower.startsWith('m') || gLower.includes('lalaki') || gLower.includes('boy')) {
+      correctedData.gender = 'Male';
+    }
+  } else {
+    correctedData.gender = 'Female'; // Default for Girlstown
+  }
+
+  // Address fields
+  if (rawExtracted.sitioStreet) {
+    correctedData.sitioStreet = rawExtracted.sitioStreet.trim();
+  }
+  if (rawExtracted.barangay) {
+    const bRes = sanitizeAddressField(rawExtracted.barangay);
+    correctedData.barangay = bRes.corrected;
+  }
+  if (rawExtracted.municipality) {
+    correctedData.municipality = rawExtracted.municipality.trim();
+  }
+  if (rawExtracted.province) {
+    correctedData.province = rawExtracted.province.trim();
+  }
   if (rawExtracted.address) {
     const addrRes = sanitizeAddressField(rawExtracted.address);
     correctedData.address = addrRes.corrected;
@@ -559,8 +611,53 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
         applied: true,
       });
     }
+  } else {
+    correctedData.address = [
+      correctedData.sitioStreet,
+      correctedData.barangay,
+      correctedData.municipality,
+      correctedData.province,
+    ]
+      .filter(Boolean)
+      .join(', ');
   }
 
+  // Elementary School & School Address
+  const elemVal = rawExtracted.elementarySchool || rawExtracted.school || '';
+  if (elemVal) {
+    const schRes = sanitizeSchoolField(elemVal);
+    correctedData.elementarySchool = schRes.corrected;
+    correctedData.school = schRes.corrected;
+    if (schRes.wasChanged) {
+      corrections.push({
+        field: 'elementarySchool',
+        fieldLabel: 'Elementary School Graduated',
+        originalValue: elemVal,
+        correctedValue: schRes.corrected,
+        confidence: schRes.confidence,
+        reason: schRes.reason,
+        applied: true,
+      });
+    }
+  }
+
+  if (rawExtracted.schoolAddress) {
+    correctedData.schoolAddress = rawExtracted.schoolAddress.trim();
+  }
+  if (rawExtracted.reportCardSy) {
+    correctedData.reportCardSy = rawExtracted.reportCardSy.trim();
+  }
+  if (rawExtracted.grading) {
+    correctedData.grading = rawExtracted.grading.trim();
+  }
+  if (rawExtracted.currentGrade) {
+    correctedData.currentGrade = rawExtracted.currentGrade.trim();
+  }
+  if (rawExtracted.oldGraduateRemarks) {
+    correctedData.oldGraduateRemarks = rawExtracted.oldGraduateRemarks.trim();
+  }
+
+  // Parents and Guardian
   if (rawExtracted.fatherName) {
     const fRes = sanitizeNameField(rawExtracted.fatherName, "Father's Name");
     correctedData.fatherName = fRes.corrected;
@@ -572,38 +669,6 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
         correctedValue: fRes.corrected,
         confidence: 'HIGH',
         reason: fRes.reason,
-        applied: true,
-      });
-    }
-  }
-
-  if (rawExtracted.motherName) {
-    const mRes = sanitizeNameField(rawExtracted.motherName, "Mother's Name");
-    correctedData.motherName = mRes.corrected;
-    if (mRes.wasChanged) {
-      corrections.push({
-        field: 'motherName',
-        fieldLabel: "Mother's Name",
-        originalValue: rawExtracted.motherName,
-        correctedValue: mRes.corrected,
-        confidence: 'HIGH',
-        reason: mRes.reason,
-        applied: true,
-      });
-    }
-  }
-
-  if (rawExtracted.guardianName) {
-    const gRes = sanitizeNameField(rawExtracted.guardianName, "Guardian's Name");
-    correctedData.guardianName = gRes.corrected;
-    if (gRes.wasChanged) {
-      corrections.push({
-        field: 'guardianName',
-        fieldLabel: "Guardian's Name",
-        originalValue: rawExtracted.guardianName,
-        correctedValue: gRes.corrected,
-        confidence: 'HIGH',
-        reason: gRes.reason,
         applied: true,
       });
     }
@@ -625,6 +690,22 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
     }
   }
 
+  if (rawExtracted.motherName) {
+    const mRes = sanitizeNameField(rawExtracted.motherName, "Mother's Name");
+    correctedData.motherName = mRes.corrected;
+    if (mRes.wasChanged) {
+      corrections.push({
+        field: 'motherName',
+        fieldLabel: "Mother's Name",
+        originalValue: rawExtracted.motherName,
+        correctedValue: mRes.corrected,
+        confidence: 'HIGH',
+        reason: mRes.reason,
+        applied: true,
+      });
+    }
+  }
+
   if (rawExtracted.motherOccupation) {
     const moRes = correctOccupationText(rawExtracted.motherOccupation);
     correctedData.motherOccupation = moRes.corrected;
@@ -641,38 +722,99 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
     }
   }
 
+  if (rawExtracted.guardianName) {
+    const gRes = sanitizeNameField(rawExtracted.guardianName, "Guardian's Name");
+    correctedData.guardianName = gRes.corrected;
+    if (gRes.wasChanged) {
+      corrections.push({
+        field: 'guardianName',
+        fieldLabel: "Guardian's Name",
+        originalValue: rawExtracted.guardianName,
+        correctedValue: gRes.corrected,
+        confidence: 'HIGH',
+        reason: gRes.reason,
+        applied: true,
+      });
+    }
+  }
+
+  if (rawExtracted.guardianRelation) {
+    correctedData.guardianRelation = rawExtracted.guardianRelation.trim();
+  }
   if (rawExtracted.guardianOccupation) {
     const goRes = correctOccupationText(rawExtracted.guardianOccupation);
     correctedData.guardianOccupation = goRes.corrected;
-    if (goRes.wasChanged) {
-      corrections.push({
-        field: 'guardianOccupation',
-        fieldLabel: "Guardian's Occupation",
-        originalValue: rawExtracted.guardianOccupation,
-        correctedValue: goRes.corrected,
-        confidence: goRes.confidence,
-        reason: goRes.reason,
-        applied: true,
-      });
-    }
   }
 
-  if (rawExtracted.elementarySchool) {
-    const schRes = sanitizeSchoolField(rawExtracted.elementarySchool);
-    correctedData.elementarySchool = schRes.corrected;
-    if (schRes.wasChanged) {
-      corrections.push({
-        field: 'elementarySchool',
-        fieldLabel: 'Elementary School Graduated',
-        originalValue: rawExtracted.elementarySchool,
-        correctedValue: schRes.corrected,
-        confidence: schRes.confidence,
-        reason: schRes.reason,
-        applied: true,
-      });
-    }
+  // Contact Information
+  if (rawExtracted.cellphoneNumber || rawExtracted.contactNumber) {
+    const cp = (rawExtracted.cellphoneNumber || rawExtracted.contactNumber || '').replace(/[^\d+]/g, '');
+    correctedData.cellphoneNumber = cp;
+  }
+  if (rawExtracted.cellphoneOwner) {
+    correctedData.cellphoneOwner = rawExtracted.cellphoneOwner.trim();
+  }
+  if (rawExtracted.messengerAccount) {
+    correctedData.messengerAccount = rawExtracted.messengerAccount.trim();
+  }
+  if (rawExtracted.messengerOwner) {
+    correctedData.messengerOwner = rawExtracted.messengerOwner.trim();
   }
 
+  // Religious and Civil Information
+  if (rawExtracted.birthCertificatePsa) {
+    correctedData.birthCertificatePsa = rawExtracted.birthCertificatePsa.trim();
+  }
+  if (rawExtracted.psaFatherNameAge) {
+    correctedData.psaFatherNameAge = rawExtracted.psaFatherNameAge.trim();
+  }
+  if (rawExtracted.fatherReligion) {
+    correctedData.fatherReligion = rawExtracted.fatherReligion.trim();
+  }
+  if (rawExtracted.psaMotherNameAge) {
+    correctedData.psaMotherNameAge = rawExtracted.psaMotherNameAge.trim();
+  }
+  if (rawExtracted.motherReligion) {
+    correctedData.motherReligion = rawExtracted.motherReligion.trim();
+  }
+  if (rawExtracted.birthOrder !== undefined) {
+    correctedData.birthOrder = Number(rawExtracted.birthOrder) || 1;
+  }
+  if (rawExtracted.numberOfChildren !== undefined) {
+    correctedData.numberOfChildren = Number(rawExtracted.numberOfChildren) || 1;
+  }
+  if (rawExtracted.baptizedCatholic) {
+    correctedData.baptizedCatholic = rawExtracted.baptizedCatholic.trim();
+  }
+  if (rawExtracted.denomination) {
+    correctedData.denomination = rawExtracted.denomination.trim();
+  }
+  if (rawExtracted.confirmedCatholic) {
+    correctedData.confirmedCatholic = rawExtracted.confirmedCatholic.trim();
+  }
+
+  // Siblings Array
+  if (Array.isArray(rawExtracted.siblings)) {
+    correctedData.siblings = rawExtracted.siblings.map((sib: any, idx: number) => ({
+      siblingNo: Number(sib.siblingNo) || idx + 1,
+      name: (sib.name || '').trim(),
+      age: sib.age !== undefined && sib.age !== null ? sib.age : '',
+      remarks: (sib.remarks || '').trim(),
+    }));
+    correctedData.numSiblings = correctedData.siblings.length;
+  } else if (rawExtracted.numSiblings) {
+    correctedData.numSiblings = Number(rawExtracted.numSiblings) || 0;
+  }
+
+  // Parish Place and Priest
+  if (rawExtracted.parishPlace) {
+    correctedData.parishPlace = rawExtracted.parishPlace.trim();
+  }
+  if (rawExtracted.parishPriest) {
+    correctedData.parishPriest = rawExtracted.parishPriest.trim();
+  }
+
+  // Remarks & Exam Score
   if (rawExtracted.examScore !== undefined && rawExtracted.examScore !== null) {
     const score = Math.max(0, Number(rawExtracted.examScore) || 0);
     correctedData.examScore = score;
@@ -708,6 +850,13 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
         applied: true,
       });
     }
+  }
+
+  if (rawExtracted.additionalNotes) {
+    correctedData.additionalNotes = rawExtracted.additionalNotes.trim();
+  }
+  if (rawExtracted.studentSignature) {
+    correctedData.studentSignature = rawExtracted.studentSignature.trim();
   }
 
   return {

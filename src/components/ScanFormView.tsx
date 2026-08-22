@@ -10,8 +10,6 @@ import {
   X,
   ZoomIn,
   ZoomOut,
-  Maximize2,
-  Minimize2,
   RotateCw,
   ShieldCheck,
   User,
@@ -20,7 +18,6 @@ import {
   HeartPulse,
   Save,
   SwitchCamera,
-  HelpCircle,
   FileSearch,
   Check,
   Clock,
@@ -28,8 +25,14 @@ import {
   FileText,
   AlertTriangle,
   Zap,
+  Plus,
+  Trash2,
+  Phone,
+  Church,
+  Home,
+  Image as ImageIcon,
 } from 'lucide-react';
-import { StudentRecord, AdmissionStatus, OCRScanResult, ConfidenceLevel, OCRCorrectionRecord } from '../types';
+import { StudentRecord, AdmissionStatus, OCRScanResult, SiblingRecord } from '../types';
 import { performOCRScan, createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
 
 interface Props {
@@ -37,6 +40,7 @@ interface Props {
   onSuccess: (student: StudentRecord) => void;
   maxExamScore: number;
   initialImageBase64?: string;
+  recruitmentListId?: string;
 }
 
 export const ScanFormView: React.FC<Props> = ({
@@ -44,6 +48,7 @@ export const ScanFormView: React.FC<Props> = ({
   onSuccess,
   maxExamScore,
   initialImageBase64,
+  recruitmentListId,
 }) => {
   // Stage: 'capture' | 'scanning' | 'review'
   const [stage, setStage] = useState<'capture' | 'scanning' | 'review'>(
@@ -56,7 +61,6 @@ export const ScanFormView: React.FC<Props> = ({
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
   const [cameraFacingMode, setCameraFacingMode] = useState<'environment' | 'user'>('environment');
   const [cameraError, setCameraError] = useState<string | null>(null);
-  const [isFlashActive, setIsFlashActive] = useState<boolean>(false);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
   // OCR Processing State
@@ -64,31 +68,76 @@ export const ScanFormView: React.FC<Props> = ({
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [scanResult, setScanResult] = useState<OCRScanResult | null>(null);
 
-  // Extracted & Editable Fields
-  const [lrn, setLrn] = useState<string>('');
-  const [surname, setSurname] = useState<string>('');
-  const [middleName, setMiddleName] = useState<string>('');
+  // Active section tab in Review mode
+  const [activeReviewTab, setActiveReviewTab] = useState<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H_I'>('A');
+
+  // --- SECTION A: Basic Personal Information ---
+  const [photoUrl, setPhotoUrl] = useState<string>('');
+  const [lastName, setLastName] = useState<string>('');
   const [firstName, setFirstName] = useState<string>('');
-  const [birthday, setBirthday] = useState<string>('');
+  const [middleName, setMiddleName] = useState<string>('');
+  const [birthdate, setBirthdate] = useState<string>('');
+  const [age, setAge] = useState<number | string>('');
+  const [gender, setGender] = useState<'Female' | 'Male' | string>('Female');
+
+  // --- SECTION B: Residence / Address Information ---
+  const [sitioStreet, setSitioStreet] = useState<string>('');
+  const [barangay, setBarangay] = useState<string>('');
+  const [municipality, setMunicipality] = useState<string>('');
+  const [province, setProvince] = useState<string>('');
   const [address, setAddress] = useState<string>('');
 
+  // --- SECTION C: Educational Background ---
+  const [elementarySchool, setElementarySchool] = useState<string>('');
+  const [schoolAddress, setSchoolAddress] = useState<string>('');
+  const [reportCardSy, setReportCardSy] = useState<string>('SY 2024-2025');
+  const [lrn, setLrn] = useState<string>('');
+  const [grading, setGrading] = useState<string>('Final');
+  const [currentGrade, setCurrentGrade] = useState<string>('Grade 6');
+  const [oldGraduateRemarks, setOldGraduateRemarks] = useState<string>('');
+
+  // --- SECTION D: Family Background ---
   const [fatherName, setFatherName] = useState<string>('');
   const [fatherOccupation, setFatherOccupation] = useState<string>('');
   const [motherName, setMotherName] = useState<string>('');
   const [motherOccupation, setMotherOccupation] = useState<string>('');
   const [guardianName, setGuardianName] = useState<string>('');
+  const [guardianRelation, setGuardianRelation] = useState<string>('');
   const [guardianOccupation, setGuardianOccupation] = useState<string>('');
-  const [numSiblings, setNumSiblings] = useState<number | string>(0);
 
+  // --- SECTION E: Contact Information ---
+  const [cellphoneNumber, setCellphoneNumber] = useState<string>('');
+  const [cellphoneOwner, setCellphoneOwner] = useState<string>('');
+  const [messengerAccount, setMessengerAccount] = useState<string>('');
+  const [messengerOwner, setMessengerOwner] = useState<string>('');
+
+  // --- SECTION F: Religious & Civil Information ---
+  const [birthCertificatePsa, setBirthCertificatePsa] = useState<'Yes' | 'No' | string>('Yes');
+  const [psaFatherNameAge, setPsaFatherNameAge] = useState<string>('');
+  const [fatherReligion, setFatherReligion] = useState<string>('Roman Catholic');
+  const [psaMotherNameAge, setPsaMotherNameAge] = useState<string>('');
+  const [motherReligion, setMotherReligion] = useState<string>('Roman Catholic');
+  const [birthOrder, setBirthOrder] = useState<number | string>(1);
+  const [numberOfChildren, setNumberOfChildren] = useState<number | string>(1);
+  const [baptizedCatholic, setBaptizedCatholic] = useState<'Yes' | 'No' | string>('Yes');
+  const [denomination, setDenomination] = useState<string>('');
+  const [confirmedCatholic, setConfirmedCatholic] = useState<'Yes' | 'No' | string>('Yes');
+
+  // --- SECTION G: Siblings Information ---
+  const [siblings, setSiblings] = useState<SiblingRecord[]>([
+    { siblingNo: 1, name: '', age: '', remarks: '' },
+  ]);
+
+  // --- SECTION H: Parish Information ---
+  const [parishPlace, setParishPlace] = useState<string>('');
+  const [parishPriest, setParishPriest] = useState<string>('');
+
+  // --- SECTION I: Health Assessment & Exam ---
+  const [healthStatus, setHealthStatus] = useState<string>('Normal / Fit for schooling');
   const [examScore, setExamScore] = useState<number | string>(0);
-  const [elementarySchool, setElementarySchool] = useState<string>('');
   const [remarks, setRemarks] = useState<AdmissionStatus>('B - PENDING');
-  const [healthStatus, setHealthStatus] = useState<string>('');
-
-  // Smart OCR Auto-Correction State
-  const [corrections, setCorrections] = useState<OCRCorrectionRecord[]>([]);
-  const [originalOcrData, setOriginalOcrData] = useState<Partial<StudentRecord> | null>(null);
-  const [showCorrectionsDrawer, setShowCorrectionsDrawer] = useState<boolean>(false);
+  const [additionalNotes, setAdditionalNotes] = useState<string>('');
+  const [studentSignature, setStudentSignature] = useState<string>('Signed');
 
   // Review UI State
   const [saving, setSaving] = useState<boolean>(false);
@@ -99,10 +148,10 @@ export const ScanFormView: React.FC<Props> = ({
     matchReason?: string;
     message: string;
   } | null>(null);
+
   const [imageZoom, setImageZoom] = useState<number>(1);
   const [imageRotation, setImageRotation] = useState<number>(0);
-  const [activeReviewTab, setActiveReviewTab] = useState<'personal' | 'family' | 'educational' | 'health'>('personal');
-  const [highlightField, setHighlightField] = useState<string | null>(null);
+  const [showCorrectionsDrawer, setShowCorrectionsDrawer] = useState<boolean>(false);
 
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -110,7 +159,7 @@ export const ScanFormView: React.FC<Props> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nativeCameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Clipboard paste listener (Ctrl+V)
+  // Clipboard paste listener
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       if (stage !== 'capture') return;
@@ -135,7 +184,6 @@ export const ScanFormView: React.FC<Props> = ({
   // Clean up camera stream on unmount
   useEffect(() => {
     if (!initialImageBase64) {
-      // Auto-start live camera on mount
       startCamera('environment');
     }
     return () => {
@@ -143,44 +191,23 @@ export const ScanFormView: React.FC<Props> = ({
     };
   }, []);
 
-  // Re-connect stream to video element whenever isCameraActive changes or video element mounts
-  const attachStreamToVideo = useCallback((videoEl: HTMLVideoElement | null) => {
-    if (videoEl && streamRef.current) {
-      if (videoEl.srcObject !== streamRef.current) {
-        videoEl.srcObject = streamRef.current;
-      }
-      videoEl.muted = true;
-      videoEl.playsInline = true;
-      videoEl.autoplay = true;
-      videoEl.play().catch((err) => {
-        console.warn('Video auto-play warning:', err);
-      });
-    }
-  }, []);
-
-  const stopCamera = () => {
+  // Camera Management
+  const stopCamera = useCallback(() => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => {
-        try {
-          track.stop();
-        } catch (e) {
-          console.warn('Error stopping track:', e);
-        }
-      });
+      streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
     setIsCameraActive(false);
-  };
+  }, []);
 
-  const startCamera = async (facing: 'environment' | 'user' = cameraFacingMode) => {
+  const startCamera = async (facing: 'environment' | 'user' = 'environment') => {
     setCameraError(null);
     stopCamera();
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setCameraError('Live camera access is not supported by your browser. Please use "Upload Document File" or native camera capture.');
+      setCameraError(
+        'Live camera stream is not supported in this browser environment. Please use "Upload Document File" or native device capture.'
+      );
       return;
     }
 
@@ -190,1653 +217,1515 @@ export const ScanFormView: React.FC<Props> = ({
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: facing },
-            width: { ideal: 1920, min: 1280 },
-            height: { ideal: 1080, min: 720 },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
           },
           audio: false,
         });
-      } catch (err) {
-        // Fall back to basic video constraint
+      } catch {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facing },
+          video: true,
           audio: false,
         });
       }
 
-      // Verify active video track
-      const videoTracks = stream.getVideoTracks();
-      if (!videoTracks || videoTracks.length === 0 || videoTracks[0].readyState !== 'live') {
-        throw new Error('No live video track available from camera device.');
-      }
-
       streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
       setIsCameraActive(true);
       setCameraFacingMode(facing);
-
-      // Attach stream to video element
-      if (videoRef.current) {
-        const video = videoRef.current;
-        video.srcObject = stream;
-        video.muted = true;
-        video.playsInline = true;
-        video.autoplay = true;
-        try {
-          await video.play();
-        } catch (playErr) {
-          console.warn('Video play call required gesture or had warning:', playErr);
-        }
-      }
     } catch (err: any) {
-      console.warn('Camera stream error:', err);
+      console.warn('Camera error:', err);
       setIsCameraActive(false);
-
-      const errName = err?.name || '';
       const errMsg = err?.message || String(err);
-
-      if (
-        errName === 'NotAllowedError' ||
-        errMsg.includes('Permission dismissed') ||
-        errMsg.includes('Permission denied')
-      ) {
-        setCameraError('Camera permission was not granted or dismissed. You can snap a photo with your device camera app or upload a document file.');
-      } else if (errName === 'NotFoundError') {
-        setCameraError('No camera found on this device. Please select or upload a document photo from your device storage.');
-      } else if (errName === 'NotReadableError') {
-        setCameraError('Camera is currently being used by another application. Please close other camera tabs and try again.');
+      if (errMsg.includes('Permission') || errMsg.includes('NotAllowedError')) {
+        setCameraError('Camera access was denied. You can still upload or snap document images with native capture.');
       } else {
-        setCameraError(`Camera note: ${errMsg || 'Connection unavailable'}. Please use "Upload Document File" or choose a photo.`);
+        setCameraError(`Camera initialization: ${errMsg || 'Restricted'}. Use file upload instead.`);
       }
     }
   };
 
-  const toggleCameraFacing = () => {
-    const next = cameraFacingMode === 'environment' ? 'user' : 'environment';
-    startCamera(next);
+  const handleToggleFacingMode = () => {
+    const nextFacing = cameraFacingMode === 'environment' ? 'user' : 'environment';
+    startCamera(nextFacing);
   };
 
-  const capturePhoto = () => {
-    if (!videoRef.current) {
-      setCameraError('Camera is not ready for capture. Please wait a moment or restart camera.');
-      return;
-    }
+  // Capture current frame from live video
+  const handleCaptureSnapshot = () => {
+    if (!videoRef.current) return;
     const video = videoRef.current;
-
-    const width = video.videoWidth || 1920;
-    const height = video.videoHeight || 1080;
+    if (!video.videoWidth || !video.videoHeight) return;
 
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      setCameraError('Unable to create image canvas. Please try again.');
-      return;
-    }
+    if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
 
-    setImagePreview(dataUrl);
-    setSelectedFile(null);
     stopCamera();
-
-    // Trigger OCR automatically after capture
-    runOCR(dataUrl);
+    setImagePreview(dataUrl);
+    runOcrScan(dataUrl);
   };
 
+  // File Upload Handlers
   const handleFileSelected = (file: File) => {
-    setCameraError(null);
-    setOcrError(null);
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload a valid image file (JPEG, PNG, WebP).');
+      return;
+    }
     setSelectedFile(file);
     stopCamera();
 
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setImagePreview(dataUrl);
-      runOCR(dataUrl, file.type);
+      if (typeof reader.result === 'string') {
+        setImagePreview(reader.result);
+        runOcrScan(reader.result);
+      }
     };
     reader.readAsDataURL(file);
   };
 
-  // Load a realistic sample "Personal Data Form" for instant testing
-  const loadSampleForm = () => {
-    stopCamera();
-    // Create an SVG canvas data URL representing a real Sisters of Mary School Personal Data Form with handwritten entries
-    const canvas = document.createElement('canvas');
-    canvas.width = 1200;
-    canvas.height = 1600;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Background paper
-    ctx.fillStyle = '#FCFAF2';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Border
-    ctx.strokeStyle = '#1E3A8A';
-    ctx.lineWidth = 4;
-    ctx.strokeRect(30, 30, canvas.width - 60, canvas.height - 60);
-
-    // Header
-    ctx.fillStyle = '#1E3A8A';
-    ctx.font = 'bold 32px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('SISTERS OF MARY SCHOOL - GIRLSTOWN, INC.', canvas.width / 2, 85);
-    ctx.font = 'bold 24px sans-serif';
-    ctx.fillStyle = '#0F172A';
-    ctx.fillText('STUDENT RECRUITMENT & ADMISSION - PERSONAL DATA FORM', canvas.width / 2, 125);
-    ctx.font = 'italic 16px sans-serif';
-    ctx.fillStyle = '#64748B';
-    ctx.fillText('Biga II, Silang, Cavite | School Year 2025-2026', canvas.width / 2, 155);
-
-    // Divider
-    ctx.strokeStyle = '#CBD5E1';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(50, 175);
-    ctx.lineTo(canvas.width - 50, 175);
-    ctx.stroke();
-
-    // Section 1: Personal Information
-    ctx.fillStyle = '#1E3A8A';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('I. PERSONAL INFORMATION', 60, 215);
-
-    // LRN Header & 12 boxes
-    ctx.fillStyle = '#334155';
-    ctx.font = 'bold 16px sans-serif';
-    ctx.fillText('LEARNER REFERENCE NUMBER (LRN):', 60, 255);
-
-    const lrnDigits = ['1', '0', '9', '2', '8', '3', '7', '4', '6', '1', '2', '3'];
-    for (let i = 0; i < 12; i++) {
-      const x = 390 + i * 40;
-      const y = 232;
-      ctx.strokeStyle = '#1E3A8A';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x, y, 34, 34);
-      // Handwritten digit
-      ctx.fillStyle = '#1E293B';
-      ctx.font = 'bold 20px cursive, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(lrnDigits[i], x + 17, y + 25);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileSelected(e.dataTransfer.files[0]);
     }
-
-    ctx.textAlign = 'left';
-
-    // Surname, First Name, Middle Name
-    const drawField = (label: string, value: string, x: number, y: number, w: number) => {
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 15px sans-serif';
-      ctx.fillText(label, x, y);
-
-      ctx.strokeStyle = '#94A3B8';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(x, y + 25);
-      ctx.lineTo(x + w, y + 25);
-      ctx.stroke();
-
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 18px cursive, sans-serif';
-      ctx.fillText(value, x + 5, y + 20);
-    };
-
-    drawField('Surname (SN):', 'DELA CRUZ', 60, 310, 320);
-    drawField('First Name (FN):', 'MARIA CRISTINA', 420, 310, 420);
-    drawField('Middle Name (MN):', 'SANTOS', 880, 310, 260);
-
-    drawField('Date of Birth (Birthday):', '2012-05-14 (May 14, 2012)', 60, 370, 360);
-    drawField('Age:', '12', 460, 370, 120);
-    drawField('Sex / Gender:', 'Female', 620, 370, 180);
-    drawField('Contact / Mobile No.:', '0917-892-3412', 840, 370, 300);
-
-    drawField('Complete Home Address:', 'Block 14 Lot 22, Brgy. San Jose, Dasmariñas City, Cavite', 60, 430, 1080);
-
-    // Section 2: Family Background
-    ctx.fillStyle = '#1E3A8A';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('II. FAMILY BACKGROUND', 60, 500);
-
-    drawField("Father's Name (Tatay):", 'ROBERTO DELA CRUZ', 60, 545, 520);
-    drawField("Father's Occupation:", 'TRICYCLE DRIVER', 620, 545, 520);
-
-    drawField("Mother's Name (Nanay):", 'TERESITA SANTOS DELA CRUZ', 60, 610, 520);
-    drawField("Mother's Occupation:", 'HOUSEWIFE / SEWER', 620, 610, 520);
-
-    drawField("Guardian's Name (if applicable):", 'ELENA SANTOS', 60, 675, 520);
-    drawField("Guardian's Occupation:", 'STORE VENDOR', 620, 675, 520);
-
-    drawField('Number of Siblings (Bilang ng Kapatid):', '4', 60, 740, 340);
-
-    // Section 3: Educational Background
-    ctx.fillStyle = '#1E3A8A';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('III. EDUCATIONAL BACKGROUND', 60, 815);
-
-    drawField('Elementary School Graduated:', 'DASMARIÑAS INTEGRATED ELEMENTARY SCHOOL', 60, 860, 700);
-    drawField('General Average (GWA):', '89.5%', 800, 860, 340);
-
-    // Section 4: Examination & Recruitment Evaluation
-    ctx.fillStyle = '#1E3A8A';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('IV. ENTRANCE EXAM & ADMISSION STATUS', 60, 935);
-
-    drawField('Entrance Exam Score:', '88', 60, 980, 240);
-    drawField('Exam Date:', '2025-02-15', 340, 980, 260);
-
-    ctx.fillStyle = '#475569';
-    ctx.font = 'bold 15px sans-serif';
-    ctx.fillText('Admission Remarks / Result:', 640, 980);
-    ctx.fillStyle = '#047857';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('[X] A - PASS (QUALIFIED FOR ADMISSION)', 640, 1010);
-
-    // Section 5: Health & Medical
-    ctx.fillStyle = '#1E3A8A';
-    ctx.font = 'bold 20px sans-serif';
-    ctx.fillText('V. HEALTH & MEDICAL RECORD', 60, 1075);
-
-    drawField('Health Status / Medical History:', 'NORMAL / NO KNOWN ALLERGIES / FIT FOR BOARDING SCHOOL', 60, 1120, 1080);
-
-    // Stamp / Signature
-    ctx.fillStyle = '#1E3A8A';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText('Assessed by: Sr. Maria Theresa, SM', 60, 1200);
-    ctx.fillText('Date Processed: 2025-02-16', 700, 1200);
-
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-    setImagePreview(dataUrl);
-    setSelectedFile(null);
-    runOCR(dataUrl);
   };
 
-  const runOCR = async (base64Img: string, mime: string = 'image/jpeg') => {
+  // Execute Gemini OCR Scan
+  const runOcrScan = async (base64Data: string) => {
     setStage('scanning');
     setOcrError(null);
     setScanProgressStage(1);
 
-    // Simulate smooth scanning pipeline steps while waiting for Gemini 3.7
-    const timer1 = setTimeout(() => setScanProgressStage(2), 700);
-    const timer2 = setTimeout(() => setScanProgressStage(3), 1500);
-    const timer3 = setTimeout(() => setScanProgressStage(4), 2200);
+    // Progress simulation steps
+    const t1 = setTimeout(() => setScanProgressStage(2), 700);
+    const t2 = setTimeout(() => setScanProgressStage(3), 1500);
 
     try {
-      const result = await performOCRScan(base64Img, mime);
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
+      const result = await performOCRScan(base64Data);
+      clearTimeout(t1);
+      clearTimeout(t2);
 
       setScanResult(result);
-      setCorrections(result.corrections || []);
-      setOriginalOcrData(result.originalOcrData || result.extractedData || {});
       const data = result.extractedData || {};
 
-      // Map Extracted Data into State
-      if (data.lrn) setLrn(data.lrn.replace(/\D/g, '').slice(0, 12));
-      if (data.surname) setSurname(data.surname.toUpperCase());
-      if (data.firstName) setFirstName(data.firstName.toUpperCase());
-      if (data.middleName) setMiddleName(data.middleName.toUpperCase());
-      if (data.birthday) setBirthday(data.birthday);
-      if (data.address) setAddress(data.address);
+      // Map Extracted Data into Official Form State
+      setLastName(data.lastName || data.surname || '');
+      setFirstName(data.firstName || '');
+      setMiddleName(data.middleName || '');
 
-      if (data.fatherName) setFatherName(data.fatherName.toUpperCase());
-      if (data.fatherOccupation) setFatherOccupation(data.fatherOccupation);
-      if (data.motherName) setMotherName(data.motherName.toUpperCase());
-      if (data.motherOccupation) setMotherOccupation(data.motherOccupation);
-      if (data.guardianName) setGuardianName(data.guardianName.toUpperCase());
-      if (data.guardianOccupation) setGuardianOccupation(data.guardianOccupation);
-      if (data.numSiblings !== undefined && data.numSiblings !== null) {
-        setNumSiblings(data.numSiblings);
+      const bDate = data.birthdate || data.birthday || '';
+      setBirthdate(bDate);
+      if (data.age) {
+        setAge(data.age);
+      } else if (bDate && bDate.includes('-')) {
+        const birth = new Date(bDate);
+        if (!isNaN(birth.getTime())) {
+          const today = new Date();
+          let calculatedAge = today.getFullYear() - birth.getFullYear();
+          if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) {
+            calculatedAge--;
+          }
+          setAge(calculatedAge > 0 ? calculatedAge : 12);
+        }
       }
 
-      if (data.examScore !== undefined && data.examScore !== null) {
-        setExamScore(data.examScore);
-      }
-      if (data.elementarySchool) setElementarySchool(data.elementarySchool.toUpperCase());
-      if (data.remarks && (data.remarks === 'A - PASS' || data.remarks === 'B - PENDING')) {
-        setRemarks(data.remarks as AdmissionStatus);
+      setGender(data.gender || 'Female');
+
+      // Section B
+      setSitioStreet(data.sitioStreet || '');
+      setBarangay(data.barangay || '');
+      setMunicipality(data.municipality || '');
+      setProvince(data.province || '');
+      setAddress(data.address || [data.sitioStreet, data.barangay, data.municipality, data.province].filter(Boolean).join(', '));
+
+      // Section C
+      setElementarySchool(data.elementarySchool || data.school || '');
+      setSchoolAddress(data.schoolAddress || '');
+      setReportCardSy(data.reportCardSy || 'SY 2024-2025');
+      setLrn(data.lrn ? String(data.lrn).replace(/\D/g, '').slice(0, 12) : '');
+      setGrading(data.grading || 'Final');
+      setCurrentGrade(data.currentGrade || 'Grade 6');
+      setOldGraduateRemarks(data.oldGraduateRemarks || '');
+
+      // Section D
+      setFatherName(data.fatherName || '');
+      setFatherOccupation(data.fatherOccupation || '');
+      setMotherName(data.motherName || '');
+      setMotherOccupation(data.motherOccupation || '');
+      setGuardianName(data.guardianName || '');
+      setGuardianRelation(data.guardianRelation || '');
+      setGuardianOccupation(data.guardianOccupation || '');
+
+      // Section E
+      setCellphoneNumber(data.cellphoneNumber || '');
+      setCellphoneOwner(data.cellphoneOwner || '');
+      setMessengerAccount(data.messengerAccount || '');
+      setMessengerOwner(data.messengerOwner || '');
+
+      // Section F
+      setBirthCertificatePsa(data.birthCertificatePsa || 'Yes');
+      setPsaFatherNameAge(data.psaFatherNameAge || '');
+      setFatherReligion(data.fatherReligion || 'Roman Catholic');
+      setPsaMotherNameAge(data.psaMotherNameAge || '');
+      setMotherReligion(data.motherReligion || 'Roman Catholic');
+      setBirthOrder(data.birthOrder || 1);
+      setNumberOfChildren(data.numberOfChildren || (data.numSiblings ? Number(data.numSiblings) + 1 : 1));
+      setBaptizedCatholic(data.baptizedCatholic || 'Yes');
+      setDenomination(data.denomination || '');
+      setConfirmedCatholic(data.confirmedCatholic || 'Yes');
+
+      // Section G
+      if (Array.isArray(data.siblings) && data.siblings.length > 0) {
+        setSiblings(data.siblings);
+      } else if (data.numSiblings && Number(data.numSiblings) > 0) {
+        const count = Math.min(Number(data.numSiblings), 10);
+        const rows: SiblingRecord[] = [];
+        for (let i = 1; i <= count; i++) {
+          rows.push({ siblingNo: i, name: '', age: '', remarks: '' });
+        }
+        setSiblings(rows);
       } else {
-        setRemarks('B - PENDING');
+        setSiblings([{ siblingNo: 1, name: '', age: '', remarks: '' }]);
       }
-      if (data.healthStatus) setHealthStatus(data.healthStatus);
+
+      // Section H
+      setParishPlace(data.parishPlace || '');
+      setParishPriest(data.parishPriest || '');
+
+      // Section I
+      setHealthStatus(data.healthStatus || 'Normal / Fit for schooling');
+      setExamScore(data.examScore !== undefined && data.examScore !== null ? data.examScore : 0);
+      setRemarks(data.remarks === 'A - PASS' ? 'A - PASS' : 'B - PENDING');
+      setAdditionalNotes(data.additionalNotes || '');
+      setStudentSignature(data.studentSignature || 'Signed');
 
       setStage('review');
     } catch (err: any) {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
-      setOcrError(err?.message || 'Failed to scan document with OCR. You can try retaking the photo or upload another file.');
+      console.error('OCR Processing Error:', err);
+      setOcrError(err.message || 'Gemini document understanding failed. Please try snapping again with clearer lighting.');
       setStage('capture');
     }
   };
 
-  const handleRevertCorrection = (fieldKey: string) => {
-    const corr = corrections.find((c) => c.field === fieldKey);
-    if (!corr) return;
+  // Real-time duplicate checking in Review Mode
+  useEffect(() => {
+    if (stage !== 'review') return;
 
-    switch (fieldKey) {
-      case 'lrn':
-        setLrn(corr.originalValue);
-        break;
-      case 'surname':
-        setSurname(corr.originalValue.toUpperCase());
-        break;
-      case 'firstName':
-        setFirstName(corr.originalValue.toUpperCase());
-        break;
-      case 'middleName':
-        setMiddleName(corr.originalValue.toUpperCase());
-        break;
-      case 'birthday':
-        setBirthday(corr.originalValue);
-        break;
-      case 'address':
-        setAddress(corr.originalValue);
-        break;
-      case 'fatherName':
-        setFatherName(corr.originalValue.toUpperCase());
-        break;
-      case 'fatherOccupation':
-        setFatherOccupation(corr.originalValue);
-        break;
-      case 'motherName':
-        setMotherName(corr.originalValue.toUpperCase());
-        break;
-      case 'motherOccupation':
-        setMotherOccupation(corr.originalValue);
-        break;
-      case 'guardianName':
-        setGuardianName(corr.originalValue.toUpperCase());
-        break;
-      case 'guardianOccupation':
-        setGuardianOccupation(corr.originalValue);
-        break;
-      case 'elementarySchool':
-        setElementarySchool(corr.originalValue.toUpperCase());
-        break;
-      case 'healthStatus':
-        setHealthStatus(corr.originalValue);
-        break;
-      case 'remarks':
-        if (corr.originalValue === 'A - PASS' || corr.originalValue === 'B - PENDING') {
-          setRemarks(corr.originalValue as AdmissionStatus);
+    const timer = setTimeout(async () => {
+      const cleanLrn = lrn.trim();
+      const cleanSn = lastName.trim();
+      const cleanFn = firstName.trim();
+
+      if ((cleanLrn && cleanLrn.length >= 6) || (cleanSn && cleanFn)) {
+        try {
+          const res = await checkStudentDuplicate(
+            {
+              lrn: cleanLrn,
+              lastName: cleanSn,
+              surname: cleanSn,
+              firstName: cleanFn,
+              birthdate: birthdate,
+              birthday: birthdate,
+              address: address,
+            },
+            undefined,
+            recruitmentListId
+          );
+
+          if (res.duplicateStatus === 'EXACT' || res.duplicateStatus === 'POSSIBLE') {
+            setDuplicateWarning({
+              duplicateStatus: res.duplicateStatus,
+              existingRecord: res.existingRecord!,
+              matchReason: res.matchReason,
+              message: res.message,
+            });
+          } else {
+            setDuplicateWarning(null);
+          }
+        } catch {
+          // Silent
         }
-        break;
-    }
+      } else {
+        setDuplicateWarning(null);
+      }
+    }, 600);
 
-    setCorrections((prev) => prev.filter((c) => c.field !== fieldKey));
+    return () => clearTimeout(timer);
+  }, [stage, lrn, lastName, firstName, birthdate, address, recruitmentListId]);
+
+  // Sibling Helpers
+  const handleAddSibling = () => {
+    setSiblings((prev) => [
+      ...prev,
+      {
+        siblingNo: prev.length + 1,
+        name: '',
+        age: '',
+        remarks: '',
+      },
+    ]);
   };
 
-  const handleSaveToDatabase = async () => {
+  const handleRemoveSibling = (index: number) => {
+    setSiblings((prev) => {
+      const updated = prev.filter((_, i) => i !== index);
+      return updated.map((item, idx) => ({ ...item, siblingNo: idx + 1 }));
+    });
+  };
+
+  const handleSiblingChange = (index: number, field: keyof SiblingRecord, value: any) => {
+    setSiblings((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  // Save Applicant Record
+  const handleSaveReviewedRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
     setSaveError(null);
 
-    // Validation
-    if (!lrn.trim()) {
-      setSaveError("Please enter or verify the student's 12-digit LRN.");
-      setActiveReviewTab('personal');
+    const cleanLastName = lastName.trim();
+    const cleanFirstName = firstName.trim();
+    const cleanLrn = lrn.trim();
+
+    if (!cleanLastName) {
+      setSaveError('Last Name (Surname) is required.');
+      setActiveReviewTab('A');
       return;
     }
-    if (!surname.trim()) {
-      setSaveError("Please enter the student's Surname (SN).");
-      setActiveReviewTab('personal');
+    if (!cleanFirstName) {
+      setSaveError('First Name is required.');
+      setActiveReviewTab('A');
       return;
     }
-    if (!firstName.trim()) {
-      setSaveError("Please enter the student's First Name (FN).");
-      setActiveReviewTab('personal');
+    if (!cleanLrn) {
+      setSaveError('12-Digit Learner Reference Number (LRN) is required.');
+      setActiveReviewTab('C');
       return;
     }
-    if (!birthday) {
-      setSaveError('Please enter a valid Date of Birth (Birthday).');
-      setActiveReviewTab('personal');
+    if (cleanLrn.length !== 12 || !/^\d{12}$/.test(cleanLrn)) {
+      setSaveError('Learner Reference Number (LRN) must be exactly 12 digits.');
+      setActiveReviewTab('C');
       return;
     }
 
-    const scoreNum = Number(examScore);
-    if (isNaN(scoreNum) || scoreNum < 0) {
-      setSaveError('Exam score must be a non-negative number.');
-      setActiveReviewTab('educational');
-      return;
-    }
-    if (scoreNum > maxExamScore) {
-      setSaveError(`Exam score cannot exceed configured maximum score of ${maxExamScore}.`);
-      setActiveReviewTab('educational');
+    const parsedScore = typeof examScore === 'number' ? examScore : parseFloat(String(examScore)) || 0;
+    if (parsedScore < 0 || parsedScore > maxExamScore) {
+      setSaveError(`Entrance Exam Score must be between 0 and ${maxExamScore}.`);
+      setActiveReviewTab('H_I');
       return;
     }
 
-    const sibNum = Math.max(0, Math.floor(Number(numSiblings) || 0));
+    setSaving(true);
 
     try {
-      setSaving(true);
-      const studentPayload = {
-        lrn: lrn.trim(),
-        surname: surname.trim(),
+      const studentPayload: any = {
+        recruitmentListId,
+        photoUrl: photoUrl || undefined,
+        // Section A
+        lastName: cleanLastName,
+        surname: cleanLastName,
+        firstName: cleanFirstName,
         middleName: middleName.trim(),
-        firstName: firstName.trim(),
-        birthday,
-        address: address.trim(),
+        birthdate: birthdate.trim(),
+        birthday: birthdate.trim(),
+        age: typeof age === 'number' ? age : parseInt(String(age), 10) || 0,
+        gender: gender || 'Female',
+
+        // Section B
+        sitioStreet: sitioStreet.trim(),
+        barangay: barangay.trim(),
+        municipality: municipality.trim(),
+        province: province.trim(),
+        address: address.trim() || [sitioStreet, barangay, municipality, province].filter(Boolean).join(', '),
+
+        // Section C
+        elementarySchool: elementarySchool.trim(),
+        school: elementarySchool.trim(),
+        schoolAddress: schoolAddress.trim(),
+        reportCardSy: reportCardSy.trim(),
+        reportCard: reportCardSy.trim(),
+        lrn: cleanLrn,
+        grading: grading.trim(),
+        currentGrade: currentGrade.trim() || 'Grade 6',
+        oldGraduateRemarks: oldGraduateRemarks.trim(),
+
+        // Section D
         fatherName: fatherName.trim(),
         fatherOccupation: fatherOccupation.trim(),
         motherName: motherName.trim(),
         motherOccupation: motherOccupation.trim(),
         guardianName: guardianName.trim(),
+        guardianRelation: guardianRelation.trim(),
         guardianOccupation: guardianOccupation.trim(),
-        numSiblings: sibNum,
-        examScore: scoreNum,
-        elementarySchool: elementarySchool.trim(),
-        remarks,
-        healthStatus: healthStatus.trim(),
+
+        // Section E
+        cellphoneNumber: cellphoneNumber.trim(),
+        cellphoneOwner: cellphoneOwner.trim(),
+        messengerAccount: messengerAccount.trim(),
+        messengerOwner: messengerOwner.trim(),
+
+        // Section F
+        birthCertificatePsa: birthCertificatePsa || 'Yes',
+        psaFatherNameAge: psaFatherNameAge.trim(),
+        fatherReligion: fatherReligion.trim() || 'Roman Catholic',
+        psaMotherNameAge: psaMotherNameAge.trim(),
+        motherReligion: motherReligion.trim() || 'Roman Catholic',
+        birthOrder: typeof birthOrder === 'number' ? birthOrder : parseInt(String(birthOrder), 10) || 1,
+        numberOfChildren: typeof numberOfChildren === 'number' ? numberOfChildren : parseInt(String(numberOfChildren), 10) || 1,
+        baptizedCatholic: baptizedCatholic || 'Yes',
+        denomination: denomination.trim(),
+        confirmedCatholic: confirmedCatholic || 'Yes',
+
+        // Section G
+        siblings: siblings.filter((s) => s.name?.trim()),
+        numSiblings: siblings.filter((s) => s.name?.trim()).length,
+
+        // Section H
+        parishPlace: parishPlace.trim(),
+        parishPriest: parishPriest.trim(),
+
+        // Section I
+        healthStatus: healthStatus.trim() || 'Normal / Fit for schooling',
+        examScore: parsedScore,
+        remarks: remarks,
+        additionalNotes: additionalNotes.trim(),
+        studentSignature: studentSignature || 'Signed',
       };
 
-      // Strict duplicate check before creating record
-      const dupCheck = await checkStudentDuplicate(studentPayload);
-      if (dupCheck.duplicateStatus === 'EXACT' && dupCheck.existingRecord) {
-        setDuplicateWarning({
-          duplicateStatus: 'EXACT',
-          existingRecord: dupCheck.existingRecord,
-          matchReason: dupCheck.matchReason,
-          message: dupCheck.message || 'Exact duplicate found: A record for this student already exists in your database. The record will not be saved again.',
-        });
-        setSaving(false);
-        return;
-      } else if (dupCheck.duplicateStatus === 'POSSIBLE' && dupCheck.existingRecord && !duplicateWarning) {
-        setDuplicateWarning({
-          duplicateStatus: 'POSSIBLE',
-          existingRecord: dupCheck.existingRecord,
-          matchReason: dupCheck.matchReason,
-          message: dupCheck.message,
-        });
-        setSaving(false);
-        return;
-      }
-
-      const created = await createStudent(studentPayload);
-      onSuccess(created);
+      const saved = await createStudent(studentPayload);
+      onSuccess(saved);
       onClose();
     } catch (err: any) {
-      if (err.message && err.message.toLowerCase().includes('duplicate')) {
-        setSaveError(err.message);
-      } else {
-        setSaveError(err.message || 'Failed to save student record to database.');
-      }
+      setSaveError(err.message || 'Failed to save scanned student record.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleUpdateExistingRecord = async () => {
-    if (!duplicateWarning?.existingRecord) return;
-    try {
-      setSaving(true);
-      const scoreNum = Number(examScore) || 0;
-      const sibNum = Math.max(0, Math.floor(Number(numSiblings) || 0));
-      const studentPayload = {
-        lrn: lrn.trim(),
-        surname: surname.trim(),
-        middleName: middleName.trim(),
-        firstName: firstName.trim(),
-        birthday,
-        address: address.trim(),
-        fatherName: fatherName.trim(),
-        fatherOccupation: fatherOccupation.trim(),
-        motherName: motherName.trim(),
-        motherOccupation: motherOccupation.trim(),
-        guardianName: guardianName.trim(),
-        guardianOccupation: guardianOccupation.trim(),
-        numSiblings: sibNum,
-        examScore: scoreNum,
-        elementarySchool: elementarySchool.trim(),
-        remarks,
-        healthStatus: healthStatus.trim(),
-      };
-
-      const updated = await updateStudent(duplicateWarning.existingRecord.id, studentPayload);
-      setDuplicateWarning(null);
-      onSuccess(updated);
-      onClose();
-    } catch (err: any) {
-      setSaveError(err.message || 'Failed to update existing student record.');
-      setDuplicateWarning(null);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleViewExistingRecord = () => {
-    if (!duplicateWarning?.existingRecord) return;
-    const existing = duplicateWarning.existingRecord;
-    setDuplicateWarning(null);
-    onSuccess(existing);
-    onClose();
-  };
-
-  // Helper for auto-correction badge
-  const getAutoCorrectionBadge = (fieldKey: string) => {
-    const corr = corrections.find((c) => c.field === fieldKey);
-    if (!corr) return null;
-
+  // --- STAGE 2: SCANNING IN PROGRESS ---
+  if (stage === 'scanning') {
     return (
-      <span className="px-2 py-0.5 bg-violet-50 text-violet-900 text-[10px] font-black rounded-full border border-violet-300 flex items-center gap-1">
-        <Sparkles className="w-2.5 h-2.5 text-violet-600" />
-        <span>Auto-corrected from "{corr.originalValue}"</span>
-        <button
-          type="button"
-          onClick={() => handleRevertCorrection(fieldKey)}
-          className="text-violet-700 hover:text-violet-950 underline font-bold ml-1 cursor-pointer"
-          title={`Undo auto-correction and restore "${corr.originalValue}"`}
-        >
-          Undo
-        </button>
-      </span>
-    );
-  };
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-lg animate-fade-in text-white">
+        <div className="max-w-md w-full text-center space-y-6">
+          <div className="relative w-32 h-44 mx-auto bg-slate-900 rounded-2xl border-2 border-blue-400/60 overflow-hidden shadow-2xl flex items-center justify-center">
+            {imagePreview && (
+              <img src={imagePreview} alt="Document Scan" className="w-full h-full object-cover opacity-60 filter blur-[1px]" />
+            )}
+            <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_#22d3ee] animate-pulse" />
+            <div className="absolute inset-0 bg-blue-900/20 backdrop-blur-xs flex items-center justify-center">
+              <Sparkles className="w-10 h-10 text-cyan-300 animate-spin" style={{ animationDuration: '3s' }} />
+            </div>
+          </div>
 
-  // Helper for confidence badge
-  const getConfidenceBadge = (fieldKey: string) => {
-    const corrBadge = getAutoCorrectionBadge(fieldKey);
-    const conf = scanResult?.fieldConfidence?.[fieldKey] || 'MEDIUM';
-    const isUncertain = scanResult?.uncertainFields?.includes(fieldKey);
+          <div className="space-y-2">
+            <h2 className="text-xl font-black tracking-tight flex items-center justify-center gap-2">
+              <span>SCANNING OFFICIAL RECRUITMENT FORM</span>
+              <Sparkles className="w-4 h-4 text-amber-400" />
+            </h2>
+            <p className="text-xs text-blue-200">
+              {scanProgressStage === 1 && 'Detecting Sections A through J and orientation...'}
+              {scanProgressStage === 2 && 'Gemini 3.6 Flash extracting applicant details, LRN, and family data...'}
+              {scanProgressStage === 3 && 'Applying smart corrections and preparing validation mapping...'}
+            </p>
+          </div>
 
-    return (
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {corrBadge}
-        {isUncertain || conf === 'LOW' ? (
-          <span className="px-2 py-0.5 bg-amber-50 text-amber-800 text-[10px] font-black rounded-full border border-amber-300 flex items-center gap-1">
-            <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
-            Review Needed
-          </span>
-        ) : conf === 'HIGH' ? (
-          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[10px] font-black rounded-full border border-emerald-300 flex items-center gap-1">
-            <Check className="w-2.5 h-2.5 text-emerald-600" />
-            OCR Verified
-          </span>
-        ) : conf === 'NOT_DETECTED' ? (
-          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-full border border-slate-300">
-            Not Found
-          </span>
-        ) : (
-          <span className="px-2 py-0.5 bg-blue-50 text-[#1E3A8A] text-[10px] font-bold rounded-full border border-blue-200">
-            Extracted
-          </span>
-        )}
+          <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
+            <div
+              className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full transition-all duration-500"
+              style={{
+                width: scanProgressStage === 1 ? '35%' : scanProgressStage === 2 ? '70%' : '95%',
+              }}
+            />
+          </div>
+        </div>
       </div>
     );
-  };
+  }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-150">
-      <div className="bg-white rounded-2xl shadow-2xl border border-blue-200 max-w-6xl w-full flex flex-col max-h-[96vh] my-auto overflow-hidden">
-        {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-blue-100 bg-slate-50 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#1E3A8A] text-white flex items-center justify-center shadow-xs shrink-0">
-              <Camera className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#1E3A8A]" />
-                <span className="text-[11px] font-black uppercase tracking-wider text-[#1E3A8A]">
-                  Sisters of Mary School-Girlstown, Inc.
-                </span>
-                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 font-bold text-[10px] rounded-full border border-emerald-300 flex items-center gap-1">
-                  <Sparkles className="w-2.5 h-2.5 text-emerald-700" />
-                  Gemini 3.7 AI Multimodal OCR
-                </span>
+  // --- STAGE 1: CAPTURE & UPLOAD ---
+  if (stage === 'capture') {
+    return (
+      <div
+        id="scan-form-capture-modal"
+        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
+      >
+        <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full border border-blue-100 overflow-hidden flex flex-col max-h-[95vh]">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-[#1E3A8A] via-[#1D4ED8] to-[#172554] p-4 sm:p-5 text-white flex items-center justify-between shadow-md shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20">
+                <Camera className="w-5 h-5 text-amber-300" />
               </div>
-              <h2 className="text-base sm:text-lg font-black text-gray-900 leading-tight">
-                PERSONAL DATA FORM SCANNER & AUTO-FILL
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/10 rounded-full text-[10px] font-bold text-blue-200">
+                  <Sparkles className="w-3 h-3 text-cyan-300" />
+                  <span>GEMINI 3.6 FLASH DOCUMENT RECOGNITION</span>
+                </div>
+                <h2 className="text-base sm:text-lg font-black tracking-tight mt-0.5">
+                  Scan Official Recruitment Personal Information Form
+                </h2>
+              </div>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Camera Error Message */}
+          {cameraError && (
+            <div className="p-3 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs font-semibold flex items-center gap-2 shrink-0">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>{cameraError}</span>
+            </div>
+          )}
+
+          {/* Capture Stage Body */}
+          <div className="p-4 sm:p-6 flex-1 overflow-y-auto space-y-4">
+            {/* Live Camera Viewfinder or Fallback Drop Area */}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOver(true);
+              }}
+              onDragLeave={() => setIsDragOver(false)}
+              onDrop={handleDrop}
+              className={`relative rounded-2xl overflow-hidden border-2 transition-all ${
+                isDragOver
+                  ? 'border-blue-600 bg-blue-50/50 ring-4 ring-blue-100'
+                  : 'border-slate-800 bg-slate-950 text-white'
+              } min-h-[340px] flex flex-col items-center justify-center`}
+            >
+              {isCameraActive ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full max-h-[420px] object-cover"
+                  />
+                  {/* Document Alignment Frame */}
+                  <div className="absolute inset-6 sm:inset-10 border-2 border-dashed border-cyan-400/80 rounded-2xl pointer-events-none flex flex-col justify-between p-4 shadow-[0_0_20px_rgba(34,211,238,0.2)]">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-cyan-300 bg-slate-900/60 px-3 py-1 rounded-full backdrop-blur-md self-center">
+                      <span>ALIGN RECRUITMENT PAPER FORM INSIDE RECTANGLE</span>
+                    </div>
+                    <div className="text-center text-[10px] text-cyan-200/80">
+                      Ensure good lighting and all 4 corners of the form are visible
+                    </div>
+                  </div>
+
+                  {/* Camera Controls Overlay */}
+                  <div className="absolute bottom-4 inset-x-0 flex items-center justify-center gap-4 z-10 px-4">
+                    <button
+                      type="button"
+                      onClick={handleToggleFacingMode}
+                      className="p-3 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full backdrop-blur-md border border-white/20 transition-all cursor-pointer"
+                      title="Switch Camera (Front/Back)"
+                    >
+                      <SwitchCamera className="w-5 h-5 text-amber-300" />
+                    </button>
+
+                    <button
+                      type="button"
+                      id="btn-capture-snapshot"
+                      onClick={handleCaptureSnapshot}
+                      className="px-8 py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-sm rounded-full shadow-lg hover:shadow-cyan-500/50 transition-all flex items-center gap-2 cursor-pointer uppercase tracking-wider"
+                    >
+                      <Camera className="w-5 h-5" />
+                      <span>CAPTURE & EXTRACT</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="p-8 text-center space-y-4 max-w-md">
+                  <div className="w-16 h-16 rounded-3xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center mx-auto shadow-inner">
+                    <Upload className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-slate-100">Upload or Drag Paper Form Image</h3>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Supports high-resolution photos, phone camera snaps, or scanned PDF images (JPEG, PNG, WebP)
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap justify-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black rounded-xl shadow-md transition-all cursor-pointer uppercase tracking-wider flex items-center gap-2"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>SELECT FILE</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => nativeCameraInputRef.current?.click()}
+                      className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-black rounded-xl border border-slate-700 shadow-md transition-all cursor-pointer uppercase tracking-wider flex items-center gap-2"
+                    >
+                      <Camera className="w-4 h-4 text-amber-300" />
+                      <span>NATIVE CAMERA</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => startCamera('environment')}
+                      className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-cyan-300 text-xs font-black rounded-xl border border-cyan-500/30 transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Retry Live Video</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Hidden Input Elements */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.[0]) handleFileSelected(e.target.files[0]);
+              }}
+            />
+            <input
+              ref={nativeCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.[0]) handleFileSelected(e.target.files[0]);
+              }}
+            />
+
+            {/* Bottom Tips */}
+            <div className="p-3 bg-blue-50 rounded-2xl border border-blue-100 flex items-start gap-2.5 text-xs text-blue-900">
+              <Zap className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Pro Tip: </span>
+                All official Sections A to J (Personal, Residence, Education, Family, Contact, Civil & Religion, Siblings, Parish & Exam) will be populated with auto-duplicate detection.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- STAGE 3: REVIEW & EDIT EXTRACTED INFORMATION ---
+  return (
+    <div
+      id="scan-form-review-modal"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
+    >
+      <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full border border-blue-100 overflow-hidden flex flex-col max-h-[95vh]">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-[#1E3A8A] via-[#1D4ED8] to-[#172554] p-4 text-white flex items-center justify-between shadow-md shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setStage('capture');
+                startCamera('environment');
+              }}
+              className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+              title="Rescan another document"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-emerald-500/20 border border-emerald-400/40 rounded-full text-[10px] font-bold text-emerald-200">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span>OCR EXTRACTION COMPLETE — REVIEW & VALIDATE</span>
+              </div>
+              <h2 className="text-base sm:text-lg font-black tracking-tight mt-0.5">
+                Official Recruitment Form: {lastName || 'NEW APPLICANT'}, {firstName}
               </h2>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {scanResult?.corrections && scanResult.corrections.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowCorrectionsDrawer(!showCorrectionsDrawer)}
+                className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/40 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>{scanResult.corrections.length} Smart Auto-Corrections</span>
+              </button>
+            )}
             <button
-              onClick={() => {
-                stopCamera();
-                onClose();
-              }}
-              className="p-2 text-gray-400 hover:text-gray-700 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
-              title="Close Scanner"
+              onClick={onClose}
+              className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-full transition-all cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* STAGE 1: CAPTURE & UPLOAD VIEW */}
-        {stage === 'capture' && (
-          <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
-            {ocrError && (
-              <div className="p-5 bg-amber-50/90 border-2 border-amber-300 rounded-2xl text-amber-950 text-xs font-medium space-y-4 animate-in fade-in shadow-md">
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700 shrink-0 mt-0.5">
-                    <AlertCircle className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-black text-amber-950 text-sm">
-                      {ocrError.includes('configuration error')
-                        ? 'OCR Configuration Error'
-                        : ocrError.includes('Connection problem')
-                        ? 'Connection Problem'
-                        : ocrError.includes('busy')
-                        ? 'OCR Service Temporarily Busy'
-                        : ocrError.includes('Unable to process')
-                        ? 'Unable to Process This Image'
-                        : 'OCR Processing Failed'}
-                    </p>
-                    <p className="text-amber-900 text-xs mt-0.5 font-semibold">
-                      {ocrError}
-                    </p>
-                    <p className="text-amber-800 text-[11px] mt-1 font-medium bg-amber-100/70 p-2 rounded-lg border border-amber-200/80 inline-block">
-                      ✓ Your captured document image has been preserved. You can retry OCR immediately without taking another photo.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setOcrError(null)}
-                    className="text-amber-700 hover:text-amber-950 p-1.5 rounded-lg hover:bg-amber-100 cursor-pointer"
-                    title="Dismiss"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {imagePreview && (
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t border-amber-200">
-                    {/* Preserved Thumbnail */}
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-12 h-14 bg-slate-900 rounded-lg overflow-hidden border border-amber-300 shadow-2xs shrink-0">
-                        <img
-                          src={imagePreview}
-                          alt="Preserved Capture"
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="text-[11px]">
-                        <span className="font-bold text-amber-950 block">Preserved Document Photo</span>
-                        <span className="text-amber-700 text-[10px]">Ready to process with Gemini 3.6 Flash</span>
-                      </div>
-                    </div>
-
-                    {/* Action Controls */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => runOCR(imagePreview)}
-                        className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer border border-emerald-600"
-                      >
-                        <RefreshCw className="w-4 h-4 text-emerald-200" />
-                        <span>[ RETRY OCR ]</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setImagePreview(null);
-                          setOcrError(null);
-                          startCamera('environment');
-                        }}
-                        className="px-3.5 py-2.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>Take New Photo</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="px-3.5 py-2.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-950 font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Choose File</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {cameraError && (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs font-semibold space-y-2 animate-in fade-in">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                  <span className="leading-relaxed">{cameraError}</span>
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1 pl-7">
-                  <button
-                    type="button"
-                    onClick={() => startCamera('environment')}
-                    className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Retry Camera Permission</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => nativeCameraInputRef.current?.click()}
-                    className="px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>Open Device Camera App</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 font-bold text-xs rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Choose File from Device</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* LIVE CAMERA VIEWFINDER */}
-            {isCameraActive ? (
-              <div className="bg-slate-950 rounded-2xl overflow-hidden relative border-2 border-emerald-500 shadow-2xl max-w-3xl mx-auto flex items-center justify-center min-h-[360px] sm:min-h-[460px]">
-                {/* Layer 1: Real HTML <video> Camera Element */}
-                <video
-                  ref={(el) => {
-                    videoRef.current = el;
-                    if (el && streamRef.current) {
-                      if (el.srcObject !== streamRef.current) {
-                        el.srcObject = streamRef.current;
-                      }
-                      el.muted = true;
-                      el.playsInline = true;
-                      el.autoplay = true;
-                      el.play().catch(() => {});
-                    }
-                  }}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="w-full h-full min-h-[360px] sm:min-h-[460px] max-h-[560px] object-contain bg-slate-950 block z-0"
-                  style={{ objectFit: 'contain', width: '100%', height: '100%' }}
-                />
-
-                {/* Layer 2 & 3 & 4: Scanning Frame Overlay & Guides */}
-                <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-4 sm:p-6">
-                  {/* Top Header inside camera */}
-                  <div className="flex items-center justify-between">
-                    <div className="w-8 h-8 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg" />
-                    <div className="bg-slate-900/85 text-emerald-300 px-4 py-1.5 rounded-full text-xs font-black backdrop-blur-md tracking-wider uppercase border border-emerald-500/50 shadow-md flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      <span>ALIGN PERSONAL DATA FORM INSIDE FRAME</span>
-                    </div>
-                    <div className="w-8 h-8 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg" />
-                  </div>
-
-                  {/* Center subtle scan line */}
-                  <div className="flex-1 flex items-center justify-center my-4">
-                    <div className="w-full h-[1.5px] bg-gradient-to-r from-transparent via-emerald-400/60 to-transparent animate-pulse" />
-                  </div>
-
-                  {/* Bottom Footer inside camera */}
-                  <div className="flex items-center justify-between">
-                    <div className="w-8 h-8 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg" />
-                    <div className="text-[11px] text-white/90 font-bold bg-slate-900/85 px-3.5 py-1 rounded-full border border-slate-700/60 backdrop-blur-md">
-                      Hold steady for clear handwriting recognition
-                    </div>
-                    <div className="w-8 h-8 border-b-4 border-r-4 border-emerald-400 rounded-br-lg" />
-                  </div>
-                </div>
-
-                {/* Layer 5: Camera Controls & Buttons */}
-                <div className="absolute bottom-5 inset-x-0 flex items-center justify-center gap-3 sm:gap-4 px-4 z-20">
-                  <button
-                    type="button"
-                    onClick={toggleCameraFacing}
-                    className="p-3.5 bg-slate-900/85 hover:bg-slate-800 text-white rounded-full backdrop-blur-md transition-all cursor-pointer border border-white/30 shadow-lg"
-                    title="Switch Camera (Front / Rear)"
-                  >
-                    <SwitchCamera className="w-5 h-5 text-emerald-300" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={capturePhoto}
-                    className="px-6 sm:px-8 py-3.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white font-black text-xs sm:text-sm uppercase tracking-wider rounded-full shadow-2xl transition-all flex items-center gap-2.5 cursor-pointer border-2 border-white transform active:scale-95 hover:shadow-emerald-500/25"
-                  >
-                    <Camera className="w-5 h-5 text-white" />
-                    <span>[ 📷 SNAP & PROCESS FORM ]</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      stopCamera();
-                    }}
-                    className="p-3.5 bg-slate-900/85 hover:bg-slate-800 text-white rounded-full backdrop-blur-md transition-all cursor-pointer border border-white/30 shadow-lg"
-                    title="Choose File Instead"
-                  >
-                    <Upload className="w-5 h-5 text-blue-300" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* DUAL CAMERA / FILE DROPZONE */
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragOver(true);
-                }}
-                onDragLeave={() => setIsDragOver(false)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDragOver(false);
-                  if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                    handleFileSelected(e.dataTransfer.files[0]);
-                  }
-                }}
-                className={`rounded-2xl border-2 border-dashed transition-all p-8 sm:p-10 text-center space-y-6 max-w-3xl mx-auto ${
-                  isDragOver
-                    ? 'border-emerald-500 bg-emerald-50/70 scale-[1.01]'
-                    : 'border-blue-200 bg-slate-50/80 hover:bg-blue-50/40'
-                }`}
-              >
-                <div className="w-20 h-20 bg-blue-100 text-[#1E3A8A] rounded-2xl flex items-center justify-center mx-auto border border-blue-200 shadow-sm">
-                  <FileSearch className="w-10 h-10" />
-                </div>
-
-                <div className="space-y-1.5 max-w-md mx-auto">
-                  <h3 className="text-lg font-black text-gray-900">
-                    Scan or Upload Student "Personal Data Form"
-                  </h3>
-                  <p className="text-xs text-gray-600 font-medium leading-relaxed">
-                    Capture paper forms directly with your device camera, drag and drop an image file, or press <kbd className="px-1.5 py-0.5 bg-white border border-gray-300 rounded font-mono text-[10px] text-gray-800">Ctrl+V</kbd> to paste.
-                  </p>
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => startCamera('environment')}
-                    className="w-full sm:w-auto px-6 py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer border border-emerald-600/50 hover:shadow-lg"
-                  >
-                    <Camera className="w-4 h-4 text-emerald-200" />
-                    <span>📷 OPEN LIVE CAMERA</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full sm:w-auto px-6 py-3.5 bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:shadow-lg"
-                  >
-                    <Upload className="w-4 h-4 text-blue-200" />
-                    <span>UPLOAD FORM FILE (PNG / JPG / PDF)</span>
-                  </button>
-                </div>
-
-                {/* Instant Sample Test Option */}
-                <div className="pt-4 border-t border-blue-100/80 max-w-md mx-auto">
-                  <p className="text-xs text-gray-500 font-medium mb-2.5">
-                    Testing without a physical paper form right now?
-                  </p>
-                  <button
-                    type="button"
-                    onClick={loadSampleForm}
-                    className="px-4 py-2 bg-white border border-blue-300 hover:border-[#1E3A8A] text-[#1E3A8A] font-bold text-xs rounded-xl shadow-2xs hover:bg-blue-50 transition-all cursor-pointer flex items-center justify-center gap-2 mx-auto"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-amber-500" />
-                    <span>⚡ Load Sample Personal Data Form for Instant Test</span>
-                  </button>
-                </div>
-
-                {/* Hidden File Inputs */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      handleFileSelected(e.target.files[0]);
-                    }
-                  }}
-                />
-                <input
-                  ref={nativeCameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      handleFileSelected(e.target.files[0]);
-                    }
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* STAGE 2: REAL-TIME AI SCANNING ANIMATION */}
-        {stage === 'scanning' && (
-          <div className="p-8 sm:p-12 text-center space-y-6 my-auto">
-            {/* Visual Document Scan Animation */}
-            <div className="relative w-48 sm:w-56 h-64 sm:h-72 mx-auto bg-white rounded-2xl shadow-xl border-2 border-blue-200 overflow-hidden flex flex-col justify-between p-4">
-              {/* Mock lines of document */}
-              <div className="space-y-2 text-left opacity-30">
-                <div className="h-3 w-3/4 bg-blue-900 rounded" />
-                <div className="h-2 w-1/2 bg-blue-700 rounded" />
-                <div className="h-px bg-slate-300 my-2" />
-                <div className="h-2 w-full bg-slate-400 rounded" />
-                <div className="h-2 w-5/6 bg-slate-400 rounded" />
-                <div className="h-2 w-4/6 bg-slate-400 rounded" />
-                <div className="h-2 w-full bg-slate-400 rounded" />
-                <div className="h-2 w-3/4 bg-slate-400 rounded" />
-              </div>
-
-              {/* Animated Laser Bar */}
-              <div className="absolute inset-x-0 h-1.5 bg-gradient-to-r from-emerald-400 via-blue-400 to-emerald-400 shadow-[0_0_15px_#10B981] animate-bounce" />
-
-              <div className="flex items-center justify-between text-[10px] text-blue-900 font-bold opacity-60">
-                <span>Personal Data Form</span>
-                <span>Gemini 3.6 Flash</span>
-              </div>
-            </div>
-
-            <div className="space-y-2 max-w-md mx-auto">
-              <div className="flex items-center justify-center gap-2 text-emerald-800 font-black text-base uppercase tracking-wide">
-                <RefreshCw className="w-5 h-5 animate-spin text-emerald-600" />
-                <span>PROCESSING DOCUMENT WITH AI OCR...</span>
-              </div>
-              <p className="text-xs text-gray-500 font-medium">
-                Reading printed text, handwritten entries, 12-digit LRN, and examination remarks.
+        {/* Duplicate Warning Banner */}
+        {duplicateWarning && (
+          <div
+            className={`p-3 sm:p-4 shrink-0 flex items-start gap-3 border-b ${
+              duplicateWarning.duplicateStatus === 'EXACT'
+                ? 'bg-red-50 border-red-200 text-red-900'
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}
+          >
+            <AlertTriangle
+              className={`w-5 h-5 shrink-0 mt-0.5 ${
+                duplicateWarning.duplicateStatus === 'EXACT' ? 'text-red-600' : 'text-amber-600'
+              }`}
+            />
+            <div className="flex-1 text-xs">
+              <p className="font-black text-sm">
+                {duplicateWarning.duplicateStatus === 'EXACT'
+                  ? 'DUPLICATE RECORD WARNING'
+                  : 'POSSIBLE MATCH DETECTED IN DATABASE'}
+              </p>
+              <p className="mt-0.5 font-medium">{duplicateWarning.message}</p>
+              <p className="text-[11px] opacity-80 mt-0.5">
+                Existing record: <span className="font-bold">{duplicateWarning.existingRecord.surname}, {duplicateWarning.existingRecord.firstName}</span> (LRN: {duplicateWarning.existingRecord.lrn})
               </p>
             </div>
-
-            {/* Pipeline Stage Badges */}
-            <div className="max-w-md mx-auto grid grid-cols-2 gap-2 text-[11px] font-bold text-left pt-2">
-              <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
-                scanProgressStage >= 1
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                  : 'bg-slate-50 border-slate-200 text-slate-400'
-              }`}>
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                <span>1. Form Header & Layout</span>
-              </div>
-
-              <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
-                scanProgressStage >= 2
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                  : 'bg-slate-50 border-slate-200 text-slate-400'
-              }`}>
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                <span>2. Handwriting OCR</span>
-              </div>
-
-              <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
-                scanProgressStage >= 3
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                  : 'bg-slate-50 border-slate-200 text-slate-400'
-              }`}>
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                <span>3. LRN & Two-Column Map</span>
-              </div>
-
-              <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
-                scanProgressStage >= 4
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                  : 'bg-slate-50 border-slate-200 text-slate-400'
-              }`}>
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                <span>4. Preparing Review Form</span>
-              </div>
-            </div>
           </div>
         )}
 
-        {/* STAGE 3: SIDE-BY-SIDE SPLIT VERIFICATION & EDIT WORKSPACE */}
-        {stage === 'review' && (
-          <div className="flex-1 overflow-hidden flex flex-col">
-            {/* Review Status Banner */}
-            <div className="p-3 bg-blue-50 border-b border-blue-200 px-5 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="font-extrabold text-blue-950">
-                  OCR Extraction Complete!
-                </span>
-                <span className="text-gray-600 font-medium hidden sm:inline">
-                  Compare the scanned document on the left with the auto-filled fields on the right.
-                </span>
-              </div>
+        {/* Save Error Banner */}
+        {saveError && (
+          <div className="p-3 bg-red-100 border-b border-red-200 text-red-900 text-xs font-bold flex items-center gap-2 shrink-0">
+            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{saveError}</span>
+          </div>
+        )}
 
-              <div className="flex items-center gap-2">
+        {/* Split Container: Left Image Preview, Right Tabbed Form */}
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+          {/* Left Column: Scanned Document Image Viewer (4 cols) */}
+          <div className="hidden lg:flex lg:col-span-4 bg-slate-900 flex-col border-r border-slate-800 overflow-hidden">
+            <div className="p-2.5 bg-slate-950 flex items-center justify-between border-b border-slate-800 text-xs text-slate-300">
+              <span className="font-bold flex items-center gap-1.5">
+                <FileSearch className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Original Document</span>
+              </span>
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    setStage('capture');
-                    startCamera('environment');
-                  }}
-                  className="px-2.5 py-1 bg-white border border-blue-300 hover:border-[#1E3A8A] text-blue-900 font-bold text-[11px] rounded-lg transition-all cursor-pointer flex items-center gap-1"
+                  onClick={() => setImageZoom((z) => Math.max(0.6, z - 0.2))}
+                  className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"
+                  title="Zoom Out"
                 >
-                  <RotateCw className="w-3 h-3 text-[#1E3A8A]" />
-                  <span>Scan Another Document</span>
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[10px] font-mono">{Math.round(imageZoom * 100)}%</span>
+                <button
+                  type="button"
+                  onClick={() => setImageZoom((z) => Math.min(2.5, z + 0.2))}
+                  className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageRotation((r) => (r + 90) % 360)}
+                  className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white ml-1"
+                  title="Rotate"
+                >
+                  <RotateCw className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
 
-            {corrections.length > 0 && (
-              <div className="mx-4 mt-2 p-3 bg-violet-50 border border-violet-200 rounded-xl text-xs space-y-1.5 animate-in fade-in">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-bold text-violet-950">
-                    <Sparkles className="w-4 h-4 text-violet-600 shrink-0" />
-                    <span>Smart OCR Auto-Correction Applied ({corrections.length} mistake{corrections.length > 1 ? 's' : ''} corrected)</span>
-                  </div>
+            <div className="flex-1 overflow-auto p-3 flex items-center justify-center bg-slate-950/60">
+              {imagePreview ? (
+                <img
+                  src={imagePreview}
+                  alt="Scanned Document"
+                  className="max-w-full rounded-lg shadow-xl transition-transform duration-200"
+                  style={{
+                    transform: `scale(${imageZoom}) rotate(${imageRotation}deg)`,
+                    transformOrigin: 'center center',
+                  }}
+                />
+              ) : (
+                <div className="text-slate-500 text-xs font-bold">No image preview</div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Editable Sections A through J Form (8 cols) */}
+          <div className="col-span-1 lg:col-span-8 flex flex-col overflow-hidden bg-white">
+            {/* Section Tab Bar */}
+            <div className="bg-slate-100 border-b border-slate-200 p-2 overflow-x-auto flex items-center gap-1.5 shrink-0">
+              {[
+                { id: 'A', label: 'A. Basic Info', icon: User },
+                { id: 'B', label: 'B. Residence', icon: Home },
+                { id: 'C', label: 'C. Education', icon: GraduationCap },
+                { id: 'D', label: 'D. Family', icon: Users },
+                { id: 'E', label: 'E. Contact', icon: Phone },
+                { id: 'F', label: 'F. Religious & Civil', icon: Church },
+                { id: 'G', label: 'G. Siblings', icon: Users },
+                { id: 'H_I', label: 'H & I. Parish & Exam', icon: HeartPulse },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeReviewTab === tab.id;
+                return (
                   <button
+                    key={tab.id}
                     type="button"
-                    onClick={() => setShowCorrectionsDrawer(!showCorrectionsDrawer)}
-                    className="text-[11px] font-bold text-violet-700 hover:text-violet-900 underline cursor-pointer"
+                    onClick={() => setActiveReviewTab(tab.id as any)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-[#1E3A8A] text-white shadow-xs'
+                        : 'text-slate-700 hover:bg-slate-200 hover:text-slate-900'
+                    }`}
                   >
-                    {showCorrectionsDrawer ? 'Hide Details' : 'View Corrections'}
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-amber-300' : 'text-slate-500'}`} />
+                    <span>{tab.label}</span>
                   </button>
+                );
+              })}
+            </div>
+
+            {/* Review Form Content */}
+            <form onSubmit={handleSaveReviewedRecord} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+              {/* SECTION A */}
+              {activeReviewTab === 'A' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-blue-100">
+                    <div className="flex items-center gap-2 text-[#1E3A8A]">
+                      <User className="w-5 h-5" />
+                      <h3 className="font-extrabold text-sm uppercase tracking-wider">A. Basic Personal Information</h3>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-500 uppercase">Section A</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Last Name / Surname <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value.toUpperCase())}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        First Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value.toUpperCase())}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Middle Name</label>
+                      <input
+                        type="text"
+                        value={middleName}
+                        onChange={(e) => setMiddleName(e.target.value.toUpperCase())}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Date of Birth (Birthdate)</label>
+                      <input
+                        type="date"
+                        value={birthdate}
+                        onChange={(e) => setBirthdate(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Age (Years)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={99}
+                        value={age}
+                        onChange={(e) => setAge(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Sex / Gender</label>
+                      <select
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      >
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-[11px] text-violet-800 leading-relaxed">
-                  Automatic spelling corrections were safely applied to common OCR errors while preserving student names, addresses, and identifiers. You can review or undo each change.
-                </p>
-                {showCorrectionsDrawer && (
-                  <div className="pt-2 border-t border-violet-200 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                    {corrections.map((c) => (
-                      <div key={c.field} className="p-2 bg-white rounded-lg border border-violet-200 flex items-center justify-between">
-                        <div>
-                          <span className="font-bold text-violet-900 capitalize">{c.field.replace(/([A-Z])/g, ' $1')}:</span>{' '}
-                          <span className="line-through text-red-500 font-mono text-[10px]">{c.originalValue}</span>{' '}
-                          <span className="text-gray-400">→</span>{' '}
-                          <span className="font-bold text-emerald-700 font-mono text-[10px]">{c.correctedValue}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRevertCorrection(c.field)}
-                          className="px-2 py-0.5 bg-violet-100 hover:bg-violet-200 text-violet-800 font-bold text-[10px] rounded cursor-pointer ml-2"
-                        >
-                          Undo
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+              )}
 
-            {saveError && (
-              <div className="mx-4 mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
-                <span>{saveError}</span>
-              </div>
-            )}
-
-            {/* Split Screen Container */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
-              {/* LEFT COLUMN: INTERACTIVE DOCUMENT VIEWER */}
-              <div className="lg:col-span-5 border-b lg:border-b-0 lg:border-r border-gray-200 bg-slate-900 flex flex-col min-h-[260px] lg:min-h-0 relative">
-                {/* Document Viewer Controls */}
-                <div className="p-2.5 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between text-white text-xs shrink-0 px-4">
-                  <div className="flex items-center gap-2 font-bold text-[11px] text-slate-300">
-                    <FileText className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Scanned Form Reference</span>
+              {/* SECTION B */}
+              {activeReviewTab === 'B' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-blue-100">
+                    <div className="flex items-center gap-2 text-[#1E3A8A]">
+                      <Home className="w-5 h-5" />
+                      <h3 className="font-extrabold text-sm uppercase tracking-wider">B. Residence / Address Information</h3>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-500 uppercase">Section B</span>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setImageZoom((prev) => Math.max(0.6, prev - 0.2))}
-                      className="p-1 bg-slate-700 hover:bg-slate-600 rounded text-white cursor-pointer"
-                      title="Zoom Out"
-                    >
-                      <ZoomOut className="w-3.5 h-3.5" />
-                    </button>
-                    <span className="text-[10px] font-mono text-slate-300 w-9 text-center">
-                      {Math.round(imageZoom * 100)}%
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setImageZoom((prev) => Math.min(2.5, prev + 0.2))}
-                      className="p-1 bg-slate-700 hover:bg-slate-600 rounded text-white cursor-pointer"
-                      title="Zoom In"
-                    >
-                      <ZoomIn className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setImageZoom(1)}
-                      className="px-2 py-0.5 bg-slate-700 hover:bg-slate-600 rounded text-[10px] font-bold text-white cursor-pointer"
-                      title="Reset Zoom"
-                    >
-                      Fit
-                    </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Sitio / Street / Purok</label>
+                      <input
+                        type="text"
+                        value={sitioStreet}
+                        onChange={(e) => setSitioStreet(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Barangay</label>
+                      <input
+                        type="text"
+                        value={barangay}
+                        onChange={(e) => setBarangay(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Municipality / City</label>
+                      <input
+                        type="text"
+                        value={municipality}
+                        onChange={(e) => setMunicipality(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Province</label>
+                      <input
+                        type="text"
+                        value={province}
+                        onChange={(e) => setProvince(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
                   </div>
-                </div>
 
-                {/* Document Image Canvas */}
-                <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-950">
-                  {imagePreview ? (
-                    <img
-                      src={imagePreview}
-                      alt="Scanned Student Document"
-                      style={{
-                        transform: `scale(${imageZoom}) rotate(${imageRotation}deg)`,
-                        transformOrigin: 'top center',
-                        transition: 'transform 0.15s ease-out',
-                      }}
-                      className="max-h-full max-w-full object-contain rounded-lg shadow-2xl border border-slate-800"
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Complete Home Address</label>
+                    <textarea
+                      rows={2}
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                     />
-                  ) : (
-                    <div className="text-slate-500 text-xs">No image preview available</div>
-                  )}
-                </div>
-
-                {/* Form metadata badge */}
-                {scanResult?.formTitleDetected && (
-                  <div className="p-2 bg-slate-800/80 border-t border-slate-700 text-[10px] text-slate-400 text-center font-medium truncate px-3">
-                    Detected Document: <strong className="text-slate-200">{scanResult.formTitleDetected}</strong>
                   </div>
-                )}
-              </div>
-
-              {/* RIGHT COLUMN: AUTO-FILLED EDITABLE FORM */}
-              <div className="lg:col-span-7 bg-white flex flex-col overflow-hidden">
-                {/* Form Navigation Tabs */}
-                <div className="flex items-center border-b border-blue-100 bg-slate-50 px-4 pt-2 shrink-0 overflow-x-auto text-xs font-semibold gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setActiveReviewTab('personal')}
-                    className={`py-2 px-3 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                      activeReviewTab === 'personal'
-                        ? 'border-[#1E3A8A] text-[#1E3A8A] font-extrabold'
-                        : 'border-transparent text-gray-500 hover:text-gray-800'
-                    }`}
-                  >
-                    <User className="w-3.5 h-3.5" />
-                    <span>1. Personal Data</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveReviewTab('family')}
-                    className={`py-2 px-3 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                      activeReviewTab === 'family'
-                        ? 'border-[#1E3A8A] text-[#1E3A8A] font-extrabold'
-                        : 'border-transparent text-gray-500 hover:text-gray-800'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    <span>2. Family Info</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveReviewTab('educational')}
-                    className={`py-2 px-3 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                      activeReviewTab === 'educational'
-                        ? 'border-[#1E3A8A] text-[#1E3A8A] font-extrabold'
-                        : 'border-transparent text-gray-500 hover:text-gray-800'
-                    }`}
-                  >
-                    <GraduationCap className="w-3.5 h-3.5" />
-                    <span>3. Exam & Status</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveReviewTab('health')}
-                    className={`py-2 px-3 border-b-2 flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                      activeReviewTab === 'health'
-                        ? 'border-[#1E3A8A] text-[#1E3A8A] font-extrabold'
-                        : 'border-transparent text-gray-500 hover:text-gray-800'
-                    }`}
-                  >
-                    <HeartPulse className="w-3.5 h-3.5" />
-                    <span>4. Health</span>
-                  </button>
                 </div>
+              )}
 
-                {/* Form Fields Workspace */}
-                <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
-                  {/* TAB 1: PERSONAL INFORMATION */}
-                  {activeReviewTab === 'personal' && (
-                    <div className="space-y-3.5 animate-in fade-in">
-                      {/* LRN Field with 12-digit validator */}
-                      <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-200">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="text-xs font-black text-blue-950 uppercase flex items-center gap-1.5">
-                            <span>Learner Reference Number (LRN)</span>
-                            <span className="text-red-500">*</span>
-                          </label>
-                          {getConfidenceBadge('lrn')}
-                        </div>
+              {/* SECTION C */}
+              {activeReviewTab === 'C' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-blue-100">
+                    <div className="flex items-center gap-2 text-[#1E3A8A]">
+                      <GraduationCap className="w-5 h-5" />
+                      <h3 className="font-extrabold text-sm uppercase tracking-wider">C. Educational Background</h3>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-500 uppercase">Section C</span>
+                  </div>
 
-                        <div className="flex gap-2 items-center">
-                          <input
-                            type="text"
-                            required
-                            maxLength={12}
-                            value={lrn}
-                            onChange={(e) => setLrn(e.target.value.replace(/\D/g, ''))}
-                            placeholder="e.g. 109283746123"
-                            className="flex-1 px-3 py-2 bg-white border border-blue-300 rounded-xl text-xs font-mono font-black text-[#1E3A8A] tracking-wider focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
-                          />
-                          <span className={`text-[11px] font-bold px-2 py-1 rounded-lg ${
-                            lrn.length === 12
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : 'bg-amber-100 text-amber-900 border border-amber-300'
-                          }`}>
-                            {lrn.length} / 12 digits
-                          </span>
-                        </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Elementary School Graduated</label>
+                      <input
+                        type="text"
+                        value={elementarySchool}
+                        onChange={(e) => setElementarySchool(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">School Address</label>
+                      <input
+                        type="text"
+                        value={schoolAddress}
+                        onChange={(e) => setSchoolAddress(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Learner Reference Number (LRN) <span className="text-red-500">* (12 Digits)</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={12}
+                        value={lrn}
+                        onChange={(e) => setLrn(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-mono font-black text-blue-900 tracking-wider focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                      <span className={`text-[10px] font-bold ${lrn.length === 12 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {lrn.length === 12 ? '✓ 12 Digits verified' : `${lrn.length}/12 Digits`}
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Report Card (SY)</label>
+                      <input
+                        type="text"
+                        value={reportCardSy}
+                        onChange={(e) => setReportCardSy(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Grading Period</label>
+                      <select
+                        value={grading}
+                        onChange={(e) => setGrading(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      >
+                        <option value="Final">Final</option>
+                        <option value="1st">1st Quarter</option>
+                        <option value="2nd">2nd Quarter</option>
+                        <option value="3rd">3rd Quarter</option>
+                        <option value="4th">4th Quarter</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Current Grade</label>
+                      <input
+                        type="text"
+                        value={currentGrade}
+                        onChange={(e) => setCurrentGrade(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Old Graduate / Remarks</label>
+                      <input
+                        type="text"
+                        value={oldGraduateRemarks}
+                        onChange={(e) => setOldGraduateRemarks(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION D */}
+              {activeReviewTab === 'D' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-blue-100">
+                    <div className="flex items-center gap-2 text-[#1E3A8A]">
+                      <Users className="w-5 h-5" />
+                      <h3 className="font-extrabold text-sm uppercase tracking-wider">D. Family Background</h3>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-500 uppercase">Section D</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <h4 className="font-black text-xs text-blue-900 uppercase">Father's Info (Ama)</h4>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Full Name</label>
+                        <input
+                          type="text"
+                          value={fatherName}
+                          onChange={(e) => setFatherName(e.target.value.toUpperCase())}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                        />
                       </div>
-
-                      {/* Name Fields (SN, FN, MN) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Surname (SN) <span className="text-red-500">*</span>
-                            </label>
-                            {getConfidenceBadge('surname')}
-                          </div>
-                          <input
-                            type="text"
-                            required
-                            value={surname}
-                            onChange={(e) => setSurname(e.target.value)}
-                            placeholder="e.g. DELA CRUZ"
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white uppercase"
-                          />
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              First Name (FN) <span className="text-red-500">*</span>
-                            </label>
-                            {getConfidenceBadge('firstName')}
-                          </div>
-                          <input
-                            type="text"
-                            required
-                            value={firstName}
-                            onChange={(e) => setFirstName(e.target.value)}
-                            placeholder="e.g. MARIA CRISTINA"
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white uppercase"
-                          />
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Middle Name (MN)
-                            </label>
-                            {getConfidenceBadge('middleName')}
-                          </div>
-                          <input
-                            type="text"
-                            value={middleName}
-                            onChange={(e) => setMiddleName(e.target.value)}
-                            placeholder="e.g. SANTOS"
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white uppercase"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Birthday & Address */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="sm:col-span-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Birthday <span className="text-red-500">*</span>
-                            </label>
-                            {getConfidenceBadge('birthday')}
-                          </div>
-                          <input
-                            type="date"
-                            required
-                            value={birthday}
-                            onChange={(e) => setBirthday(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white"
-                          />
-                        </div>
-
-                        <div className="sm:col-span-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Complete Home Address
-                            </label>
-                            {getConfidenceBadge('address')}
-                          </div>
-                          <input
-                            type="text"
-                            value={address}
-                            onChange={(e) => setAddress(e.target.value)}
-                            placeholder="House No., Barangay, Municipality/City, Province"
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white"
-                          />
-                        </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Occupation</label>
+                        <input
+                          type="text"
+                          value={fatherOccupation}
+                          onChange={(e) => setFatherOccupation(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                        />
                       </div>
                     </div>
-                  )}
 
-                  {/* TAB 2: FAMILY INFORMATION */}
-                  {activeReviewTab === 'family' && (
-                    <div className="space-y-3.5 animate-in fade-in">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Father's Name (Tatay)
-                            </label>
-                            {getConfidenceBadge('fatherName')}
-                          </div>
-                          <input
-                            type="text"
-                            value={fatherName}
-                            onChange={(e) => setFatherName(e.target.value)}
-                            placeholder="Full name of father"
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white uppercase"
-                          />
-                        </div>
+                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <h4 className="font-black text-xs text-blue-900 uppercase">Mother's Info (Ina)</h4>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Maiden Name</label>
+                        <input
+                          type="text"
+                          value={motherName}
+                          onChange={(e) => setMotherName(e.target.value.toUpperCase())}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Occupation</label>
+                        <input
+                          type="text"
+                          value={motherOccupation}
+                          onChange={(e) => setMotherOccupation(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                        />
+                      </div>
+                    </div>
 
+                    <div className="sm:col-span-2 p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <h4 className="font-black text-xs text-slate-800 uppercase">Guardian's Info (Tagapag-alaga)</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Father's Occupation
-                            </label>
-                            {getConfidenceBadge('fatherOccupation')}
-                          </div>
-                          <input
-                            type="text"
-                            value={fatherOccupation}
-                            onChange={(e) => setFatherOccupation(e.target.value)}
-                            placeholder="e.g. Farmer / Tricycle Driver"
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white"
-                          />
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Mother's Name (Nanay)
-                            </label>
-                            {getConfidenceBadge('motherName')}
-                          </div>
-                          <input
-                            type="text"
-                            value={motherName}
-                            onChange={(e) => setMotherName(e.target.value)}
-                            placeholder="Full name of mother"
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white uppercase"
-                          />
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Mother's Occupation
-                            </label>
-                            {getConfidenceBadge('motherOccupation')}
-                          </div>
-                          <input
-                            type="text"
-                            value={motherOccupation}
-                            onChange={(e) => setMotherOccupation(e.target.value)}
-                            placeholder="e.g. Housewife / Sewer"
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white"
-                          />
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Guardian's Name
-                            </label>
-                            {getConfidenceBadge('guardianName')}
-                          </div>
+                          <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Full Name</label>
                           <input
                             type="text"
                             value={guardianName}
-                            onChange={(e) => setGuardianName(e.target.value)}
-                            placeholder="Full name of guardian if applicable"
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white uppercase"
+                            onChange={(e) => setGuardianName(e.target.value.toUpperCase())}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
                           />
                         </div>
-
                         <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Number of Siblings
-                            </label>
-                            {getConfidenceBadge('numSiblings')}
-                          </div>
+                          <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Relationship</label>
                           <input
-                            type="number"
-                            min="0"
-                            value={numSiblings}
-                            onChange={(e) => setNumSiblings(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white"
+                            type="text"
+                            value={guardianRelation}
+                            onChange={(e) => setGuardianRelation(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Occupation</label>
+                          <input
+                            type="text"
+                            value={guardianOccupation}
+                            onChange={(e) => setGuardianOccupation(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
                           />
                         </div>
                       </div>
                     </div>
-                  )}
+                  </div>
+                </div>
+              )}
 
-                  {/* TAB 3: EDUCATIONAL & ADMISSION STATUS */}
-                  {activeReviewTab === 'educational' && (
-                    <div className="space-y-3.5 animate-in fade-in">
+              {/* SECTION E */}
+              {activeReviewTab === 'E' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-blue-100">
+                    <div className="flex items-center gap-2 text-[#1E3A8A]">
+                      <Phone className="w-5 h-5" />
+                      <h3 className="font-extrabold text-sm uppercase tracking-wider">E. Contact Information</h3>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-500 uppercase">Section E</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <h4 className="font-black text-xs text-blue-900 uppercase">Cellphone Contact</h4>
                       <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-xs font-bold text-gray-700 uppercase">
-                            Elementary School Graduated
-                          </label>
-                          {getConfidenceBadge('elementarySchool')}
-                        </div>
+                        <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Cellphone Number</label>
                         <input
                           type="text"
-                          value={elementarySchool}
-                          onChange={(e) => setElementarySchool(e.target.value)}
-                          placeholder="e.g. DASMARIÑAS INTEGRATED ELEMENTARY SCHOOL"
-                          className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white uppercase"
+                          value={cellphoneNumber}
+                          onChange={(e) => setCellphoneNumber(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
                         />
                       </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Entrance Exam Score <span className="text-red-500">*</span>
-                            </label>
-                            {getConfidenceBadge('examScore')}
-                          </div>
-                          <input
-                            type="number"
-                            min="0"
-                            max={maxExamScore}
-                            value={examScore}
-                            onChange={(e) => setExamScore(e.target.value)}
-                            placeholder={`0 to ${maxExamScore}`}
-                            className="w-full px-3 py-2 bg-slate-50 border border-blue-300 rounded-xl text-xs font-black text-[#1E3A8A] focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white"
-                          />
-                          <p className="text-[10px] text-gray-500 mt-0.5">
-                            Max configured score: <strong>{maxExamScore}</strong>
-                          </p>
-                        </div>
-
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs font-bold text-gray-700 uppercase">
-                              Admission Status (Remarks) <span className="text-red-500">*</span>
-                            </label>
-                            {getConfidenceBadge('remarks')}
-                          </div>
-                          <select
-                            value={remarks}
-                            onChange={(e) => setRemarks(e.target.value as AdmissionStatus)}
-                            className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
-                          >
-                            <option value="A - PASS">A - PASS (Qualified)</option>
-                            <option value="B - PENDING">B - PENDING (Evaluation)</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* TAB 4: HEALTH & ASSESSOR NOTES */}
-                  {activeReviewTab === 'health' && (
-                    <div className="space-y-3.5 animate-in fade-in">
                       <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-xs font-bold text-gray-700 uppercase">
-                            Health Status & Medical Remarks
-                          </label>
-                          {getConfidenceBadge('healthStatus')}
-                        </div>
-                        <textarea
-                          rows={3}
-                          value={healthStatus}
-                          onChange={(e) => setHealthStatus(e.target.value)}
-                          placeholder="e.g. Normal / Fit for boarding school / No known asthma or allergies"
-                          className="w-full px-3 py-2 bg-slate-50 border border-gray-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:bg-white"
+                        <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Cellphone Owner</label>
+                        <input
+                          type="text"
+                          value={cellphoneOwner}
+                          onChange={(e) => setCellphoneOwner(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
                         />
                       </div>
-
-                      {scanResult?.detectedNotes && (
-                        <div className="p-3 bg-slate-50 rounded-xl border border-gray-200 text-xs text-gray-700 space-y-1">
-                          <span className="font-bold text-gray-900">Detected Handwritten Notes on Form:</span>
-                          <p className="font-mono text-[11px] text-gray-600 bg-white p-2 rounded border border-gray-200">
-                            {scanResult.detectedNotes}
-                          </p>
-                        </div>
-                      )}
                     </div>
-                  )}
+
+                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <h4 className="font-black text-xs text-blue-900 uppercase">Social Media / Messenger</h4>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Messenger Account Name</label>
+                        <input
+                          type="text"
+                          value={messengerAccount}
+                          onChange={(e) => setMessengerAccount(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Messenger Owner</label>
+                        <input
+                          type="text"
+                          value={messengerOwner}
+                          onChange={(e) => setMessengerOwner(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION F */}
+              {activeReviewTab === 'F' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-blue-100">
+                    <div className="flex items-center gap-2 text-[#1E3A8A]">
+                      <Church className="w-5 h-5" />
+                      <h3 className="font-extrabold text-sm uppercase tracking-wider">F. Religious & Civil Information</h3>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-500 uppercase">Section F</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">PSA Birth Certificate?</label>
+                      <select
+                        value={birthCertificatePsa}
+                        onChange={(e) => setBirthCertificatePsa(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      >
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">PSA Father's Name & Age</label>
+                      <input
+                        type="text"
+                        value={psaFatherNameAge}
+                        onChange={(e) => setPsaFatherNameAge(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Father's Religion</label>
+                      <input
+                        type="text"
+                        value={fatherReligion}
+                        onChange={(e) => setFatherReligion(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">PSA Mother's Name & Age</label>
+                      <input
+                        type="text"
+                        value={psaMotherNameAge}
+                        onChange={(e) => setPsaMotherNameAge(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Mother's Religion</label>
+                      <input
+                        type="text"
+                        value={motherReligion}
+                        onChange={(e) => setMotherReligion(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Birth Order (Pang-ilan)</label>
+                      <input
+                        type="number"
+                        value={birthOrder}
+                        onChange={(e) => setBirthOrder(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Number of Children</label>
+                      <input
+                        type="number"
+                        value={numberOfChildren}
+                        onChange={(e) => setNumberOfChildren(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Baptized Catholic?</label>
+                      <select
+                        value={baptizedCatholic}
+                        onChange={(e) => setBaptizedCatholic(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      >
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Confirmed Catholic?</label>
+                      <select
+                        value={confirmedCatholic}
+                        onChange={(e) => setConfirmedCatholic(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      >
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION G */}
+              {activeReviewTab === 'G' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-blue-100">
+                    <div className="flex items-center gap-2 text-[#1E3A8A]">
+                      <Users className="w-5 h-5" />
+                      <h3 className="font-extrabold text-sm uppercase tracking-wider">G. Siblings Information</h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddSibling}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white rounded-lg text-xs font-bold shadow-xs transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Add Row</span>
+                    </button>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-200">
+                        <tr>
+                          <th className="p-2 w-10 text-center">No.</th>
+                          <th className="p-2">Name of Sibling</th>
+                          <th className="p-2 w-20">Age</th>
+                          <th className="p-2">Remarks / Schooling</th>
+                          <th className="p-2 w-12 text-center">Del</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {siblings.map((sib, index) => (
+                          <tr key={index}>
+                            <td className="p-2 text-center font-bold text-slate-500">{index + 1}</td>
+                            <td className="p-1.5">
+                              <input
+                                type="text"
+                                placeholder="Sibling name"
+                                value={sib.name}
+                                onChange={(e) => handleSiblingChange(index, 'name', e.target.value)}
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                              />
+                            </td>
+                            <td className="p-1.5">
+                              <input
+                                type="text"
+                                placeholder="Age"
+                                value={sib.age}
+                                onChange={(e) => handleSiblingChange(index, 'age', e.target.value)}
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-center focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                              />
+                            </td>
+                            <td className="p-1.5">
+                              <input
+                                type="text"
+                                placeholder="Grade / Work"
+                                value={sib.remarks}
+                                onChange={(e) => handleSiblingChange(index, 'remarks', e.target.value)}
+                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                              />
+                            </td>
+                            <td className="p-1.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSibling(index)}
+                                disabled={siblings.length <= 1}
+                                className="p-1 text-slate-400 hover:text-red-600 disabled:opacity-30"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION H & I */}
+              {activeReviewTab === 'H_I' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="flex items-center justify-between pb-2 border-b border-blue-100">
+                    <div className="flex items-center gap-2 text-[#1E3A8A]">
+                      <HeartPulse className="w-5 h-5" />
+                      <h3 className="font-extrabold text-sm uppercase tracking-wider">H & I. Parish & Entrance Exam</h3>
+                    </div>
+                    <span className="text-[11px] font-bold text-gray-500 uppercase">Sections H & I</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Parish / Place</label>
+                      <input
+                        type="text"
+                        value={parishPlace}
+                        onChange={(e) => setParishPlace(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Parish Priest Name</label>
+                      <input
+                        type="text"
+                        value={parishPriest}
+                        onChange={(e) => setParishPriest(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Health Status / Conditions</label>
+                      <input
+                        type="text"
+                        value={healthStatus}
+                        onChange={(e) => setHealthStatus(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Entrance Exam Score <span className="text-gray-500 font-normal">(Max: {maxExamScore})</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min={0}
+                        max={maxExamScore}
+                        value={examScore}
+                        onChange={(e) => setExamScore(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-black text-blue-950 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Admission Remarks <span className="text-red-500">*</span>
+                      </label>
+                      <select
+                        value={remarks}
+                        onChange={(e) => setRemarks(e.target.value as AdmissionStatus)}
+                        className={`w-full px-3 py-2 border rounded-xl text-xs font-black focus:ring-2 focus:outline-none ${
+                          remarks === 'A - PASS'
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-900 focus:ring-emerald-600'
+                            : 'border-amber-500 bg-amber-50 text-amber-900 focus:ring-amber-600'
+                        }`}
+                      >
+                        <option value="A - PASS">A - PASS (Qualified for Admission)</option>
+                        <option value="B - PENDING">B - PENDING (Under Evaluation)</option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Additional Notes / Remarks</label>
+                      <textarea
+                        rows={2}
+                        value={additionalNotes}
+                        onChange={(e) => setAdditionalNotes(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Bottom Actions Bar */}
+              <div className="pt-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-slate-500">
+                    Official Single Source of Truth • Form Sections A-J
+                  </span>
                 </div>
 
-                {/* Action Bar Footer */}
-                <div className="p-4 border-t border-blue-100 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-3 w-full sm:w-auto">
                   <button
                     type="button"
-                    onClick={() => setStage('capture')}
-                    className="px-4 py-2.5 text-xs font-bold text-gray-700 hover:text-gray-900 flex items-center gap-1.5 cursor-pointer"
+                    onClick={() => {
+                      setStage('capture');
+                      startCamera('environment');
+                    }}
+                    disabled={saving}
+                    className="flex-1 sm:flex-none px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
                   >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>Back to Scanner</span>
+                    Rescan
                   </button>
 
                   <button
-                    type="button"
+                    type="submit"
+                    id="btn-save-scanned-record"
                     disabled={saving}
-                    onClick={handleSaveToDatabase}
-                    className="px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer hover:shadow-lg"
+                    className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-black text-white bg-gradient-to-r from-[#1E3A8A] to-[#1D4ED8] hover:from-[#172554] hover:to-[#1E3A8A] rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer uppercase tracking-wider disabled:opacity-50"
                   >
                     {saving ? (
                       <>
-                        <RefreshCw className="w-4 h-4 animate-spin text-emerald-200" />
-                        <span>SAVING STUDENT RECORD...</span>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Saving...</span>
                       </>
                     ) : (
                       <>
-                        <Save className="w-4 h-4 text-emerald-200" />
-                        <span>[ SAVE STUDENT RECORD TO DATABASE ]</span>
+                        <Save className="w-4 h-4 text-amber-300" />
+                        <span>Save Applicant Record</span>
                       </>
                     )}
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Duplicate Candidate Detection Warning Modal */}
-      {duplicateWarning && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-amber-300 max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center border border-amber-300 shrink-0 text-amber-700">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-amber-200 text-amber-950 font-black text-[10px] uppercase tracking-wider rounded-md">
-                    {duplicateWarning.duplicateStatus === 'EXACT' ? 'Exact Duplicate Match' : 'Possible Duplicate Match'}
-                  </span>
-                </div>
-                <h3 className="font-black text-base text-gray-900 mt-1">
-                  Duplicate Scanned Document / Record Detected
-                </h3>
-                <p className="text-xs text-gray-600 mt-0.5 leading-relaxed font-medium">
-                  {duplicateWarning.message}
-                </p>
-              </div>
-            </div>
-
-            {/* Existing Student Card */}
-            <div className="p-4 bg-slate-50 border border-gray-200 rounded-xl text-xs space-y-2">
-              <div className="flex justify-between items-start border-b border-gray-200 pb-2">
-                <div>
-                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Existing Record in Database</span>
-                  <h4 className="font-black text-sm text-[#1E3A8A]">
-                    {duplicateWarning.existingRecord.surname}, {duplicateWarning.existingRecord.firstName} {duplicateWarning.existingRecord.middleName}
-                  </h4>
-                </div>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                  duplicateWarning.existingRecord.remarks === 'A - PASS' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                }`}>
-                  {duplicateWarning.existingRecord.remarks}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
-                <div>
-                  <span className="text-gray-500 font-bold">LRN:</span>{' '}
-                  <span className="font-mono font-bold text-gray-900">{duplicateWarning.existingRecord.lrn}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 font-bold">Birthday:</span>{' '}
-                  <span className="font-bold text-gray-900">{duplicateWarning.existingRecord.birthday}</span>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-gray-500 font-bold">Elementary School:</span>{' '}
-                  <span className="font-bold text-gray-900">{duplicateWarning.existingRecord.elementarySchool || 'None specified'}</span>
-                </div>
-                <div className="col-span-2 text-[10px] text-gray-500 font-medium">
-                  Encoded by {duplicateWarning.existingRecord.createdBy} on {new Date(duplicateWarning.existingRecord.createdAt).toLocaleDateString()}
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 pt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setDuplicateWarning(null)}
-                className="w-full sm:w-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
-              >
-                Review / Edit Scanned Form
-              </button>
-              <button
-                type="button"
-                onClick={handleViewExistingRecord}
-                className="w-full sm:w-auto px-4 py-2 bg-blue-50 hover:bg-blue-100 text-[#1E3A8A] font-bold text-xs rounded-xl border border-blue-200 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>View Existing Record</span>
-              </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={handleUpdateExistingRecord}
-                className="w-full sm:w-auto px-4 py-2 bg-[#1E3A8A] hover:bg-[#172554] text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                {saving ? 'Updating...' : 'Update Existing Record'}
-              </button>
-            </div>
+            </form>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

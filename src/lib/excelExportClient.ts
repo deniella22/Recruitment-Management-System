@@ -13,10 +13,10 @@ export async function exportStudentsToExcel(
   systemSettings?: SystemSettings,
   options?: ExcelExportOptions
 ): Promise<void> {
-  const schoolName = options?.schoolName || systemSettings?.schoolName || 'Sisters of Mary School-Girlstown, Inc.';
+  const schoolName = options?.schoolName || systemSettings?.schoolName || 'Sisters of Mary School';
   const academicYear = options?.academicYear || systemSettings?.academicYear || 'SY 2026-2027 Recruitment';
   const filterLabel = options?.statusFilter && options.statusFilter !== 'ALL' ? `_${options.statusFilter.replace(/[^a-zA-Z0-9]/g, '')}` : '';
-  const filename = `SMS_Student_Records_${new Date().toISOString().slice(0, 10)}${filterLabel}.xlsx`;
+  const filename = `SMS_Recruitment_Records_${new Date().toISOString().slice(0, 10)}${filterLabel}.xlsx`;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = schoolName;
@@ -24,12 +24,65 @@ export async function exportStudentsToExcel(
   workbook.created = new Date();
 
   // 1. Student Records Sheet
-  const worksheet = workbook.addWorksheet('Student Records', {
+  const worksheet = workbook.addWorksheet('Recruitment Records', {
     views: [{ state: 'frozen', xSplit: 0, ySplit: 4 }],
   });
 
+  const columns = [
+    { header: 'No.', key: 'index', width: 6 },
+    { header: 'Status / Remarks', key: 'remarks', width: 16 },
+    { header: 'LRN (12 Digits)', key: 'lrn', width: 16 },
+    { header: 'Last Name / Surname', key: 'lastName', width: 20 },
+    { header: 'First Name', key: 'firstName', width: 20 },
+    { header: 'Middle Name', key: 'middleName', width: 18 },
+    { header: 'Birthdate', key: 'birthdate', width: 14 },
+    { header: 'Age', key: 'age', width: 8 },
+    { header: 'Sex / Gender', key: 'gender', width: 12 },
+    { header: 'Sitio / Street', key: 'sitioStreet', width: 22 },
+    { header: 'Barangay', key: 'barangay', width: 18 },
+    { header: 'Municipality / City', key: 'municipality', width: 20 },
+    { header: 'Province', key: 'province', width: 18 },
+    { header: 'Full Home Address', key: 'address', width: 32 },
+    { header: 'Elementary School Graduated', key: 'elementarySchool', width: 28 },
+    { header: 'School Address', key: 'schoolAddress', width: 24 },
+    { header: 'Report Card (SY)', key: 'reportCardSy', width: 20 },
+    { header: 'Grading Period', key: 'grading', width: 15 },
+    { header: 'Current Grade', key: 'currentGrade', width: 15 },
+    { header: 'Old Graduate Remarks', key: 'oldGraduateRemarks', width: 22 },
+    { header: "Father's Full Name", key: 'fatherName', width: 22 },
+    { header: "Father's Occupation", key: 'fatherOccupation', width: 20 },
+    { header: "Mother's Full Name", key: 'motherName', width: 22 },
+    { header: "Mother's Occupation", key: 'motherOccupation', width: 20 },
+    { header: "Guardian's Full Name", key: 'guardianName', width: 22 },
+    { header: "Guardian's Relationship", key: 'guardianRelation', width: 20 },
+    { header: "Guardian's Occupation", key: 'guardianOccupation', width: 20 },
+    { header: 'Cellphone Number', key: 'cellphoneNumber', width: 18 },
+    { header: 'Cellphone Owner', key: 'cellphoneOwner', width: 18 },
+    { header: 'Messenger Account', key: 'messengerAccount', width: 22 },
+    { header: 'Messenger Owner', key: 'messengerOwner', width: 18 },
+    { header: 'PSA Birth Certificate', key: 'birthCertificatePsa', width: 18 },
+    { header: "PSA Father's Name & Age", key: 'psaFatherNameAge', width: 24 },
+    { header: "Father's Religion", key: 'fatherReligion', width: 18 },
+    { header: "PSA Mother's Name & Age", key: 'psaMotherNameAge', width: 24 },
+    { header: "Mother's Religion", key: 'motherReligion', width: 18 },
+    { header: 'Birth Order', key: 'birthOrder', width: 12 },
+    { header: 'Number of Children', key: 'numberOfChildren', width: 16 },
+    { header: 'Baptized Catholic', key: 'baptizedCatholic', width: 16 },
+    { header: 'Other Denomination', key: 'denomination', width: 18 },
+    { header: 'Confirmed Catholic', key: 'confirmedCatholic', width: 16 },
+    { header: 'Siblings Breakdown', key: 'siblingsSummary', width: 36 },
+    { header: 'Parish / Place', key: 'parishPlace', width: 22 },
+    { header: 'Parish Priest', key: 'parishPriest', width: 22 },
+    { header: 'Exam Score', key: 'examScore', width: 12 },
+    { header: 'Health Status', key: 'healthStatus', width: 22 },
+    { header: 'Additional Notes', key: 'additionalNotes', width: 28 },
+  ];
+
+  const totalCols = columns.length;
+  const colLetterEnd = 'AU'; // 47 columns
+
   // School Header Rows (Rows 1-3)
-  worksheet.mergeCells('A1:Q1');
+  worksheet.mergeCells(`A1:${colLetterEnd}1`);
   const titleCell = worksheet.getCell('A1');
   titleCell.value = schoolName.toUpperCase();
   titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -37,15 +90,15 @@ export async function exportStudentsToExcel(
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
   worksheet.getRow(1).height = 30;
 
-  worksheet.mergeCells('A2:Q2');
+  worksheet.mergeCells(`A2:${colLetterEnd}2`);
   const subTitleCell = worksheet.getCell('A2');
-  subTitleCell.value = `OFFICIAL STUDENT RECRUITMENT & ADMISSION RECORDS — ${academicYear.toUpperCase()}`;
+  subTitleCell.value = `OFFICIAL RECRUITMENT PERSONAL INFORMATION RECORDS — ${academicYear.toUpperCase()}`;
   subTitleCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
   subTitleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
   subTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
   worksheet.getRow(2).height = 20;
 
-  worksheet.mergeCells('A3:Q3');
+  worksheet.mergeCells(`A3:${colLetterEnd}3`);
   const metaCell = worksheet.getCell('A3');
   const passCount = students.filter((s) => s.remarks === 'A - PASS').length;
   const pendingCount = students.filter((s) => s.remarks === 'B - PENDING').length;
@@ -55,36 +108,14 @@ export async function exportStudentsToExcel(
   metaCell.alignment = { horizontal: 'center', vertical: 'middle' };
   worksheet.getRow(3).height = 18;
 
-  // Define Columns
-  const columns = [
-    { header: 'No.', key: 'index', width: 6 },
-    { header: 'LRN', key: 'lrn', width: 16 },
-    { header: 'Surname', key: 'surname', width: 16 },
-    { header: 'First Name', key: 'firstName', width: 18 },
-    { header: 'Middle Name', key: 'middleName', width: 16 },
-    { header: 'Birthday', key: 'birthday', width: 14 },
-    { header: 'Score in Exam', key: 'examScore', width: 14 },
-    { header: 'Remarks / Status', key: 'remarks', width: 16 },
-    { header: 'Elementary School', key: 'elementarySchool', width: 28 },
-    { header: 'Address', key: 'address', width: 30 },
-    { header: "Father's Name", key: 'fatherName', width: 20 },
-    { header: "Father's Occupation", key: 'fatherOccupation', width: 20 },
-    { header: "Mother's Name", key: 'motherName', width: 20 },
-    { header: "Mother's Occupation", key: 'motherOccupation', width: 20 },
-    { header: "Guardian's Name", key: 'guardianName', width: 20 },
-    { header: "Guardian's Occupation", key: 'guardianOccupation', width: 20 },
-    { header: 'No. of Siblings', key: 'numSiblings', width: 14 },
-    { header: 'Health Status', key: 'healthStatus', width: 22 },
-  ];
-
   // Set row 4 headers
   const headerRow = worksheet.getRow(4);
-  headerRow.height = 26;
+  headerRow.height = 28;
   columns.forEach((col, idx) => {
     const cell = headerRow.getCell(idx + 1);
     cell.value = col.header;
     cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }; // Dark Slate
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
     cell.border = {
       top: { style: 'thin', color: { argb: 'FF334155' } },
@@ -96,12 +127,22 @@ export async function exportStudentsToExcel(
 
   // Populate Student Rows
   students.forEach((s, idx) => {
-    let formattedBirthday = s.birthday || '';
-    if (s.birthday && s.birthday.includes('-')) {
-      const parts = s.birthday.split('-');
+    const bDate = s.birthdate || s.birthday || '';
+    let formattedBirthday = bDate;
+    if (bDate && bDate.includes('-')) {
+      const parts = bDate.split('-');
       if (parts.length === 3) {
         formattedBirthday = `${parts[1]}/${parts[2]}/${parts[0]}`;
       }
+    }
+
+    let siblingsSummary = '';
+    if (Array.isArray(s.siblings) && s.siblings.length > 0) {
+      siblingsSummary = s.siblings
+        .map((sib, i) => `${i + 1}. ${sib.name || 'Unnamed'} (${sib.age ? `${sib.age}yo` : 'Age N/A'}) ${sib.remarks ? `- ${sib.remarks}` : ''}`)
+        .join('; ');
+    } else if (s.numSiblings) {
+      siblingsSummary = `${s.numSiblings} sibling(s) indicated`;
     }
 
     const rowNum = idx + 5;
@@ -110,23 +151,52 @@ export async function exportStudentsToExcel(
 
     const values = [
       idx + 1,
+      s.remarks || 'B - PENDING',
       String(s.lrn || '').trim(),
-      s.surname || '',
+      s.lastName || s.surname || '',
       s.firstName || '',
       s.middleName || '',
       formattedBirthday,
-      typeof s.examScore === 'number' ? s.examScore : Number(s.examScore) || 0,
-      s.remarks || 'B - PENDING',
-      s.elementarySchool || '',
+      s.age !== undefined && s.age !== null ? s.age : '',
+      s.gender || 'Female',
+      s.sitioStreet || '',
+      s.barangay || '',
+      s.municipality || '',
+      s.province || '',
       s.address || '',
+      s.elementarySchool || s.school || '',
+      s.schoolAddress || '',
+      s.reportCardSy || '',
+      s.grading || '',
+      s.currentGrade || 'Grade 6',
+      s.oldGraduateRemarks || '',
       s.fatherName || '',
       s.fatherOccupation || '',
       s.motherName || '',
       s.motherOccupation || '',
       s.guardianName || '',
+      s.guardianRelation || '',
       s.guardianOccupation || '',
-      typeof s.numSiblings === 'number' ? s.numSiblings : Number(s.numSiblings) || 0,
-      s.healthStatus || '',
+      s.cellphoneNumber || '',
+      s.cellphoneOwner || '',
+      s.messengerAccount || '',
+      s.messengerOwner || '',
+      s.birthCertificatePsa || '',
+      s.psaFatherNameAge || '',
+      s.fatherReligion || '',
+      s.psaMotherNameAge || '',
+      s.motherReligion || '',
+      s.birthOrder || 1,
+      s.numberOfChildren || (s.numSiblings ? Number(s.numSiblings) + 1 : 1),
+      s.baptizedCatholic || 'Yes',
+      s.denomination || '',
+      s.confirmedCatholic || 'Yes',
+      siblingsSummary,
+      s.parishPlace || '',
+      s.parishPriest || '',
+      typeof s.examScore === 'number' ? s.examScore : Number(s.examScore) || 0,
+      s.healthStatus || 'Normal / Fit for schooling',
+      s.additionalNotes || '',
     ];
 
     const isEven = idx % 2 === 0;
@@ -144,23 +214,9 @@ export async function exportStudentsToExcel(
         right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
       };
 
-      // Specific column alignments & formats
       if (colIdx === 0) {
-        // No.
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
       } else if (colIdx === 1) {
-        // LRN (Force text format to avoid scientific notation)
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        cell.numFmt = '@';
-      } else if (colIdx === 5) {
-        // Birthday
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      } else if (colIdx === 6) {
-        // Exam Score
-        cell.alignment = { horizontal: 'right', vertical: 'middle' };
-        cell.numFmt = '#,##0.0';
-      } else if (colIdx === 7) {
-        // Remarks
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
         if (val === 'A - PASS') {
           cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF166534' } };
@@ -169,8 +225,13 @@ export async function exportStudentsToExcel(
           cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF9A3412' } };
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
         }
-      } else if (colIdx === 16) {
-        // Siblings
+      } else if (colIdx === 2) {
+        // LRN
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.numFmt = '@';
+      } else if (colIdx === 6 || colIdx === 8) {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      } else if (colIdx === 7 || colIdx === 44) {
         cell.alignment = { horizontal: 'right', vertical: 'middle' };
         cell.numFmt = '#,##0';
       } else {
@@ -179,16 +240,14 @@ export async function exportStudentsToExcel(
     });
   });
 
-  // Auto-fit widths with limits
   columns.forEach((col, i) => {
     const colNumber = i + 1;
     const worksheetColumn = worksheet.getColumn(colNumber);
     worksheetColumn.width = col.width;
   });
 
-  // Enable Auto-Filter
   const lastRow = Math.max(students.length + 4, 5);
-  worksheet.autoFilter = `A4:R${lastRow}`;
+  worksheet.autoFilter = `A4:${colLetterEnd}${lastRow}`;
 
   // 2. Summary by Origin Schools Sheet
   const summarySheet = workbook.addWorksheet('Schools Summary', {
@@ -203,10 +262,9 @@ export async function exportStudentsToExcel(
   sumTitle.alignment = { horizontal: 'center', vertical: 'middle' };
   summarySheet.getRow(1).height = 26;
 
-  // School aggregate data
   const schoolMap: Record<string, { total: number; pass: number; pending: number }> = {};
   students.forEach((s) => {
-    const sch = s.elementarySchool?.trim() || 'Unspecified School';
+    const sch = s.elementarySchool?.trim() || s.school?.trim() || 'Unspecified School';
     if (!schoolMap[sch]) schoolMap[sch] = { total: 0, pass: 0, pending: 0 };
     schoolMap[sch].total += 1;
     if (s.remarks === 'A - PASS') schoolMap[sch].pass += 1;
@@ -256,7 +314,6 @@ export async function exportStudentsToExcel(
       sumRowIdx++;
     });
 
-  // Write and trigger download in browser
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

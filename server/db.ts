@@ -1,7 +1,165 @@
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
-import { User, StudentRecord, AuditLogEntry, SystemSettings, RecruitmentList, RecruitmentListWithStats } from '../src/types.js';
+import { User, StudentRecord, SiblingRecord, AuditLogEntry, SystemSettings, RecruitmentList, RecruitmentListWithStats, PaginatedResult } from '../src/types.js';
+
+export function sanitizeStudentRecord(s: any): StudentRecord {
+  const lastName = (s.lastName || s.surname || '').trim();
+  const firstName = (s.firstName || '').trim();
+  const middleName = (s.middleName || '').trim();
+  const birthdate = (s.birthdate || s.birthday || '').trim();
+  const birthday = birthdate;
+  const surname = lastName;
+
+  // Auto-calculate age if not provided
+  let age = s.age !== undefined && s.age !== null && s.age !== '' ? s.age : '';
+  if (!age && birthdate) {
+    const bDate = new Date(birthdate);
+    if (!isNaN(bDate.getTime())) {
+      const now = new Date();
+      let calculatedAge = now.getFullYear() - bDate.getFullYear();
+      const m = now.getMonth() - bDate.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < bDate.getDate())) {
+        calculatedAge--;
+      }
+      if (calculatedAge > 0 && calculatedAge < 100) {
+        age = calculatedAge;
+      }
+    }
+  }
+
+  const sitioStreet = (s.sitioStreet || '').trim();
+  const barangay = (s.barangay || '').trim();
+  const municipality = (s.municipality || '').trim();
+  const province = (s.province || '').trim();
+  const address = (s.address || [sitioStreet, barangay, municipality, province].filter(Boolean).join(', ')).trim();
+
+  const elementarySchool = (s.elementarySchool || s.school || '').trim();
+  const schoolAddress = (s.schoolAddress || '').trim();
+  const reportCardSy = (s.reportCardSy || s.reportCard || 'SY2025-2026 Submitted').trim();
+  const lrn = (s.lrn || '').trim();
+  const grading = (s.grading || '').trim();
+  const currentGrade = (s.currentGrade || 'Grade 6').trim();
+  const oldGraduateRemarks = (s.oldGraduateRemarks || s.othersSpecify || '').trim();
+
+  const fatherName = (s.fatherName || '').trim();
+  const fatherOccupation = (s.fatherOccupation || '').trim();
+  const motherName = (s.motherName || '').trim();
+  const motherOccupation = (s.motherOccupation || '').trim();
+  const guardianName = (s.guardianName || '').trim();
+  const guardianRelation = (s.guardianRelation || s.guardianRelationship || '').trim();
+  const guardianOccupation = (s.guardianOccupation || '').trim();
+
+  const cellphoneNumber = (s.cellphoneNumber || s.contactNumber || '').trim();
+  const cellphoneOwner = (s.cellphoneOwner || s.contactOwner || 'Parent/Guardian').trim();
+  const messengerAccount = (s.messengerAccount || '').trim();
+  const messengerOwner = (s.messengerOwner || 'Applicant/Parent').trim();
+
+  const birthCertificatePsa = (s.birthCertificatePsa || (s.hasPsaBirthCert ? 'Yes' : 'Yes')).trim();
+  const psaFatherNameAge = (s.psaFatherNameAge || (fatherName ? `${fatherName}` : '')).trim();
+  const fatherReligion = (s.fatherReligion || 'Roman Catholic').trim();
+  const psaMotherNameAge = (s.psaMotherNameAge || (motherName ? `${motherName}` : '')).trim();
+  const motherReligion = (s.motherReligion || 'Roman Catholic').trim();
+  const birthOrder = s.birthOrder !== undefined && s.birthOrder !== null && s.birthOrder !== '' ? s.birthOrder : 1;
+  const numberOfChildren = s.numberOfChildren !== undefined && s.numberOfChildren !== null && s.numberOfChildren !== ''
+    ? s.numberOfChildren
+    : (s.numSiblings ? Number(s.numSiblings) + 1 : 1);
+  const baptizedCatholic = (s.baptizedCatholic || 'Yes').trim();
+  const denomination = (s.denomination || '').trim();
+  const confirmedCatholic = (s.confirmedCatholic || 'Yes').trim();
+
+  let siblings: SiblingRecord[] = [];
+  if (Array.isArray(s.siblings) && s.siblings.length > 0) {
+    siblings = s.siblings.map((sib: any, idx: number) => ({
+      siblingNo: Number(sib.siblingNo) || idx + 1,
+      name: (sib.name || '').trim(),
+      age: sib.age !== undefined && sib.age !== null ? sib.age : '',
+      remarks: (sib.remarks || '').trim(),
+    }));
+  } else if (s.numSiblings && Number(s.numSiblings) > 0) {
+    const count = Math.min(Number(s.numSiblings), 10);
+    siblings = Array.from({ length: count }, (_, i) => ({
+      siblingNo: i + 1,
+      name: '',
+      age: '',
+      remarks: '',
+    }));
+  }
+
+  const parishPlace = (s.parishPlace || '').trim();
+  const parishPriest = (s.parishPriest || '').trim();
+
+  const remarks = (s.remarks === 'A - PASS' ? 'A - PASS' : 'B - PENDING') as any;
+  const additionalNotes = (s.additionalNotes || '').trim();
+  const examScore = s.examScore !== undefined && s.examScore !== null ? Number(s.examScore) : 0;
+  const healthStatus = (s.healthStatus || 'Normal / Fit for schooling').trim();
+
+  const studentSignature = (s.studentSignature || 'Signed / Confirmed').trim();
+
+  const now = new Date().toISOString();
+
+  return {
+    id: s.id || ('std_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
+    userId: s.userId,
+    recruitmentListId: s.recruitmentListId ? String(s.recruitmentListId).trim() : undefined,
+    idPhotoUrl: s.idPhotoUrl || s.idPhotoData || s.photoUrl || '',
+    lastName,
+    surname,
+    firstName,
+    middleName,
+    birthdate,
+    birthday,
+    age,
+    gender: s.gender || 'Female',
+    sitioStreet,
+    barangay,
+    municipality,
+    province,
+    address,
+    elementarySchool,
+    school: elementarySchool,
+    schoolAddress,
+    reportCardSy,
+    lrn,
+    grading,
+    currentGrade,
+    oldGraduateRemarks,
+    fatherName,
+    fatherOccupation,
+    motherName,
+    motherOccupation,
+    guardianName,
+    guardianRelation,
+    guardianOccupation,
+    cellphoneNumber,
+    cellphoneOwner,
+    messengerAccount,
+    messengerOwner,
+    birthCertificatePsa,
+    psaFatherNameAge,
+    fatherReligion,
+    psaMotherNameAge,
+    motherReligion,
+    birthOrder,
+    numberOfChildren,
+    baptizedCatholic,
+    denomination,
+    confirmedCatholic,
+    siblings,
+    numSiblings: siblings.length || (s.numSiblings ? Number(s.numSiblings) : 0),
+    parishPlace,
+    parishPriest,
+    remarks,
+    additionalNotes,
+    examScore,
+    healthStatus,
+    studentSignature,
+    createdAt: s.createdAt || now,
+    updatedAt: s.updatedAt || now,
+    createdBy: s.createdBy || 'System',
+    updatedBy: s.updatedBy || 'System',
+  };
+}
 
 interface DbSchema {
   users: (User & { passwordHash: string })[];
@@ -140,11 +298,11 @@ function validateAndSanitizeDb(raw: any): DbSchema {
     if (s.userId && idRemap.has(s.userId)) {
       cleanUserId = idRemap.get(s.userId)!;
     }
-    return {
+    return sanitizeStudentRecord({
       ...s,
       userId: cleanUserId,
       recruitmentListId: s.recruitmentListId ? s.recruitmentListId.trim() : undefined,
-    };
+    });
   });
 
   const cleanLogs = rawLogs.map((log) => {
@@ -638,7 +796,7 @@ export const dbService = {
     return { success: true, deletedStudentsCount };
   },
 
-  // STUDENTS (Account-based & Workspace strict isolation)
+  // STUDENTS (Account-based & Workspace strict isolation with pagination & fast search)
   getStudents(userId?: string, recruitmentListId?: string): StudentRecord[] {
     const db = ensureDbExists();
     if (!userId) return [];
@@ -647,6 +805,112 @@ export const dbService = {
       list = list.filter((s) => s.recruitmentListId === recruitmentListId);
     }
     return list;
+  },
+
+  queryStudents(params: {
+    userId?: string;
+    recruitmentListId?: string;
+    search?: string;
+    status?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    page?: number;
+    limit?: number;
+  }): PaginatedResult<StudentRecord> {
+    const db = ensureDbExists();
+    if (!params.userId) {
+      return { data: [], page: 1, limit: 20, totalRecords: 0, totalPages: 0 };
+    }
+
+    let records = db.students.filter((s) => s.userId === params.userId);
+
+    if (params.recruitmentListId) {
+      records = records.filter((s) => s.recruitmentListId === params.recruitmentListId);
+    }
+
+    // Search filter
+    if (params.search && params.search.trim()) {
+      const q = params.search.trim().toLowerCase();
+      records = records.filter((s) => {
+        const full = `${s.lastName || s.surname || ''} ${s.firstName || ''} ${s.middleName || ''}`.toLowerCase();
+        const lrn = (s.lrn || '').toLowerCase();
+        const school = (s.elementarySchool || s.school || '').toLowerCase();
+        const bgy = (s.barangay || '').toLowerCase();
+        const mun = (s.municipality || '').toLowerCase();
+        const prov = (s.province || '').toLowerCase();
+        const addr = (s.address || '').toLowerCase();
+
+        return full.includes(q) ||
+          lrn.includes(q) ||
+          school.includes(q) ||
+          bgy.includes(q) ||
+          mun.includes(q) ||
+          prov.includes(q) ||
+          addr.includes(q);
+      });
+    }
+
+    // Status filter
+    if (params.status && params.status !== 'ALL') {
+      records = records.filter((s) => s.remarks === params.status);
+    }
+
+    // Sorting
+    const sortBy = params.sortBy || 'fullName';
+    const order = params.sortOrder === 'desc' ? -1 : 1;
+
+    records.sort((a, b) => {
+      let comp = 0;
+      switch (sortBy) {
+        case 'lrn':
+          comp = (a.lrn || '').localeCompare(b.lrn || '');
+          break;
+        case 'lastName':
+        case 'surname':
+          comp = (a.lastName || a.surname || '').localeCompare(b.lastName || b.surname || '');
+          break;
+        case 'birthday':
+        case 'birthdate':
+          comp = (a.birthdate || a.birthday || '').localeCompare(b.birthdate || b.birthday || '');
+          break;
+        case 'examScore':
+          comp = (a.examScore || 0) - (b.examScore || 0);
+          break;
+        case 'elementarySchool':
+          comp = (a.elementarySchool || '').localeCompare(b.elementarySchool || '');
+          break;
+        case 'remarks':
+          comp = (a.remarks || '').localeCompare(b.remarks || '');
+          break;
+        case 'createdAt':
+          comp = (a.createdAt || '').localeCompare(b.createdAt || '');
+          break;
+        case 'fullName':
+        default: {
+          const nameA = `${a.lastName || a.surname || ''} ${a.firstName || ''}`.toLowerCase();
+          const nameB = `${b.lastName || b.surname || ''} ${b.firstName || ''}`.toLowerCase();
+          comp = nameA.localeCompare(nameB);
+          break;
+        }
+      }
+      return comp * order;
+    });
+
+    const totalRecords = records.length;
+    const limit = params.limit !== undefined && params.limit > 0 ? params.limit : (records.length || 20);
+    const page = Math.max(1, params.page || 1);
+    const totalPages = Math.ceil(totalRecords / limit) || 1;
+
+    const startIndex = (page - 1) * limit;
+    const paginatedData = records.slice(startIndex, startIndex + limit);
+
+    return {
+      data: paginatedData,
+      page,
+      limit,
+      totalRecords,
+      totalPages,
+    };
   },
 
   getStudentById(id: string, userId?: string, recruitmentListId?: string): StudentRecord | undefined {
@@ -667,7 +931,7 @@ export const dbService = {
   },
 
   createStudent(
-    studentData: Omit<StudentRecord, 'id' | 'createdAt' | 'updatedAt'> & { userId?: string },
+    studentData: Partial<StudentRecord> & { userId?: string },
     operatorName: string
   ): StudentRecord {
     const db = ensureDbExists();
@@ -675,32 +939,24 @@ export const dbService = {
     // Strict duplicate check before creating a record
     const dupCheck = this.checkDuplicate(studentData, studentData.userId, undefined, studentData.recruitmentListId);
     if (dupCheck.duplicateStatus === 'EXACT') {
-      throw new Error(dupCheck.message || `Duplicate student record: ${dupCheck.existingRecord?.surname}, ${dupCheck.existingRecord?.firstName} (LRN: ${dupCheck.existingRecord?.lrn || 'N/A'}) already exists in this recruitment list.`);
+      throw new Error(dupCheck.message || `Duplicate student record: ${dupCheck.existingRecord?.lastName || dupCheck.existingRecord?.surname}, ${dupCheck.existingRecord?.firstName} (LRN: ${dupCheck.existingRecord?.lrn || 'N/A'}) already exists in this recruitment list.`);
     }
 
-    const cleanLrn = studentData.lrn.trim();
-    const now = new Date().toISOString();
-    const newStudent: StudentRecord = {
+    const sanitized = sanitizeStudentRecord({
       ...studentData,
-      id: 'std_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-      userId: studentData.userId,
-      recruitmentListId: studentData.recruitmentListId,
-      lrn: cleanLrn,
-      createdAt: now,
-      updatedAt: now,
       createdBy: operatorName,
       updatedBy: operatorName,
-    };
+    });
 
-    db.students.push(newStudent);
+    db.students.push(sanitized);
     saveDb(db);
 
-    return newStudent;
+    return sanitized;
   },
 
   updateStudent(
     id: string,
-    updates: Partial<Omit<StudentRecord, 'id' | 'createdAt' | 'createdBy'>>,
+    updates: Partial<StudentRecord>,
     operatorName: string,
     userId?: string
   ): StudentRecord {
@@ -723,22 +979,22 @@ export const dbService = {
           (!currentRecruitmentId || s.recruitmentListId === currentRecruitmentId)
       );
       if (duplicate) {
-        throw new Error(`This LRN (${cleanLrn}) already exists for student: ${duplicate.surname}, ${duplicate.firstName}.`);
+        throw new Error(`This LRN (${cleanLrn}) already exists for student: ${duplicate.lastName || duplicate.surname}, ${duplicate.firstName}.`);
       }
     }
 
-    const updated: StudentRecord = {
+    const merged = {
       ...db.students[idx],
       ...updates,
-      lrn: updates.lrn ? updates.lrn.trim() : db.students[idx].lrn,
       updatedAt: new Date().toISOString(),
       updatedBy: operatorName,
     };
 
-    db.students[idx] = updated;
+    const sanitized = sanitizeStudentRecord(merged);
+    db.students[idx] = sanitized;
     saveDb(db);
 
-    return updated;
+    return sanitized;
   },
 
   deleteStudent(id: string, userId?: string): boolean {
@@ -781,19 +1037,19 @@ export const dbService = {
         .trim();
 
     const normLrn = (candidate.lrn || '').trim().replace(/[^0-9]/g, '');
-    const candSurname = norm(candidate.surname);
+    const candSurname = norm(candidate.lastName || candidate.surname);
     const candFirst = norm(candidate.firstName);
-    const candBirth = (candidate.birthday || '').trim();
-    const candSchool = norm(candidate.elementarySchool);
-    const candAddress = norm(candidate.address);
+    const candBirth = (candidate.birthdate || candidate.birthday || '').trim();
+    const candSchool = norm(candidate.elementarySchool || candidate.school);
+    const candAddress = norm(candidate.address || `${candidate.sitioStreet || ''} ${candidate.barangay || ''} ${candidate.municipality || ''}`);
 
     for (const existing of userStudents) {
       const exLrn = existing.lrn.trim().replace(/[^0-9]/g, '');
-      const exSurname = norm(existing.surname);
+      const exSurname = norm(existing.lastName || existing.surname);
       const exFirst = norm(existing.firstName);
-      const exBirth = (existing.birthday || '').trim();
-      const exSchool = norm(existing.elementarySchool);
-      const exAddress = norm(existing.address);
+      const exBirth = (existing.birthdate || existing.birthday || '').trim();
+      const exSchool = norm(existing.elementarySchool || existing.school);
+      const exAddress = norm(existing.address || `${existing.sitioStreet || ''} ${existing.barangay || ''} ${existing.municipality || ''}`);
 
       // 1. EXACT DUPLICATE: Same LRN (at least 6 digits)
       if (normLrn && exLrn && normLrn.length >= 6 && normLrn === exLrn) {
@@ -802,7 +1058,7 @@ export const dbService = {
           existingRecord: existing,
           matchedFields: ['lrn'],
           matchReason: `Exact LRN Match: ${existing.lrn}`,
-          message: `Exact duplicate found: Student "${existing.surname}, ${existing.firstName}" already has the same LRN (${existing.lrn}) in your records.`,
+          message: `Exact duplicate found: Student "${existing.lastName || existing.surname}, ${existing.firstName}" already has the same LRN (${existing.lrn}) in your records.`,
         };
       }
 
@@ -812,9 +1068,9 @@ export const dbService = {
           return {
             duplicateStatus: 'EXACT',
             existingRecord: existing,
-            matchedFields: ['surname', 'firstName', 'birthday'],
+            matchedFields: ['surname', 'firstName', 'birthdate'],
             matchReason: 'Exact Name and Birthday Match',
-            message: `Exact duplicate found: Student "${existing.surname}, ${existing.firstName}" (DOB: ${existing.birthday}) is already registered in your account.`,
+            message: `Exact duplicate found: Student "${existing.lastName || existing.surname}, ${existing.firstName}" (DOB: ${existing.birthdate || existing.birthday}) is already registered in your account.`,
           };
         }
       }
@@ -827,7 +1083,7 @@ export const dbService = {
             existingRecord: existing,
             matchedFields: ['surname', 'firstName', 'address'],
             matchReason: 'Exact Name and Address Match',
-            message: `Exact duplicate found: Student "${existing.surname}, ${existing.firstName}" from "${existing.address}" is already registered.`,
+            message: `Exact duplicate found: Student "${existing.lastName || existing.surname}, ${existing.firstName}" from "${existing.address}" is already registered.`,
           };
         }
       }
@@ -849,9 +1105,9 @@ export const dbService = {
               return {
                 duplicateStatus: 'EXACT',
                 existingRecord: existing,
-                matchedFields: ['surname', 'firstName', 'birthday'],
-                matchReason: `High-confidence Name match with identical Date of Birth (${existing.birthday})`,
-                message: `Exact duplicate found: Student "${existing.surname}, ${existing.firstName}" (DOB: ${existing.birthday}) already exists in your database.`,
+                matchedFields: ['surname', 'firstName', 'birthdate'],
+                matchReason: `High-confidence Name match with identical Date of Birth (${existing.birthdate || existing.birthday})`,
+                message: `Exact duplicate found: Student "${existing.lastName || existing.surname}, ${existing.firstName}" (DOB: ${existing.birthdate || existing.birthday}) already exists in your database.`,
               };
             }
           }
@@ -866,7 +1122,7 @@ export const dbService = {
             existingRecord: existing,
             matchedFields: ['surname', 'firstName'],
             matchReason: 'Matching Full Name with different birthday or school',
-            message: `Possible duplicate found: A student named "${existing.surname}, ${existing.firstName}" already exists (LRN: ${existing.lrn}, School: ${existing.elementarySchool || 'N/A'}). Please verify if this is the same student.`,
+            message: `Possible duplicate found: A student named "${existing.lastName || existing.surname}, ${existing.firstName}" already exists (LRN: ${existing.lrn}, School: ${existing.elementarySchool || 'N/A'}). Please verify if this is the same student.`,
           };
         }
       }
@@ -877,9 +1133,9 @@ export const dbService = {
           return {
             duplicateStatus: 'POSSIBLE',
             existingRecord: existing,
-            matchedFields: ['surname', 'birthday', 'elementarySchool'],
+            matchedFields: ['surname', 'birthdate', 'elementarySchool'],
             matchReason: 'Matching Surname, Birthday, and Elementary School',
-            message: `Possible duplicate found: Another student with surname "${existing.surname}", birthday "${existing.birthday}", and school "${existing.elementarySchool}" was found (Record: ${existing.firstName} ${existing.surname}).`,
+            message: `Possible duplicate found: Another student with surname "${existing.lastName || existing.surname}", birthday "${existing.birthdate || existing.birthday}", and school "${existing.elementarySchool}" was found (Record: ${existing.firstName} ${existing.lastName || existing.surname}).`,
           };
         }
       }

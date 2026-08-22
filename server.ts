@@ -453,20 +453,40 @@ async function startServer() {
     });
   });
 
-  // 6. Get Students (Account & Workspace isolated)
+  // 6. Get Students (Account & Workspace isolated with optional high-performance pagination)
   app.get('/api/students', (req, res) => {
     const currentUser = getCurrentUser(req);
     const recruitmentListId = req.query.recruitmentListId as string | undefined;
+    const { search, status, sortBy, sortOrder, page, limit } = req.query;
+
+    if (page !== undefined && page !== null && page !== '') {
+      const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+      const limitNum = Math.min(200, Math.max(1, parseInt(String(limit), 10) || 25));
+      const result = dbService.queryStudents({
+        userId: currentUser?.id,
+        recruitmentListId,
+        search: typeof search === 'string' ? search : undefined,
+        status: typeof status === 'string' ? status : undefined,
+        sortBy: typeof sortBy === 'string' ? sortBy : undefined,
+        sortOrder: sortOrder === 'desc' ? 'desc' : 'asc',
+        page: pageNum,
+        limit: limitNum,
+      });
+      return res.json(result);
+    }
+
     let students = dbService.getStudents(currentUser?.id, recruitmentListId);
-    const { search, status, sortBy, sortOrder } = req.query;
 
     if (search && typeof search === 'string') {
       const q = search.trim().toLowerCase();
       students = students.filter(
         (s) =>
-          `${s.firstName} ${s.middleName} ${s.surname}`.toLowerCase().includes(q) ||
+          `${s.firstName} ${s.middleName} ${s.surname} ${s.lastName}`.toLowerCase().includes(q) ||
           s.lrn.toLowerCase().includes(q) ||
-          s.elementarySchool.toLowerCase().includes(q)
+          s.elementarySchool.toLowerCase().includes(q) ||
+          s.address.toLowerCase().includes(q) ||
+          (s.barangay && s.barangay.toLowerCase().includes(q)) ||
+          (s.municipality && s.municipality.toLowerCase().includes(q))
       );
     }
 
@@ -481,8 +501,8 @@ async function startServer() {
         let valB: any = (b as any)[sortBy];
 
         if (sortBy === 'fullName') {
-          valA = `${a.surname} ${a.firstName}`;
-          valB = `${b.surname} ${b.firstName}`;
+          valA = `${a.surname || a.lastName} ${a.firstName}`;
+          valB = `${b.surname || b.lastName} ${b.firstName}`;
         }
 
         if (typeof valA === 'string') valA = valA.toLowerCase();
@@ -519,53 +539,38 @@ async function startServer() {
     return res.json(student);
   });
 
-  // 8. Add Student Record
+  // 8. Add Student Record (Official Recruitment Personal Information Form)
   app.post('/api/students', (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
       return res.status(401).json({ error: 'Authentication required to encode student records.' });
     }
 
-    const {
-      recruitmentListId,
-      lrn,
-      surname,
-      middleName,
-      firstName,
-      birthday,
-      address,
-      fatherName,
-      motherName,
-      guardianName,
-      numSiblings,
-      fatherOccupation,
-      motherOccupation,
-      guardianOccupation,
-      examScore,
-      elementarySchool,
-      remarks,
-      healthStatus,
-    } = req.body;
+    const body = req.body || {};
+    const lrn = String(body.lrn || '').trim();
+    const lastName = String(body.lastName || body.surname || '').trim();
+    const firstName = String(body.firstName || '').trim();
+    const birthdate = String(body.birthdate || body.birthday || '').trim();
 
-    // Validation
-    if (!lrn || !lrn.trim()) {
-      return res.status(400).json({ error: "Please enter the student's LRN." });
+    // Required Field Validations matching official workflow
+    if (!lrn) {
+      return res.status(400).json({ error: "Please enter the student's 12-digit LRN." });
     }
-    if (!surname || !surname.trim()) {
-      return res.status(400).json({ error: 'Surname is required.' });
+    if (!lastName) {
+      return res.status(400).json({ error: 'Last Name / Surname is required.' });
     }
-    if (!firstName || !firstName.trim()) {
+    if (!firstName) {
       return res.status(400).json({ error: 'First Name is required.' });
     }
-    if (!birthday) {
-      return res.status(400).json({ error: 'Please enter a valid birthday.' });
+    if (!birthdate) {
+      return res.status(400).json({ error: 'Please enter a valid birthdate.' });
     }
-    if (isNaN(Date.parse(birthday))) {
-      return res.status(400).json({ error: 'Please enter a valid birthday date.' });
+    if (isNaN(Date.parse(birthdate))) {
+      return res.status(400).json({ error: 'Please enter a valid birthdate date.' });
     }
 
     const settings = dbService.getSettings();
-    const scoreNum = Number(examScore);
+    const scoreNum = Number(body.examScore || 0);
     if (isNaN(scoreNum) || scoreNum < 0) {
       return res.status(400).json({ error: 'Exam score must be a non-negative number.' });
     }
@@ -573,29 +578,22 @@ async function startServer() {
       return res.status(400).json({ error: `Exam score cannot exceed the maximum configured score of ${settings.maxExamScore}.` });
     }
 
-    const siblingsNum = Number(numSiblings);
-    if (isNaN(siblingsNum) || siblingsNum < 0) {
-      return res.status(400).json({ error: 'Number of siblings must be a valid number.' });
-    }
+    const remarks = body.remarks === 'A - PASS' ? 'A - PASS' : 'B - PENDING';
 
-    if (remarks !== 'A - PASS' && remarks !== 'B - PENDING') {
-      return res.status(400).json({ error: 'Admission status must be either "A - PASS" or "B - PENDING".' });
-    }
-
-    // Explicit duplicate check before saving
+    // Duplicate check before saving
     const dupCheck = dbService.checkDuplicate(
       {
-        lrn: lrn.trim(),
-        surname: surname.trim(),
-        middleName: (middleName || '').trim(),
-        firstName: firstName.trim(),
-        birthday,
-        address: (address || '').trim(),
-        elementarySchool: (elementarySchool || '').trim(),
+        ...body,
+        lrn,
+        lastName,
+        surname: lastName,
+        firstName,
+        birthdate,
+        birthday: birthdate,
       },
       currentUser.id,
       undefined,
-      recruitmentListId
+      body.recruitmentListId
     );
 
     if (dupCheck.duplicateStatus === 'EXACT') {
@@ -612,25 +610,18 @@ async function startServer() {
     try {
       const newStudent = dbService.createStudent(
         {
+          ...body,
           userId: currentUser.id,
-          recruitmentListId: recruitmentListId ? recruitmentListId.trim() : undefined,
-          lrn: lrn.trim(),
-          surname: surname.trim(),
-          middleName: (middleName || '').trim(),
-          firstName: firstName.trim(),
-          birthday,
-          address: (address || '').trim(),
-          fatherName: (fatherName || '').trim(),
-          motherName: (motherName || '').trim(),
-          guardianName: (guardianName || '').trim(),
-          numSiblings: Math.floor(siblingsNum),
-          fatherOccupation: (fatherOccupation || '').trim(),
-          motherOccupation: (motherOccupation || '').trim(),
-          guardianOccupation: (guardianOccupation || '').trim(),
+          recruitmentListId: body.recruitmentListId ? body.recruitmentListId.trim() : undefined,
+          lrn,
+          lastName,
+          surname: lastName,
+          middleName: (body.middleName || '').trim(),
+          firstName,
+          birthdate,
+          birthday: birthdate,
           examScore: scoreNum,
-          elementarySchool: (elementarySchool || '').trim(),
           remarks: remarks as AdmissionStatus,
-          healthStatus: (healthStatus || '').trim(),
           createdBy: currentUser.fullName,
           updatedBy: currentUser.fullName,
         },
@@ -641,7 +632,7 @@ async function startServer() {
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Student Added',
-        details: `Encoded new student: ${newStudent.surname}, ${newStudent.firstName} (LRN: ${newStudent.lrn}) - Status: ${newStudent.remarks}`,
+        details: `Encoded new student: ${newStudent.lastName}, ${newStudent.firstName} (LRN: ${newStudent.lrn}) - Status: ${newStudent.remarks}`,
       });
 
       return res.status(201).json(newStudent);
@@ -670,31 +661,15 @@ async function startServer() {
       return res.status(404).json({ error: 'Student record not found.' });
     }
 
-    const {
-      lrn,
-      surname,
-      middleName,
-      firstName,
-      birthday,
-      address,
-      fatherName,
-      motherName,
-      guardianName,
-      numSiblings,
-      fatherOccupation,
-      motherOccupation,
-      guardianOccupation,
-      examScore,
-      elementarySchool,
-      remarks,
-      healthStatus,
-    } = req.body;
+    const body = req.body || {};
+    const { lrn, birthdate, birthday, examScore, remarks } = body;
 
-    if (lrn !== undefined && (!lrn || !lrn.trim())) {
+    if (lrn !== undefined && (!lrn || !String(lrn).trim())) {
       return res.status(400).json({ error: "Please enter the student's LRN." });
     }
 
-    if (birthday && isNaN(Date.parse(birthday))) {
+    const bDate = birthdate || birthday;
+    if (bDate && isNaN(Date.parse(bDate))) {
       return res.status(400).json({ error: 'Please enter a valid birthday date.' });
     }
 
@@ -719,23 +694,10 @@ async function startServer() {
       const updated = dbService.updateStudent(
         studentId,
         {
-          ...(lrn !== undefined && { lrn: lrn.trim() }),
-          ...(surname !== undefined && { surname: surname.trim() }),
-          ...(middleName !== undefined && { middleName: middleName.trim() }),
-          ...(firstName !== undefined && { firstName: firstName.trim() }),
-          ...(birthday !== undefined && { birthday }),
-          ...(address !== undefined && { address: address.trim() }),
-          ...(fatherName !== undefined && { fatherName: fatherName.trim() }),
-          ...(motherName !== undefined && { motherName: motherName.trim() }),
-          ...(guardianName !== undefined && { guardianName: guardianName.trim() }),
-          ...(numSiblings !== undefined && { numSiblings: Math.floor(Number(numSiblings)) }),
-          ...(fatherOccupation !== undefined && { fatherOccupation: fatherOccupation.trim() }),
-          ...(motherOccupation !== undefined && { motherOccupation: motherOccupation.trim() }),
-          ...(guardianOccupation !== undefined && { guardianOccupation: guardianOccupation.trim() }),
-          ...(examScore !== undefined && { examScore: Number(examScore) }),
-          ...(elementarySchool !== undefined && { elementarySchool: elementarySchool.trim() }),
-          ...(remarks !== undefined && { remarks }),
-          ...(healthStatus !== undefined && { healthStatus: healthStatus.trim() }),
+          ...body,
+          ...(bDate && { birthdate: bDate, birthday: bDate }),
+          ...(body.lastName && { lastName: body.lastName.trim(), surname: body.lastName.trim() }),
+          ...(body.surname && { lastName: body.surname.trim(), surname: body.surname.trim() }),
         },
         currentUser.fullName,
         currentUser.id
@@ -746,8 +708,8 @@ async function startServer() {
         userName: currentUser.fullName,
         action: isStatusChange ? 'Status Changed' : 'Student Edited',
         details: isStatusChange
-          ? `Changed admission status of ${updated.surname}, ${updated.firstName} from ${existing.remarks} to ${updated.remarks}`
-          : `Updated details for student ${updated.surname}, ${updated.firstName} (LRN: ${updated.lrn})`,
+          ? `Changed admission status of ${updated.lastName || updated.surname}, ${updated.firstName} from ${existing.remarks} to ${updated.remarks}`
+          : `Updated details for student ${updated.lastName || updated.surname}, ${updated.firstName} (LRN: ${updated.lrn})`,
       });
 
       return res.json(updated);
@@ -829,44 +791,101 @@ async function startServer() {
           extractedData: {
             type: Type.OBJECT,
             properties: {
-              surname: { type: Type.STRING, description: 'Surname / Last Name / SN written on the form' },
-              middleName: { type: Type.STRING, description: 'Middle Name / MN written on the form' },
-              firstName: { type: Type.STRING, description: 'First Name / Given Name / FN written on the form' },
-              birthday: { type: Type.STRING, description: 'Date of Birth in standardized YYYY-MM-DD format if recognizable, else empty string' },
-              address: { type: Type.STRING, description: 'Complete home address including Barangay, Municipality/City, Province' },
-              lrn: { type: Type.STRING, description: '12-digit Learner Reference Number (digits only, e.g. 109283746123)' },
-              fatherName: { type: Type.STRING, description: 'Full name of father (Ama/Tatay)' },
-              fatherOccupation: { type: Type.STRING, description: 'Occupation / Hanapbuhay of father' },
-              motherName: { type: Type.STRING, description: 'Full name of mother (Ina/Nanay)' },
-              motherOccupation: { type: Type.STRING, description: 'Occupation / Hanapbuhay of mother' },
-              guardianName: { type: Type.STRING, description: 'Full name of guardian (Tagapag-alaga), if any' },
-              guardianOccupation: { type: Type.STRING, description: 'Occupation / Hanapbuhay of guardian, if any' },
-              numSiblings: { type: Type.NUMBER, description: 'Number of siblings (Bilang ng kapatid). Default 0 if none or unstated' },
-              examScore: { type: Type.NUMBER, description: 'Score in Entrance/Admission Exam, if indicated on the form' },
-              elementarySchool: { type: Type.STRING, description: 'Name of Elementary School Graduated / Paaralang Elementarya' },
-              healthStatus: { type: Type.STRING, description: 'Health / Medical conditions (e.g., Normal, Asthma, Allergies, or None)' },
-              remarks: { type: Type.STRING, description: "Admission remarks: strictly either 'A - PASS' or 'B - PENDING'" },
+              // Section A: Basic Personal Information
+              lastName: { type: Type.STRING, description: 'Last Name / Surname / Apelyido' },
+              surname: { type: Type.STRING, description: 'Last Name / Surname' },
+              firstName: { type: Type.STRING, description: 'First Name / Pangalan' },
+              middleName: { type: Type.STRING, description: 'Middle Name / Gitnang Pangalan' },
+              birthdate: { type: Type.STRING, description: 'Date of Birth in standardized YYYY-MM-DD format (e.g. 2012-05-14)' },
+              birthday: { type: Type.STRING, description: 'Date of Birth in YYYY-MM-DD' },
+              age: { type: Type.NUMBER, description: 'Age in years' },
+              gender: { type: Type.STRING, description: 'Sex / Gender (Female or Male)' },
+
+              // Section B: Residence / Address Information
+              sitioStreet: { type: Type.STRING, description: 'Sitio / Street / Purok / House No.' },
+              barangay: { type: Type.STRING, description: 'Barangay' },
+              municipality: { type: Type.STRING, description: 'Municipality / City' },
+              province: { type: Type.STRING, description: 'Province' },
+              address: { type: Type.STRING, description: 'Complete address string' },
+
+              // Section C: Educational Background
+              elementarySchool: { type: Type.STRING, description: 'Elementary School Graduated' },
+              school: { type: Type.STRING, description: 'Elementary School Graduated' },
+              schoolAddress: { type: Type.STRING, description: 'Address of Elementary School' },
+              reportCardSy: { type: Type.STRING, description: 'Report Card School Year (e.g. SY 2024-2025)' },
+              lrn: { type: Type.STRING, description: '12-digit Learner Reference Number digits only' },
+              grading: { type: Type.STRING, description: 'Grading Period (e.g. 1st, 2nd, 3rd, 4th, Final)' },
+              currentGrade: { type: Type.STRING, description: 'Current Grade Level (e.g. Grade 6)' },
+              oldGraduateRemarks: { type: Type.STRING, description: 'Old Graduate details or others specified' },
+
+              // Section D: Family Background
+              fatherName: { type: Type.STRING, description: "Father's Full Name (Ama)" },
+              fatherOccupation: { type: Type.STRING, description: "Father's Occupation (Hanapbuhay ng Ama)" },
+              motherName: { type: Type.STRING, description: "Mother's Full Maiden Name (Ina)" },
+              motherOccupation: { type: Type.STRING, description: "Mother's Occupation (Hanapbuhay ng Ina)" },
+              guardianName: { type: Type.STRING, description: "Guardian's Full Name (Tagapag-alaga), if applicable" },
+              guardianRelation: { type: Type.STRING, description: "Relationship of Guardian to applicant" },
+              guardianOccupation: { type: Type.STRING, description: "Guardian's Occupation" },
+
+              // Section E: Contact Information
+              cellphoneNumber: { type: Type.STRING, description: 'Contact / Cellphone number' },
+              cellphoneOwner: { type: Type.STRING, description: 'Whose cellphone number (e.g. Mother, Father, Guardian, Applicant)' },
+              messengerAccount: { type: Type.STRING, description: 'Facebook / Messenger account name' },
+              messengerOwner: { type: Type.STRING, description: 'Owner of Messenger account' },
+
+              // Section F: Religious & Civil Information
+              birthCertificatePsa: { type: Type.STRING, description: 'PSA Birth Certificate submitted / verified (Yes/No)' },
+              psaFatherNameAge: { type: Type.STRING, description: "PSA Father's Name and Age as appearing on document" },
+              fatherReligion: { type: Type.STRING, description: "Father's Religion" },
+              psaMotherNameAge: { type: Type.STRING, description: "PSA Mother's Name and Age as appearing on document" },
+              motherReligion: { type: Type.STRING, description: "Mother's Religion" },
+              birthOrder: { type: Type.NUMBER, description: 'Birth order / Pang-ilan sa magkakapatid (e.g. 1, 2, 3)' },
+              numberOfChildren: { type: Type.NUMBER, description: 'Total number of children in family' },
+              baptizedCatholic: { type: Type.STRING, description: 'Baptized Catholic (Yes or No)' },
+              denomination: { type: Type.STRING, description: 'If not Catholic, religious denomination' },
+              confirmedCatholic: { type: Type.STRING, description: 'Confirmed Catholic (Yes or No)' },
+
+              // Section G: Siblings Information
+              siblings: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    siblingNo: { type: Type.NUMBER },
+                    name: { type: Type.STRING },
+                    age: { type: Type.STRING },
+                    remarks: { type: Type.STRING },
+                  },
+                },
+                description: 'List of brothers and sisters with their age and remarks/schooling/work',
+              },
+              numSiblings: { type: Type.NUMBER, description: 'Total count of siblings' },
+
+              // Section H: Parish Information
+              parishPlace: { type: Type.STRING, description: 'Parish name and place / location' },
+              parishPriest: { type: Type.STRING, description: "Parish Priest's name" },
+
+              // Section I: Health Assessment & Exam
+              examScore: { type: Type.NUMBER, description: 'Entrance Exam Score' },
+              healthStatus: { type: Type.STRING, description: 'Health & Medical Conditions / Assessment' },
+              remarks: { type: Type.STRING, description: "Admission Remarks / Status ('A - PASS' or 'B - PENDING')" },
+              additionalNotes: { type: Type.STRING, description: 'Additional Notes or Observations from Interviewer / Recruiter' },
+              studentSignature: { type: Type.STRING, description: 'Student Signature confirmed (e.g. Signed)' },
             },
           },
           fieldConfidence: {
             type: Type.OBJECT,
             properties: {
-              surname: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              middleName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              lastName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
               firstName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              birthday: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              address: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              middleName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              birthdate: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
               lrn: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              fatherName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              fatherOccupation: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              motherName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              motherOccupation: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              guardianName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              guardianOccupation: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              numSiblings: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              examScore: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              address: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
               elementarySchool: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
-              healthStatus: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              fatherName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              motherName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              examScore: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
               remarks: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
             },
           },
@@ -900,33 +919,62 @@ async function startServer() {
                   },
                 },
                 {
-                  text: `You are an expert OCR and document understanding system for Sisters of Mary School-Girlstown, Inc. student recruitment forms.
-Analyze the provided document image (Personal Data Form / Applicant Form) and extract all printed and handwritten information with high fidelity.
+                  text: `You are an expert OCR and document understanding system for Sisters of Mary School student recruitment intake forms.
+Analyze the provided document image of the official "RECRUITMENT PERSONAL INFORMATION" form and extract all printed and handwritten information with high fidelity according to the official sections:
 
-FORM STRUCTURE AND MAPPING GUIDELINES:
-1. FORM HEADER: Look for "PERSONAL DATA FORM", "Sisters of Mary School-Girlstown, Inc.", or recruitment intake header.
-2. PERSONAL INFORMATION:
-   - Surname (SN / Apelyido / Last Name): Look for the surname field.
-   - First Name (FN / Pangalan / Given Name): Look for the applicant's first name.
-   - Middle Name (MN / Gitnang Pangalan): Look for middle name or initial.
-   - LRN (Learner Reference Number): 12-digit student reference number, often enclosed in 12 individual boxes or next to "LRN". Extract strictly digits.
-   - Birthday / Date of Birth (Kaarawan): Convert any format (e.g., "10/24/2012", "October 24, 2012", "24-Oct-2012", "2012-10-24") to standardized "YYYY-MM-DD".
-   - Address (Tirahan): Complete street address, barangay, town/city, province.
-3. FAMILY BACKGROUND:
-   - Father's Name (Pangalan ng Ama / Tatay) and Father's Occupation (Hanapbuhay)
-   - Mother's Name (Pangalan ng Ina / Nanay) and Mother's Occupation (Hanapbuhay)
-   - Guardian's Name (Tagapag-alaga) and Guardian's Occupation (Hanapbuhay)
-   - Number of Siblings (Bilang ng Kapatid): Extract integer count. If written as words (e.g. "tatlo", "three", "3"), parse to numeric 3.
-4. EDUCATIONAL & ADMISSION:
-   - Elementary School (Paaralang Elementarya / School Graduated): Elementary school name where student finished Grade 6.
-   - Exam Score: Score in the entrance examination or admission test. Extract as number.
-   - Remarks: Check if marked "A - PASS" / Passed / Admitted / Qualified, or "B - PENDING" / Pending / For evaluation. Map strictly to "A - PASS" or "B - PENDING".
-5. HEALTH STATUS:
-   - Medical conditions, allergies, asthma, normal, fit, or none.
+SECTION BREAKDOWN & MAPPING:
+A. BASIC PERSONAL INFORMATION:
+   - Last Name / Surname (SN / Apelyido)
+   - First Name (FN / Pangalan)
+   - Middle Name (MN / Gitnang Pangalan)
+   - Date of Birth (Kaarawan): Standardize to YYYY-MM-DD (e.g., "2012-05-14")
+   - Age: Calculate or extract age in years
+   - Sex / Gender: Female or Male
+
+B. RESIDENCE / ADDRESS INFORMATION:
+   - Sitio / Street / Purok
+   - Barangay
+   - Municipality / City
+   - Province
+   - Complete Address string
+
+C. EDUCATIONAL BACKGROUND:
+   - Elementary School Graduated / Paaralan
+   - School Address
+   - Report Card (SY) / Grading Period
+   - 12-digit Learner Reference Number (LRN): Digits only (e.g. 109283746123)
+   - Current Grade (Grade 6) & Old Graduate remarks if any
+
+D. FAMILY BACKGROUND:
+   - Father's Full Name & Occupation
+   - Mother's Full Name & Occupation
+   - Guardian's Full Name, Relationship & Occupation (if applicable)
+
+E. CONTACT INFORMATION:
+   - Cellphone Number & Cellphone Owner (e.g. Mother, Father, Self)
+   - Messenger Account & Messenger Owner
+
+F. RELIGIOUS & CIVIL INFORMATION:
+   - PSA Birth Certificate (Yes/No)
+   - PSA Father's Name & Age, Father's Religion
+   - PSA Mother's Name & Age, Mother's Religion
+   - Birth Order (Pang-ilan) & Number of Children
+   - Baptized Catholic (Yes/No), Denomination (if other), Confirmed Catholic (Yes/No)
+
+G. SIBLINGS INFORMATION:
+   - Extract list of siblings (name, age, remarks) and total count
+
+H. PARISH INFORMATION:
+   - Parish / Place & Parish Priest
+
+I. HEALTH & EXAMINATION:
+   - Health / Medical conditions (Normal, Asthma, Allergies, etc.)
+   - Entrance Exam Score
+   - Remarks: strictly "A - PASS" or "B - PENDING"
 
 ACCURACY & INTEGRITY RULES:
 - NEVER guess unreadable handwriting or invent sample names/data.
-- If a field is blank, unmarked, or completely illegible, return an empty string "" or 0 and assign fieldConfidence as "LOW" or "NOT_DETECTED".
+- If a field is blank or illegible, return empty string "" or 0 and assign fieldConfidence as "LOW" or "NOT_DETECTED".
 - Put the names of any ambiguous/faint fields into the uncertainFields array so recruitment staff can easily review and verify them.`,
                 },
               ],

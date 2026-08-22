@@ -31,31 +31,103 @@ export interface RecruitmentListWithStats extends RecruitmentList {
   lastUpdated: string;
 }
 
+export interface SiblingRecord {
+  siblingNo: number;            // 1 to 10
+  name: string;                // Name of Sibling
+  age: number | string;        // Age
+  remarks: string;             // Remarks (e.g. Student, Working, Grade 4)
+}
+
 export interface StudentRecord {
   id: string;
   userId?: string;              // Account owner ID
   recruitmentListId?: string;   // Associated recruitment year list
-  lrn: string;                  // Learner Reference Number (Unique string)
-  surname: string;              // SN
-  middleName: string;           // MN
-  firstName: string;            // FN
-  birthday: string;             // YYYY-MM-DD
-  address: string;
-  fatherName: string;
-  motherName: string;
-  guardianName: string;
-  numSiblings: number;
-  fatherOccupation: string;
-  motherOccupation: string;
-  guardianOccupation: string;
-  examScore: number;
-  elementarySchool: string;
-  remarks: AdmissionStatus;     // A - PASS or B - PENDING
-  healthStatus: string;
+
+  // A. Basic Personal Information
+  idPhotoUrl?: string;          // ID Photo 1x1
+  lastName: string;             // Last Name / Surname / Apelyido
+  surname?: string;             // SN (Alias for backward compatibility)
+  firstName: string;            // First Name / Pangalan
+  middleName: string;           // Middle Name / Apelyido ng Ina
+  birthdate: string;            // Birthdate / Araw ng Kapanganakan (YYYY-MM-DD)
+  birthday?: string;            // Alias for birthdate
+  age: number | string;         // Age / Edad Kasalukuyan
+  gender: string;               // Gender / Kasarian ('Female' | 'Male' | 'Other')
+
+  // B. Home Address
+  sitioStreet: string;          // Sitio/Street
+  barangay: string;             // Barangay
+  municipality: string;         // Municipality
+  province: string;             // Province
+  address?: string;             // Consolidated address
+
+  // C. School Information
+  elementarySchool: string;     // School / Paaralang Elementarya
+  school?: string;              // School alias
+  schoolAddress: string;        // Address / Lokasyon of School
+  reportCardSy: string;         // Report Card (SY2025-2026)
+  lrn: string;                  // LRN (12-digit Learner Reference Number)
+  grading: string;              // Grading (e.g. 88% or General Average)
+  currentGrade: string;         // Current Grade (e.g. Grade 6)
+  oldGraduateRemarks: string;   // Others specify (old graduate)
+
+  // D. Family Information
+  fatherName: string;           // Father's Name
+  fatherOccupation: string;     // Father's Occupation / Trabaho / Hanapbuhay
+  motherName: string;           // Mother's Name
+  motherOccupation: string;     // Mother's Occupation / Trabaho / Hanapbuhay
+  guardianName: string;         // Guardian's Name
+  guardianRelation: string;     // Relation to the Guardian
+  guardianOccupation?: string;  // Guardian's Occupation
+
+  // E. Contact Information
+  cellphoneNumber: string;      // Cellphone Number
+  cellphoneOwner: string;       // Cellphone Owner
+  messengerAccount: string;     // Messenger Account
+  messengerOwner: string;       // Messenger Owner
+
+  // F. PSA / Family Record Information
+  birthCertificatePsa: string;  // Birth Certificate (PSA) - Yes / No / Submitted
+  psaFatherNameAge: string;     // Name of Father (Age)
+  fatherReligion: string;       // Father's Religion
+  psaMotherNameAge: string;     // Name of Mother (Age)
+  motherReligion: string;       // Mother's Religion
+  birthOrder: number | string;  // Birth order among siblings
+  numberOfChildren: number | string; // Number of Children
+  baptizedCatholic: string;     // Baptized in Catholic (Yes / No)
+  denomination: string;         // If not Catholic, what denomination
+  confirmedCatholic: string;    // Confirmed (Yes / No)
+
+  // G. Sibling Information (Rows 1 to 10)
+  siblings: SiblingRecord[];
+  numSiblings?: number;         // Total siblings helper
+
+  // H. Parish Information
+  parishPlace: string;          // Place/Parish
+  parishPriest: string;         // Parish Priest Name
+
+  // I. Remarks
+  remarks: AdmissionStatus;     // Admission status: 'A - PASS' | 'B - PENDING'
+  additionalNotes: string;      // Remarks / Additional Notes
+  examScore?: number;           // Exam score
+  healthStatus?: string;        // Health & Medical conditions
+
+  // J. Student Signature
+  studentSignature: string;     // Student's Signature over Printed Name
+
+  // System audit fields
   createdAt: string;
   updatedAt: string;
   createdBy: string;
   updatedBy: string;
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  page: number;
+  limit: number;
+  totalRecords: number;
+  totalPages: number;
 }
 
 export type DuplicateStatus = 'EXACT' | 'POSSIBLE' | 'NONE';
@@ -140,3 +212,4 @@ export interface OCRScanResult {
   uncertainFields?: string[];
   rawSummary?: string;
 }
+
