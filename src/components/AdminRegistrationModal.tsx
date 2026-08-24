@@ -10,7 +10,7 @@ interface Props {
 }
 
 export const AdminRegistrationModal: React.FC<Props> = ({ onSuccess, systemSettings }) => {
-  const logoSrc = systemSettings?.schoolLogoUrl || '/school_logo.png';
+  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo.png';
   const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -60,8 +60,9 @@ export const AdminRegistrationModal: React.FC<Props> = ({ onSuccess, systemSetti
             <img
               src={logoSrc}
               alt={`${schoolName} Logo`}
+              referrerPolicy="no-referrer"
               className="w-full h-full object-contain"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/school_logo.png'; }}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/school-logo.png'; }}
             />
           </div>
           <h2 className="text-xl font-black text-[#1E3A8A] tracking-tight">

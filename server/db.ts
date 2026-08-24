@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
-import { User, StudentRecord, SiblingRecord, AuditLogEntry, SystemSettings, RecruitmentList, RecruitmentListWithStats, PaginatedResult } from '../src/types.js';
+import { User, StudentRecord, SiblingRecord, AuditLogEntry, SystemSettings, BrandingPreset, ThemePreset, RecruitmentList, RecruitmentListWithStats, PaginatedResult } from '../src/types.js';
 
 export function sanitizeStudentRecord(s: any): StudentRecord {
   const lastName = (s.lastName || s.surname || '').trim();
@@ -175,6 +175,100 @@ const DB_FILE = path.join(DATA_DIR, 'db.json');
 const DB_BACKUP_FILE = path.join(DATA_DIR, 'db.backup.json');
 const DB_TMP_FILE = path.join(DATA_DIR, 'db.tmp.json');
 
+export const DEFAULT_LOGO_PRESETS: BrandingPreset[] = [
+  {
+    id: 'default-blue-logo',
+    name: 'Official Blue Circular Emblem',
+    url: '/school-logo.png',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'default-vector-emblem',
+    name: 'Vector Emblem',
+    url: '/school_logo.svg',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+export const DEFAULT_DASHBOARD_BG_PRESETS: BrandingPreset[] = [
+  {
+    id: 'default-campus-grounds',
+    name: 'School Campus Grounds',
+    url: '/school-campus-background.jpg',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'default-sunset-campus',
+    name: 'Campus Sunset Panorama',
+    url: '/school-sunset-background.jpg',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+export const DEFAULT_SPLASH_BG_PRESETS: BrandingPreset[] = [
+  {
+    id: 'default-sunset-splash',
+    name: 'School Sunset Panorama',
+    url: '/school-sunset-background.jpg',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'default-campus-splash',
+    name: 'School Campus Grounds',
+    url: '/school-campus-background.jpg',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+export const DEFAULT_THEME_PRESETS: ThemePreset[] = [
+  {
+    id: 'royal-blue',
+    name: 'Institutional Royal Blue',
+    gradient: 'from-[#1E3A8A] via-[#1D4ED8] to-[#172554]',
+    colorBadge: 'bg-[#1E3A8A]',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'navy-gold',
+    name: 'Navy & Amber Gold',
+    gradient: 'from-[#0F172A] via-[#1E3A8A] to-[#D97706]',
+    colorBadge: 'bg-[#0F172A]',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'emerald',
+    name: 'Academic Emerald',
+    gradient: 'from-[#064E3B] via-[#047857] to-[#022c22]',
+    colorBadge: 'bg-[#064E3B]',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'burgundy',
+    name: 'Classic Burgundy',
+    gradient: 'from-[#691B23] via-[#881337] to-[#4c0519]',
+    colorBadge: 'bg-[#691B23]',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'slate',
+    name: 'Slate Tech',
+    gradient: 'from-[#1e293b] via-[#334155] to-[#0f172a]',
+    colorBadge: 'bg-[#334155]',
+    isDefault: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
 const DEFAULT_SETTINGS: SystemSettings = {
   id: 'system_default_settings',
   setupCompleted: false,
@@ -182,13 +276,17 @@ const DEFAULT_SETTINGS: SystemSettings = {
   subTitle: 'Internal Student Recruitment & Information Management System',
   systemName: 'Student Recruitment Management System',
   schoolLocation: 'Talisay, Cebu, Philippines',
-  schoolLogoUrl: '/school_logo.png',
+  schoolLogoUrl: '/school-logo.png',
   maxExamScore: 100,
   dashboardBgTheme: 'custom',
   dashboardBgGradient: 'from-[#1E3A8A] via-[#1D4ED8] to-[#172554]',
-  dashboardBgImageUrl: '/dashboard_bg.jpg',
-  splashBgImageUrl: '/dashboard_bg.jpg',
+  dashboardBgImageUrl: '/school-campus-background.jpg',
+  splashBgImageUrl: '/school-sunset-background.jpg',
   academicYear: 'SY 2026-2027 Recruitment',
+  logoPresets: DEFAULT_LOGO_PRESETS,
+  dashboardBgPresets: DEFAULT_DASHBOARD_BG_PRESETS,
+  splashBgPresets: DEFAULT_SPLASH_BG_PRESETS,
+  customThemePresets: DEFAULT_THEME_PRESETS,
   updatedAt: new Date().toISOString(),
 };
 
@@ -316,6 +414,77 @@ function validateAndSanitizeDb(raw: any): DbSchema {
   const isSetupCompleted = cleanUsers.length > 0 || Boolean(rawSettings.setupCompleted);
   const superAdmin = cleanUsers.find((u) => u.role === 'Super Administrator') || cleanUsers[0];
 
+  // Sanitize Logo Presets
+  const rawLogos: BrandingPreset[] = Array.isArray(rawSettings.logoPresets) ? rawSettings.logoPresets : [];
+  const mergedLogos = [...DEFAULT_LOGO_PRESETS];
+  for (const l of rawLogos) {
+    if (!l || !l.url) continue;
+    if (!mergedLogos.some((m) => m.id === l.id || m.url === l.url)) {
+      mergedLogos.push({
+        id: l.id || 'logo_' + Math.random().toString(36).substring(2, 8),
+        name: (l.name || 'Custom Logo').trim(),
+        url: l.url.trim(),
+        data: l.data,
+        mime: l.mime,
+        isDefault: Boolean(l.isDefault),
+        createdAt: l.createdAt || new Date().toISOString(),
+      });
+    }
+  }
+
+  // Sanitize Dashboard Background Presets
+  const rawDashboardBgs: BrandingPreset[] = Array.isArray(rawSettings.dashboardBgPresets) ? rawSettings.dashboardBgPresets : [];
+  const mergedDashboardBgs = [...DEFAULT_DASHBOARD_BG_PRESETS];
+  for (const bg of rawDashboardBgs) {
+    if (!bg || !bg.url) continue;
+    if (!mergedDashboardBgs.some((m) => m.id === bg.id || m.url === bg.url)) {
+      mergedDashboardBgs.push({
+        id: bg.id || 'dbg_' + Math.random().toString(36).substring(2, 8),
+        name: (bg.name || 'Custom Dashboard BG').trim(),
+        url: bg.url.trim(),
+        data: bg.data,
+        mime: bg.mime,
+        isDefault: Boolean(bg.isDefault),
+        createdAt: bg.createdAt || new Date().toISOString(),
+      });
+    }
+  }
+
+  // Sanitize Splash Background Presets
+  const rawSplashBgs: BrandingPreset[] = Array.isArray(rawSettings.splashBgPresets) ? rawSettings.splashBgPresets : [];
+  const mergedSplashBgs = [...DEFAULT_SPLASH_BG_PRESETS];
+  for (const sbg of rawSplashBgs) {
+    if (!sbg || !sbg.url) continue;
+    if (!mergedSplashBgs.some((m) => m.id === sbg.id || m.url === sbg.url)) {
+      mergedSplashBgs.push({
+        id: sbg.id || 'sbg_' + Math.random().toString(36).substring(2, 8),
+        name: (sbg.name || 'Custom Splash BG').trim(),
+        url: sbg.url.trim(),
+        data: sbg.data,
+        mime: sbg.mime,
+        isDefault: Boolean(sbg.isDefault),
+        createdAt: sbg.createdAt || new Date().toISOString(),
+      });
+    }
+  }
+
+  // Sanitize Custom Theme Presets
+  const rawThemes: ThemePreset[] = Array.isArray(rawSettings.customThemePresets) ? rawSettings.customThemePresets : [];
+  const mergedThemes = [...DEFAULT_THEME_PRESETS];
+  for (const t of rawThemes) {
+    if (!t || !t.gradient) continue;
+    if (!mergedThemes.some((m) => m.id === t.id || m.gradient === t.gradient)) {
+      mergedThemes.push({
+        id: t.id || 'theme_' + Math.random().toString(36).substring(2, 8),
+        name: (t.name || 'Custom Theme').trim(),
+        gradient: t.gradient.trim(),
+        colorBadge: t.colorBadge || 'bg-[#1E3A8A]',
+        isDefault: Boolean(t.isDefault),
+        createdAt: t.createdAt || new Date().toISOString(),
+      });
+    }
+  }
+
   return {
     users: cleanUsers,
     recruitmentLists: cleanRecruitmentLists,
@@ -324,6 +493,10 @@ function validateAndSanitizeDb(raw: any): DbSchema {
     settings: {
       ...DEFAULT_SETTINGS,
       ...rawSettings,
+      logoPresets: mergedLogos,
+      dashboardBgPresets: mergedDashboardBgs,
+      splashBgPresets: mergedSplashBgs,
+      customThemePresets: mergedThemes,
       setupCompleted: isSetupCompleted,
       ...(superAdmin ? { administratorUserId: superAdmin.id } : {}),
     },
@@ -1185,7 +1358,8 @@ export const dbService = {
 
   saveLogo(
     dataString: string,
-    mimeTypeOverride?: string
+    mimeTypeOverride?: string,
+    presetName?: string
   ): { logoUrl: string; settings: SystemSettings } {
     const db = ensureDbExists();
     ensureUploadsDir();
@@ -1193,6 +1367,10 @@ export const dbService = {
     if (!dataString) {
       throw new Error('Logo image data is required');
     }
+
+    const currentPresets: BrandingPreset[] = Array.isArray(db.settings.logoPresets)
+      ? [...db.settings.logoPresets]
+      : [...DEFAULT_LOGO_PRESETS];
 
     if (dataString.startsWith('data:image') || dataString.length > 500) {
       const { base64Data, mimeType, ext } = parseBase64Image(dataString, mimeTypeOverride || 'image/png');
@@ -1204,16 +1382,19 @@ export const dbService = {
       // Write physical file to uploads directory
       fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
 
-      // Clean up older logo files in uploads directory
+      // Clean up older temporary logo files in uploads directory (keep ones in presets)
       try {
         const files = fs.readdirSync(UPLOADS_DIR);
+        const presetFilenames = new Set(
+          currentPresets.map((p) => p.url.replace('/api/uploads/', '').replace('/uploads/', ''))
+        );
         for (const file of files) {
-          if (file.startsWith('logo_') && file !== filename) {
-            fs.unlinkSync(path.join(UPLOADS_DIR, file));
+          if (file.startsWith('logo_') && file !== filename && !presetFilenames.has(file)) {
+            // Keep recent or preset files
           }
         }
       } catch (cleanupErr) {
-        console.warn('Old logo cleanup warning:', cleanupErr);
+        console.warn('Logo cleanup warning:', cleanupErr);
       }
 
       // Extra fallback sync to public and dist folders
@@ -1229,12 +1410,43 @@ export const dbService = {
       }
 
       const logoUrl = `/api/uploads/${filename}`;
+
+      // Check if this logo already exists in presets (by url or matching base64 data)
+      const existingIdx = currentPresets.findIndex(
+        (p) => p.url === logoUrl || (p.data && p.data === base64Data)
+      );
+
+      if (existingIdx >= 0) {
+        if (presetName && presetName.trim()) {
+          currentPresets[existingIdx].name = presetName.trim();
+        }
+        currentPresets[existingIdx].url = logoUrl;
+        currentPresets[existingIdx].data = base64Data;
+        currentPresets[existingIdx].mime = mimeType;
+      } else {
+        const autoName =
+          presetName && presetName.trim()
+            ? presetName.trim()
+            : `Custom Logo (${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`;
+
+        currentPresets.push({
+          id: 'logo_' + timestamp + '_' + randomSuffix,
+          name: autoName,
+          url: logoUrl,
+          data: base64Data,
+          mime: mimeType,
+          isDefault: false,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       db.settings = {
         ...DEFAULT_SETTINGS,
         ...db.settings,
         schoolLogoUrl: logoUrl,
         schoolLogoData: base64Data,
         schoolLogoMime: mimeType,
+        logoPresets: currentPresets,
         updatedAt: new Date().toISOString(),
       };
       saveDb(db);
@@ -1243,13 +1455,34 @@ export const dbService = {
     } else {
       // Direct URL passed
       const logoUrl = dataString.trim();
+
+      // Check if already in presets
+      const existingIdx = currentPresets.findIndex((p) => p.url === logoUrl);
+      if (existingIdx >= 0 && presetName && presetName.trim()) {
+        currentPresets[existingIdx].name = presetName.trim();
+      } else if (existingIdx === -1 && logoUrl) {
+        const autoName =
+          presetName && presetName.trim()
+            ? presetName.trim()
+            : `Custom Logo (${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`;
+
+        currentPresets.push({
+          id: 'logo_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          name: autoName,
+          url: logoUrl,
+          isDefault: logoUrl === '/school-logo.png' || logoUrl === '/school_logo.svg',
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       db.settings = {
         ...DEFAULT_SETTINGS,
         ...db.settings,
         schoolLogoUrl: logoUrl,
+        logoPresets: currentPresets,
         updatedAt: new Date().toISOString(),
       };
-      if (logoUrl === '/school_logo.png') {
+      if (logoUrl === '/school-logo.png' || logoUrl === '/school_logo.png' || logoUrl === '/school_logo.svg') {
         delete db.settings.schoolLogoData;
         delete db.settings.schoolLogoMime;
       }
@@ -1260,7 +1493,8 @@ export const dbService = {
 
   saveBackground(
     dataString: string,
-    mimeTypeOverride?: string
+    mimeTypeOverride?: string,
+    presetName?: string
   ): { backgroundUrl: string; settings: SystemSettings } {
     const db = ensureDbExists();
     ensureUploadsDir();
@@ -1268,6 +1502,10 @@ export const dbService = {
     if (!dataString) {
       throw new Error('Background image data is required');
     }
+
+    const currentPresets: BrandingPreset[] = Array.isArray(db.settings.dashboardBgPresets)
+      ? [...db.settings.dashboardBgPresets]
+      : [...DEFAULT_DASHBOARD_BG_PRESETS];
 
     if (dataString.startsWith('data:image') || dataString.length > 500) {
       const { base64Data, mimeType, ext } = parseBase64Image(dataString, mimeTypeOverride || 'image/jpeg');
@@ -1279,23 +1517,13 @@ export const dbService = {
       // Write physical file to uploads directory
       fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
 
-      // Clean up older background files in uploads directory
-      try {
-        const files = fs.readdirSync(UPLOADS_DIR);
-        for (const file of files) {
-          if (file.startsWith('bg_') && file !== filename) {
-            fs.unlinkSync(path.join(UPLOADS_DIR, file));
-          }
-        }
-      } catch (cleanupErr) {
-        console.warn('Old background cleanup warning:', cleanupErr);
-      }
-
       // Extra fallback sync to public and dist folders
       try {
-        const publicBg = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
+        const publicBg = path.join(process.cwd(), 'public', 'school-campus-background.jpg');
         fs.writeFileSync(publicBg, Buffer.from(base64Data, 'base64'));
-        const distBg = path.join(process.cwd(), 'dist', 'dashboard_bg.jpg');
+        const publicBgLegacy = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
+        fs.writeFileSync(publicBgLegacy, Buffer.from(base64Data, 'base64'));
+        const distBg = path.join(process.cwd(), 'dist', 'school-campus-background.jpg');
         if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
           fs.writeFileSync(distBg, Buffer.from(base64Data, 'base64'));
         }
@@ -1304,6 +1532,36 @@ export const dbService = {
       }
 
       const backgroundUrl = `/api/uploads/${filename}`;
+
+      // Check if already in presets
+      const existingIdx = currentPresets.findIndex(
+        (p) => p.url === backgroundUrl || (p.data && p.data === base64Data)
+      );
+
+      if (existingIdx >= 0) {
+        if (presetName && presetName.trim()) {
+          currentPresets[existingIdx].name = presetName.trim();
+        }
+        currentPresets[existingIdx].url = backgroundUrl;
+        currentPresets[existingIdx].data = base64Data;
+        currentPresets[existingIdx].mime = mimeType;
+      } else {
+        const autoName =
+          presetName && presetName.trim()
+            ? presetName.trim()
+            : `Custom Dashboard BG (${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`;
+
+        currentPresets.push({
+          id: 'dbg_' + timestamp + '_' + randomSuffix,
+          name: autoName,
+          url: backgroundUrl,
+          data: base64Data,
+          mime: mimeType,
+          isDefault: false,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       db.settings = {
         ...DEFAULT_SETTINGS,
         ...db.settings,
@@ -1311,6 +1569,7 @@ export const dbService = {
         dashboardBgImageData: base64Data,
         dashboardBgImageMime: mimeType,
         dashboardBgTheme: 'custom',
+        dashboardBgPresets: currentPresets,
         updatedAt: new Date().toISOString(),
       };
       saveDb(db);
@@ -1319,13 +1578,36 @@ export const dbService = {
     } else {
       // Direct URL passed
       const backgroundUrl = dataString.trim();
+
+      const existingIdx = currentPresets.findIndex((p) => p.url === backgroundUrl);
+      if (existingIdx >= 0 && presetName && presetName.trim()) {
+        currentPresets[existingIdx].name = presetName.trim();
+      } else if (existingIdx === -1 && backgroundUrl) {
+        const autoName =
+          presetName && presetName.trim()
+            ? presetName.trim()
+            : `Custom Dashboard BG (${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`;
+
+        currentPresets.push({
+          id: 'dbg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          name: autoName,
+          url: backgroundUrl,
+          isDefault:
+            backgroundUrl === '/school-campus-background.jpg' ||
+            backgroundUrl === '/school-sunset-background.jpg' ||
+            backgroundUrl === '/dashboard_bg.jpg',
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       db.settings = {
         ...DEFAULT_SETTINGS,
         ...db.settings,
         dashboardBgImageUrl: backgroundUrl,
+        dashboardBgPresets: currentPresets,
         updatedAt: new Date().toISOString(),
       };
-      if (backgroundUrl === '/dashboard_bg.jpg') {
+      if (backgroundUrl === '/school-campus-background.jpg' || backgroundUrl === '/dashboard_bg.jpg') {
         delete db.settings.dashboardBgImageData;
         delete db.settings.dashboardBgImageMime;
       }
@@ -1334,8 +1616,26 @@ export const dbService = {
     }
   },
 
-  getLogoStream(): { data: Buffer; mime: string } | null {
+  getLogoStream(requestedFilename?: string): { data: Buffer; mime: string } | null {
     const db = ensureDbExists();
+
+    // If a specific preset file is requested
+    if (requestedFilename && Array.isArray(db.settings?.logoPresets)) {
+      const matchingPreset = db.settings.logoPresets.find(
+        (p) => p.url.includes(requestedFilename) && p.data
+      );
+      if (matchingPreset?.data) {
+        try {
+          return {
+            data: Buffer.from(matchingPreset.data, 'base64'),
+            mime: matchingPreset.mime || 'image/png',
+          };
+        } catch (e) {
+          // Fall through
+        }
+      }
+    }
+
     if (db.settings?.schoolLogoData) {
       try {
         const buf = Buffer.from(db.settings.schoolLogoData, 'base64');
@@ -1352,7 +1652,9 @@ export const dbService = {
     try {
       if (fs.existsSync(UPLOADS_DIR)) {
         const files = fs.readdirSync(UPLOADS_DIR);
-        const logoFile = files.find((f) => f.startsWith('logo_'));
+        const logoFile = requestedFilename
+          ? files.find((f) => f === requestedFilename)
+          : files.find((f) => f.startsWith('logo_'));
         if (logoFile) {
           const filePath = path.join(UPLOADS_DIR, logoFile);
           const buf = fs.readFileSync(filePath);
@@ -1367,12 +1669,19 @@ export const dbService = {
 
     // Fallback to public
     try {
-      const publicPath = path.join(process.cwd(), 'public', 'school_logo.png');
-      if (fs.existsSync(publicPath)) {
-        return {
-          data: fs.readFileSync(publicPath),
-          mime: 'image/png',
-        };
+      const candidatePaths = [
+        path.join(process.cwd(), 'public', 'school-logo.png'),
+        path.join(process.cwd(), 'public', 'school_logo.png'),
+        path.join(process.cwd(), 'public', 'school_logo.svg'),
+        path.join(process.cwd(), 'public', 'school-logo.jpg'),
+      ];
+      for (const p of candidatePaths) {
+        if (fs.existsSync(p)) {
+          return {
+            data: fs.readFileSync(p),
+            mime: p.endsWith('.jpg') ? 'image/jpeg' : p.endsWith('.svg') ? 'image/svg+xml' : 'image/png',
+          };
+        }
       }
     } catch (e) {
       // No fallback
@@ -1381,8 +1690,25 @@ export const dbService = {
     return null;
   },
 
-  getBackgroundStream(): { data: Buffer; mime: string } | null {
+  getBackgroundStream(requestedFilename?: string): { data: Buffer; mime: string } | null {
     const db = ensureDbExists();
+
+    if (requestedFilename && Array.isArray(db.settings?.dashboardBgPresets)) {
+      const matchingPreset = db.settings.dashboardBgPresets.find(
+        (p) => p.url.includes(requestedFilename) && p.data
+      );
+      if (matchingPreset?.data) {
+        try {
+          return {
+            data: Buffer.from(matchingPreset.data, 'base64'),
+            mime: matchingPreset.mime || 'image/jpeg',
+          };
+        } catch (e) {
+          // Fall through
+        }
+      }
+    }
+
     if (db.settings?.dashboardBgImageData) {
       try {
         const buf = Buffer.from(db.settings.dashboardBgImageData, 'base64');
@@ -1399,7 +1725,9 @@ export const dbService = {
     try {
       if (fs.existsSync(UPLOADS_DIR)) {
         const files = fs.readdirSync(UPLOADS_DIR);
-        const bgFile = files.find((f) => f.startsWith('bg_'));
+        const bgFile = requestedFilename
+          ? files.find((f) => f === requestedFilename)
+          : files.find((f) => f.startsWith('bg_'));
         if (bgFile) {
           const filePath = path.join(UPLOADS_DIR, bgFile);
           const buf = fs.readFileSync(filePath);
@@ -1414,12 +1742,18 @@ export const dbService = {
 
     // Fallback to public
     try {
-      const publicPath = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
-      if (fs.existsSync(publicPath)) {
-        return {
-          data: fs.readFileSync(publicPath),
-          mime: 'image/jpeg',
-        };
+      const candidatePaths = [
+        path.join(process.cwd(), 'public', 'school-campus-background.jpg'),
+        path.join(process.cwd(), 'public', 'school-sunset-background.jpg'),
+        path.join(process.cwd(), 'public', 'dashboard_bg.jpg'),
+      ];
+      for (const p of candidatePaths) {
+        if (fs.existsSync(p)) {
+          return {
+            data: fs.readFileSync(p),
+            mime: 'image/jpeg',
+          };
+        }
       }
     } catch (e) {
       // No fallback
@@ -1430,7 +1764,8 @@ export const dbService = {
 
   saveSplashBackground(
     dataString: string,
-    mimeTypeOverride?: string
+    mimeTypeOverride?: string,
+    presetName?: string
   ): { splashBackgroundUrl: string; settings: SystemSettings } {
     const db = ensureDbExists();
     ensureUploadsDir();
@@ -1438,6 +1773,10 @@ export const dbService = {
     if (!dataString) {
       throw new Error('Splash background image data is required');
     }
+
+    const currentPresets: BrandingPreset[] = Array.isArray(db.settings.splashBgPresets)
+      ? [...db.settings.splashBgPresets]
+      : [...DEFAULT_SPLASH_BG_PRESETS];
 
     if (dataString.startsWith('data:image') || dataString.length > 500) {
       const { base64Data, mimeType, ext } = parseBase64Image(dataString, mimeTypeOverride || 'image/jpeg');
@@ -1449,25 +1788,44 @@ export const dbService = {
       // Write physical file to uploads directory
       fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
 
-      // Clean up older splash files in uploads directory
-      try {
-        const files = fs.readdirSync(UPLOADS_DIR);
-        for (const file of files) {
-          if (file.startsWith('splash_') && file !== filename) {
-            fs.unlinkSync(path.join(UPLOADS_DIR, file));
-          }
+      const splashBackgroundUrl = `/api/uploads/${filename}`;
+
+      // Check if already in presets
+      const existingIdx = currentPresets.findIndex(
+        (p) => p.url === splashBackgroundUrl || (p.data && p.data === base64Data)
+      );
+
+      if (existingIdx >= 0) {
+        if (presetName && presetName.trim()) {
+          currentPresets[existingIdx].name = presetName.trim();
         }
-      } catch (cleanupErr) {
-        console.warn('Old splash background cleanup warning:', cleanupErr);
+        currentPresets[existingIdx].url = splashBackgroundUrl;
+        currentPresets[existingIdx].data = base64Data;
+        currentPresets[existingIdx].mime = mimeType;
+      } else {
+        const autoName =
+          presetName && presetName.trim()
+            ? presetName.trim()
+            : `Custom Splash BG (${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`;
+
+        currentPresets.push({
+          id: 'sbg_' + timestamp + '_' + randomSuffix,
+          name: autoName,
+          url: splashBackgroundUrl,
+          data: base64Data,
+          mime: mimeType,
+          isDefault: false,
+          createdAt: new Date().toISOString(),
+        });
       }
 
-      const splashBackgroundUrl = `/api/uploads/${filename}`;
       db.settings = {
         ...DEFAULT_SETTINGS,
         ...db.settings,
         splashBgImageUrl: splashBackgroundUrl,
         splashBgImageData: base64Data,
         splashBgImageMime: mimeType,
+        splashBgPresets: currentPresets,
         updatedAt: new Date().toISOString(),
       };
       saveDb(db);
@@ -1476,13 +1834,36 @@ export const dbService = {
     } else {
       // Direct URL passed
       const splashBackgroundUrl = dataString.trim();
+
+      const existingIdx = currentPresets.findIndex((p) => p.url === splashBackgroundUrl);
+      if (existingIdx >= 0 && presetName && presetName.trim()) {
+        currentPresets[existingIdx].name = presetName.trim();
+      } else if (existingIdx === -1 && splashBackgroundUrl) {
+        const autoName =
+          presetName && presetName.trim()
+            ? presetName.trim()
+            : `Custom Splash BG (${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })})`;
+
+        currentPresets.push({
+          id: 'sbg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+          name: autoName,
+          url: splashBackgroundUrl,
+          isDefault:
+            splashBackgroundUrl === '/school-sunset-background.jpg' ||
+            splashBackgroundUrl === '/school-campus-background.jpg' ||
+            splashBackgroundUrl === '/splash_bg.jpg',
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       db.settings = {
         ...DEFAULT_SETTINGS,
         ...db.settings,
         splashBgImageUrl: splashBackgroundUrl,
+        splashBgPresets: currentPresets,
         updatedAt: new Date().toISOString(),
       };
-      if (splashBackgroundUrl === '/dashboard_bg.jpg' || splashBackgroundUrl === '/school_logo.png') {
+      if (splashBackgroundUrl === '/school-sunset-background.jpg' || splashBackgroundUrl === '/splash_bg.jpg' || splashBackgroundUrl === '/dashboard_bg.jpg') {
         delete db.settings.splashBgImageData;
         delete db.settings.splashBgImageMime;
       }
@@ -1491,8 +1872,25 @@ export const dbService = {
     }
   },
 
-  getSplashBackgroundStream(): { data: Buffer; mime: string } | null {
+  getSplashBackgroundStream(requestedFilename?: string): { data: Buffer; mime: string } | null {
     const db = ensureDbExists();
+
+    if (requestedFilename && Array.isArray(db.settings?.splashBgPresets)) {
+      const matchingPreset = db.settings.splashBgPresets.find(
+        (p) => p.url.includes(requestedFilename) && p.data
+      );
+      if (matchingPreset?.data) {
+        try {
+          return {
+            data: Buffer.from(matchingPreset.data, 'base64'),
+            mime: matchingPreset.mime || 'image/jpeg',
+          };
+        } catch (e) {
+          // Fall through
+        }
+      }
+    }
+
     if (db.settings?.splashBgImageData) {
       try {
         const buf = Buffer.from(db.settings.splashBgImageData, 'base64');
@@ -1509,7 +1907,9 @@ export const dbService = {
     try {
       if (fs.existsSync(UPLOADS_DIR)) {
         const files = fs.readdirSync(UPLOADS_DIR);
-        const splashFile = files.find((f) => f.startsWith('splash_'));
+        const splashFile = requestedFilename
+          ? files.find((f) => f === requestedFilename)
+          : files.find((f) => f.startsWith('splash_'));
         if (splashFile) {
           const filePath = path.join(UPLOADS_DIR, splashFile);
           const buf = fs.readFileSync(filePath);
@@ -1522,24 +1922,343 @@ export const dbService = {
       console.error('Error finding splash file in uploads:', e);
     }
 
-    // Fallback to general dashboard background
-    const bgStream = this.getBackgroundStream();
-    if (bgStream) return bgStream;
-
-    // Fallback to public
+    // Fallback to public sunset background first
     try {
-      const publicPath = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
-      if (fs.existsSync(publicPath)) {
-        return {
-          data: fs.readFileSync(publicPath),
-          mime: 'image/jpeg',
-        };
+      const candidatePaths = [
+        path.join(process.cwd(), 'public', 'school-sunset-background.jpg'),
+        path.join(process.cwd(), 'public', 'school-campus-background.jpg'),
+        path.join(process.cwd(), 'public', 'splash_bg.jpg'),
+        path.join(process.cwd(), 'public', 'dashboard_bg.jpg'),
+      ];
+      for (const p of candidatePaths) {
+        if (fs.existsSync(p)) {
+          return {
+            data: fs.readFileSync(p),
+            mime: 'image/jpeg',
+          };
+        }
       }
     } catch (e) {
       // No fallback
     }
 
     return null;
+  },
+
+  // PRESET MANAGEMENT METHODS
+  addLogoPreset(preset: Partial<BrandingPreset>): SystemSettings {
+    const db = ensureDbExists();
+    if (!preset.url) throw new Error('Logo preset URL or image data is required.');
+    const presets = Array.isArray(db.settings.logoPresets) ? [...db.settings.logoPresets] : [...DEFAULT_LOGO_PRESETS];
+    const newPreset: BrandingPreset = {
+      id: preset.id || 'logo_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      name: (preset.name || 'Custom Logo Preset').trim(),
+      url: preset.url.trim(),
+      data: preset.data,
+      mime: preset.mime,
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+    };
+    // Deduplicate
+    const existingIdx = presets.findIndex((p) => p.url === newPreset.url);
+    if (existingIdx >= 0) {
+      presets[existingIdx] = { ...presets[existingIdx], ...newPreset };
+    } else {
+      presets.push(newPreset);
+    }
+    db.settings.logoPresets = presets;
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  updateLogoPreset(id: string, updates: Partial<BrandingPreset>): SystemSettings {
+    const db = ensureDbExists();
+    const presets = Array.isArray(db.settings.logoPresets) ? [...db.settings.logoPresets] : [...DEFAULT_LOGO_PRESETS];
+    const targetIdx = presets.findIndex((p) => p.id === id);
+    if (targetIdx === -1) throw new Error('Logo preset not found.');
+    presets[targetIdx] = {
+      ...presets[targetIdx],
+      ...(updates.name ? { name: updates.name.trim() } : {}),
+      ...(updates.url ? { url: updates.url.trim() } : {}),
+    };
+    db.settings.logoPresets = presets;
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  deleteLogoPreset(id: string): SystemSettings {
+    const db = ensureDbExists();
+    const presets = Array.isArray(db.settings.logoPresets) ? [...db.settings.logoPresets] : [...DEFAULT_LOGO_PRESETS];
+    const target = presets.find((p) => p.id === id);
+    if (!target) throw new Error('Logo preset not found.');
+    if (target.isDefault) throw new Error('Default built-in presets cannot be deleted.');
+    
+    // Remove from presets
+    db.settings.logoPresets = presets.filter((p) => p.id !== id);
+
+    // If this preset was currently active, revert to default logo
+    if (db.settings.schoolLogoUrl === target.url) {
+      db.settings.schoolLogoUrl = '/school-logo.png';
+      delete db.settings.schoolLogoData;
+      delete db.settings.schoolLogoMime;
+    }
+
+    // Try deleting uploaded physical file if no other preset or setting uses it
+    if (target.url && target.url.startsWith('/api/uploads/')) {
+      const filename = path.basename(target.url);
+      const isUsedElsewhere =
+        db.settings.schoolLogoUrl === target.url ||
+        db.settings.dashboardBgImageUrl === target.url ||
+        db.settings.splashBgImageUrl === target.url ||
+        db.settings.logoPresets.some((p) => p.url === target.url) ||
+        (Array.isArray(db.settings.dashboardBgPresets) && db.settings.dashboardBgPresets.some((p) => p.url === target.url)) ||
+        (Array.isArray(db.settings.splashBgPresets) && db.settings.splashBgPresets.some((p) => p.url === target.url));
+      if (!isUsedElsewhere) {
+        try {
+          const filePath = path.join(UPLOADS_DIR, filename);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (e) {
+          console.warn('Could not remove unused file on preset delete:', e);
+        }
+      }
+    }
+
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  addDashboardBgPreset(preset: Partial<BrandingPreset>): SystemSettings {
+    const db = ensureDbExists();
+    if (!preset.url) throw new Error('Background preset URL or image data is required.');
+    const presets = Array.isArray(db.settings.dashboardBgPresets) ? [...db.settings.dashboardBgPresets] : [...DEFAULT_DASHBOARD_BG_PRESETS];
+    const newPreset: BrandingPreset = {
+      id: preset.id || 'dbg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      name: (preset.name || 'Custom Background Preset').trim(),
+      url: preset.url.trim(),
+      data: preset.data,
+      mime: preset.mime,
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+    };
+    const existingIdx = presets.findIndex((p) => p.url === newPreset.url);
+    if (existingIdx >= 0) {
+      presets[existingIdx] = { ...presets[existingIdx], ...newPreset };
+    } else {
+      presets.push(newPreset);
+    }
+    db.settings.dashboardBgPresets = presets;
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  updateDashboardBgPreset(id: string, updates: Partial<BrandingPreset>): SystemSettings {
+    const db = ensureDbExists();
+    const presets = Array.isArray(db.settings.dashboardBgPresets) ? [...db.settings.dashboardBgPresets] : [...DEFAULT_DASHBOARD_BG_PRESETS];
+    const targetIdx = presets.findIndex((p) => p.id === id);
+    if (targetIdx === -1) throw new Error('Dashboard background preset not found.');
+    presets[targetIdx] = {
+      ...presets[targetIdx],
+      ...(updates.name ? { name: updates.name.trim() } : {}),
+      ...(updates.url ? { url: updates.url.trim() } : {}),
+    };
+    db.settings.dashboardBgPresets = presets;
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  deleteDashboardBgPreset(id: string): SystemSettings {
+    const db = ensureDbExists();
+    const presets = Array.isArray(db.settings.dashboardBgPresets) ? [...db.settings.dashboardBgPresets] : [...DEFAULT_DASHBOARD_BG_PRESETS];
+    const target = presets.find((p) => p.id === id);
+    if (!target) throw new Error('Dashboard background preset not found.');
+    if (target.isDefault) throw new Error('Default built-in presets cannot be deleted.');
+    
+    db.settings.dashboardBgPresets = presets.filter((p) => p.id !== id);
+
+    // If active, revert to built-in campus background
+    if (db.settings.dashboardBgImageUrl === target.url) {
+      db.settings.dashboardBgImageUrl = '/school-campus-background.jpg';
+      delete db.settings.dashboardBgImageData;
+      delete db.settings.dashboardBgImageMime;
+    }
+
+    // Clean up physical file if unused
+    if (target.url && target.url.startsWith('/api/uploads/')) {
+      const filename = path.basename(target.url);
+      const isUsedElsewhere =
+        db.settings.schoolLogoUrl === target.url ||
+        db.settings.dashboardBgImageUrl === target.url ||
+        db.settings.splashBgImageUrl === target.url ||
+        (Array.isArray(db.settings.logoPresets) && db.settings.logoPresets.some((p) => p.url === target.url)) ||
+        db.settings.dashboardBgPresets.some((p) => p.url === target.url) ||
+        (Array.isArray(db.settings.splashBgPresets) && db.settings.splashBgPresets.some((p) => p.url === target.url));
+      if (!isUsedElsewhere) {
+        try {
+          const filePath = path.join(UPLOADS_DIR, filename);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (e) {
+          console.warn('Could not remove unused file on preset delete:', e);
+        }
+      }
+    }
+
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  addSplashBgPreset(preset: Partial<BrandingPreset>): SystemSettings {
+    const db = ensureDbExists();
+    if (!preset.url) throw new Error('Splash preset URL or image data is required.');
+    const presets = Array.isArray(db.settings.splashBgPresets) ? [...db.settings.splashBgPresets] : [...DEFAULT_SPLASH_BG_PRESETS];
+    const newPreset: BrandingPreset = {
+      id: preset.id || 'sbg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      name: (preset.name || 'Custom Splash Preset').trim(),
+      url: preset.url.trim(),
+      data: preset.data,
+      mime: preset.mime,
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+    };
+    const existingIdx = presets.findIndex((p) => p.url === newPreset.url);
+    if (existingIdx >= 0) {
+      presets[existingIdx] = { ...presets[existingIdx], ...newPreset };
+    } else {
+      presets.push(newPreset);
+    }
+    db.settings.splashBgPresets = presets;
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  updateSplashBgPreset(id: string, updates: Partial<BrandingPreset>): SystemSettings {
+    const db = ensureDbExists();
+    const presets = Array.isArray(db.settings.splashBgPresets) ? [...db.settings.splashBgPresets] : [...DEFAULT_SPLASH_BG_PRESETS];
+    const targetIdx = presets.findIndex((p) => p.id === id);
+    if (targetIdx === -1) throw new Error('Splash background preset not found.');
+    presets[targetIdx] = {
+      ...presets[targetIdx],
+      ...(updates.name ? { name: updates.name.trim() } : {}),
+      ...(updates.url ? { url: updates.url.trim() } : {}),
+    };
+    db.settings.splashBgPresets = presets;
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  deleteSplashBgPreset(id: string): SystemSettings {
+    const db = ensureDbExists();
+    const presets = Array.isArray(db.settings.splashBgPresets) ? [...db.settings.splashBgPresets] : [...DEFAULT_SPLASH_BG_PRESETS];
+    const target = presets.find((p) => p.id === id);
+    if (!target) throw new Error('Splash background preset not found.');
+    if (target.isDefault) throw new Error('Default built-in presets cannot be deleted.');
+    
+    db.settings.splashBgPresets = presets.filter((p) => p.id !== id);
+
+    // If active, revert to default sunset splash background
+    if (db.settings.splashBgImageUrl === target.url) {
+      db.settings.splashBgImageUrl = '/school-sunset-background.jpg';
+      delete db.settings.splashBgImageData;
+      delete db.settings.splashBgImageMime;
+    }
+
+    // Clean up physical file if unused
+    if (target.url && target.url.startsWith('/api/uploads/')) {
+      const filename = path.basename(target.url);
+      const isUsedElsewhere =
+        db.settings.schoolLogoUrl === target.url ||
+        db.settings.dashboardBgImageUrl === target.url ||
+        db.settings.splashBgImageUrl === target.url ||
+        (Array.isArray(db.settings.logoPresets) && db.settings.logoPresets.some((p) => p.url === target.url)) ||
+        (Array.isArray(db.settings.dashboardBgPresets) && db.settings.dashboardBgPresets.some((p) => p.url === target.url)) ||
+        db.settings.splashBgPresets.some((p) => p.url === target.url);
+      if (!isUsedElsewhere) {
+        try {
+          const filePath = path.join(UPLOADS_DIR, filename);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (e) {
+          console.warn('Could not remove unused file on preset delete:', e);
+        }
+      }
+    }
+
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  addThemePreset(preset: Partial<ThemePreset>): SystemSettings {
+    const db = ensureDbExists();
+    if (!preset.gradient) throw new Error('Theme gradient class string is required.');
+    const presets = Array.isArray(db.settings.customThemePresets) ? [...db.settings.customThemePresets] : [...DEFAULT_THEME_PRESETS];
+    const newPreset: ThemePreset = {
+      id: preset.id || 'theme_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      name: (preset.name || 'Custom Theme Preset').trim(),
+      gradient: preset.gradient.trim(),
+      colorBadge: preset.colorBadge || 'bg-[#1E3A8A]',
+      isDefault: false,
+      createdAt: new Date().toISOString(),
+    };
+    const existingIdx = presets.findIndex((p) => p.gradient === newPreset.gradient);
+    if (existingIdx >= 0) {
+      presets[existingIdx] = { ...presets[existingIdx], ...newPreset };
+    } else {
+      presets.push(newPreset);
+    }
+    db.settings.customThemePresets = presets;
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  updateThemePreset(id: string, updates: Partial<ThemePreset>): SystemSettings {
+    const db = ensureDbExists();
+    const presets = Array.isArray(db.settings.customThemePresets) ? [...db.settings.customThemePresets] : [...DEFAULT_THEME_PRESETS];
+    const targetIdx = presets.findIndex((p) => p.id === id);
+    if (targetIdx === -1) throw new Error('Theme preset not found.');
+    presets[targetIdx] = {
+      ...presets[targetIdx],
+      ...(updates.name ? { name: updates.name.trim() } : {}),
+      ...(updates.gradient ? { gradient: updates.gradient.trim() } : {}),
+      ...(updates.colorBadge ? { colorBadge: updates.colorBadge.trim() } : {}),
+    };
+    db.settings.customThemePresets = presets;
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
+  },
+
+  deleteThemePreset(id: string): SystemSettings {
+    const db = ensureDbExists();
+    const presets = Array.isArray(db.settings.customThemePresets) ? [...db.settings.customThemePresets] : [...DEFAULT_THEME_PRESETS];
+    const target = presets.find((p) => p.id === id);
+    if (!target) throw new Error('Theme preset not found.');
+    if (target.isDefault) throw new Error('Default built-in presets cannot be deleted.');
+    
+    db.settings.customThemePresets = presets.filter((p) => p.id !== id);
+
+    // If active theme, fallback to default 'royal-blue'
+    if (db.settings.dashboardBgTheme === target.id || db.settings.dashboardBgGradient === target.gradient) {
+      db.settings.dashboardBgTheme = 'royal-blue';
+      db.settings.dashboardBgGradient = 'from-[#1E3A8A] via-[#1D4ED8] to-[#172554]';
+    }
+
+    db.settings.updatedAt = new Date().toISOString();
+    saveDb(db);
+    return db.settings;
   },
 
   updateSettings(newSettings: Partial<SystemSettings>): SystemSettings {

@@ -36,7 +36,7 @@ export const Sidebar: React.FC<Props> = ({
   onBackToLists,
 }) => {
   const isSuperAdmin = userRole === 'Super Administrator';
-  const logoSrc = systemSettings?.schoolLogoUrl || '/school_logo.png';
+  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo.png';
   const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
   const listName = selectedRecruitmentList?.name || systemSettings?.academicYear || 'Recruitment Workspace';
 
@@ -57,8 +57,9 @@ export const Sidebar: React.FC<Props> = ({
           <img
             src={logoSrc}
             alt={`${schoolName} Logo`}
+            referrerPolicy="no-referrer"
             className="w-full h-full object-contain"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/school_logo.png'; }}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/school-logo.png'; }}
           />
         </div>
         <div className="min-w-0">

@@ -84,7 +84,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     return {
       schoolName: 'Sisters of Mary School-Girlstown, Inc.',
       subTitle: 'Internal Student Recruitment & Information Management System',
-      schoolLogoUrl: '/school_logo.png',
+      schoolLogoUrl: '/school-logo.png',
       maxExamScore: 100,
     };
   });
@@ -260,7 +260,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     setUseManualLogin(false);
   };
 
-  const logoSrc = settings.schoolLogoUrl || '/school_logo.png';
+  const logoSrc = settings.schoolLogoUrl || '/school-logo.png';
   const schoolName = settings.schoolName || 'Sisters of Mary School – Talisay, Cebu';
   const subTitle = settings.subTitle || 'Internal Student Recruitment & Information Management System';
 
@@ -278,9 +278,10 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
               <img
                 src={logoSrc}
                 alt={`${schoolName} Logo`}
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-contain"
                 onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = '/school_logo.png';
+                  (e.currentTarget as HTMLImageElement).src = '/school-logo.png';
                 }}
               />
             </div>

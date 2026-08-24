@@ -157,6 +157,25 @@ export interface AuditLogEntry {
   timestamp: string;
 }
 
+export interface BrandingPreset {
+  id: string;
+  name: string;
+  url: string;
+  data?: string;
+  mime?: string;
+  isDefault?: boolean;
+  createdAt?: string;
+}
+
+export interface ThemePreset {
+  id: string;
+  name: string;
+  gradient: string;
+  colorBadge: string;
+  isDefault?: boolean;
+  createdAt?: string;
+}
+
 export interface SystemSettings {
   id?: string;
   setupCompleted?: boolean;
@@ -169,7 +188,7 @@ export interface SystemSettings {
   schoolLogoData?: string;
   schoolLogoMime?: string;
   maxExamScore: number;
-  dashboardBgTheme?: 'royal-blue' | 'navy-gold' | 'emerald' | 'burgundy' | 'slate' | 'custom';
+  dashboardBgTheme?: 'royal-blue' | 'navy-gold' | 'emerald' | 'burgundy' | 'slate' | 'custom' | string;
   dashboardBgGradient?: string;
   dashboardBgImageUrl?: string;
   dashboardBgImageData?: string;
@@ -179,6 +198,12 @@ export interface SystemSettings {
   splashBgImageMime?: string;
   academicYear?: string;
   updatedAt?: string;
+
+  // Persistent Customization Presets
+  logoPresets?: BrandingPreset[];
+  dashboardBgPresets?: BrandingPreset[];
+  splashBgPresets?: BrandingPreset[];
+  customThemePresets?: ThemePreset[];
 }
 
 export interface DashboardStats {

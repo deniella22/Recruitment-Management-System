@@ -363,7 +363,8 @@ export async function fetchSettings(): Promise<SystemSettings> {
 
 export async function uploadSystemLogo(
   imageBase64: string,
-  mimeType?: string
+  mimeType?: string,
+  presetName?: string
 ): Promise<{ success: boolean; logoUrl: string; settings: SystemSettings }> {
   const res = await fetch('/api/settings/logo', {
     method: 'PUT',
@@ -371,7 +372,7 @@ export async function uploadSystemLogo(
       'Content-Type': 'application/json',
       ...getAuthHeaders(),
     },
-    body: JSON.stringify({ imageBase64, mimeType }),
+    body: JSON.stringify({ imageBase64, mimeType, presetName }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Failed to upload and save system logo');
@@ -380,7 +381,8 @@ export async function uploadSystemLogo(
 
 export async function uploadSystemBackground(
   imageBase64: string,
-  mimeType?: string
+  mimeType?: string,
+  presetName?: string
 ): Promise<{ success: boolean; backgroundUrl: string; settings: SystemSettings }> {
   const res = await fetch('/api/settings/background', {
     method: 'PUT',
@@ -388,7 +390,7 @@ export async function uploadSystemBackground(
       'Content-Type': 'application/json',
       ...getAuthHeaders(),
     },
-    body: JSON.stringify({ imageBase64, mimeType }),
+    body: JSON.stringify({ imageBase64, mimeType, presetName }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Failed to upload and save dashboard background');
@@ -397,7 +399,8 @@ export async function uploadSystemBackground(
 
 export async function uploadSplashBackground(
   imageBase64: string,
-  mimeType?: string
+  mimeType?: string,
+  presetName?: string
 ): Promise<{ success: boolean; splashBackgroundUrl: string; settings: SystemSettings }> {
   const res = await fetch('/api/settings/splash-background', {
     method: 'PUT',
@@ -405,7 +408,7 @@ export async function uploadSplashBackground(
       'Content-Type': 'application/json',
       ...getAuthHeaders(),
     },
-    body: JSON.stringify({ imageBase64, mimeType }),
+    body: JSON.stringify({ imageBase64, mimeType, presetName }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Failed to upload and save splash background');
@@ -423,6 +426,117 @@ export async function updateSettings(settings: Partial<SystemSettings>): Promise
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Failed to update system settings');
+  return json;
+}
+
+// Preset CRUD Helpers
+export async function deleteLogoPreset(id: string): Promise<SystemSettings> {
+  const res = await fetch(`/api/settings/presets/logo/${id}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete logo preset');
+  return json;
+}
+
+export async function renameLogoPreset(id: string, name: string): Promise<SystemSettings> {
+  const res = await fetch(`/api/settings/presets/logo/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ name }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update logo preset');
+  return json;
+}
+
+export async function deleteDashboardBgPreset(id: string): Promise<SystemSettings> {
+  const res = await fetch(`/api/settings/presets/dashboard-bg/${id}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete background preset');
+  return json;
+}
+
+export async function renameDashboardBgPreset(id: string, name: string): Promise<SystemSettings> {
+  const res = await fetch(`/api/settings/presets/dashboard-bg/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ name }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update background preset');
+  return json;
+}
+
+export async function deleteSplashBgPreset(id: string): Promise<SystemSettings> {
+  const res = await fetch(`/api/settings/presets/splash-bg/${id}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete splash preset');
+  return json;
+}
+
+export async function renameSplashBgPreset(id: string, name: string): Promise<SystemSettings> {
+  const res = await fetch(`/api/settings/presets/splash-bg/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ name }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update splash preset');
+  return json;
+}
+
+export async function addThemePreset(theme: { name: string; gradient: string; colorBadge?: string }): Promise<SystemSettings> {
+  const res = await fetch('/api/settings/presets/theme', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(theme),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to create theme preset');
+  return json;
+}
+
+export async function deleteThemePreset(id: string): Promise<SystemSettings> {
+  const res = await fetch(`/api/settings/presets/theme/${id}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeaders() },
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to delete theme preset');
+  return json;
+}
+
+export async function renameThemePreset(id: string, name: string, gradient?: string, colorBadge?: string): Promise<SystemSettings> {
+  const res = await fetch(`/api/settings/presets/theme/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ name, gradient, colorBadge }),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Failed to update theme preset');
   return json;
 }
 

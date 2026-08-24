@@ -72,7 +72,7 @@ export const DashboardView: React.FC<Props> = ({
   const averageExamScore = stats?.averageExamScore ?? 0;
   const recentStudents = stats?.recentStudents ?? [];
 
-  const logoSrc = systemSettings?.schoolLogoUrl || '/school_logo.png';
+  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo.png';
   const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
   const subTitle = systemSettings?.subTitle || 'Internal Student Information Management System';
   const academicYear = systemSettings?.academicYear || 'SY 2026-2027 Recruitment';
@@ -80,7 +80,7 @@ export const DashboardView: React.FC<Props> = ({
     systemSettings?.dashboardBgTheme,
     systemSettings?.dashboardBgGradient
   );
-  const bgImageUrl = systemSettings?.dashboardBgImageUrl;
+  const bgImageUrl = systemSettings?.dashboardBgImageUrl || '/school-campus-background.jpg';
 
   return (
     <div className="space-y-6">
@@ -150,8 +150,9 @@ export const DashboardView: React.FC<Props> = ({
           <img
             src={logoSrc}
             alt={`${schoolName} Logo`}
+            referrerPolicy="no-referrer"
             className="w-full h-full object-contain"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/school_logo.png'; }}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/school-logo.png'; }}
           />
         </div>
       </div>

@@ -1,71 +1,70 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="100%" height="100%">
   <defs>
-    <!-- Text path for top text: Sisters of Mary School-Girlstown, Inc. -->
-    <path id="topTextArc" d="M 68, 300 A 232,232 0 1,1 532, 300" fill="none" />
-    <!-- Text path for bottom text: * 1990 * -->
-    <path id="bottomTextArc" d="M 532, 300 A 232,232 0 0,1 68, 300" fill="none" />
+    <!-- Path for the top curved text: SISTERS OF MARY SCHOOL-GIRLSTOWN, INC. -->
+    <!-- Arc from ~190 degrees clockwise to ~-10 degrees -->
+    <path id="topTextArc" d="M 75,300 A 225,225 0 1,1 525,300" fill="none" />
+    <!-- Path for the bottom curved text: ★ 1990 ★ -->
+    <!-- Arc along bottom circle -->
+    <path id="bottomTextArc" d="M 105,300 A 195,195 0 0,0 495,300" fill="none" />
   </defs>
 
-  <style>
-    .logo-blue { fill: #001FD1; stroke: #001FD1; }
-    .logo-text-top {
-      font-family: 'Times New Roman', Times, 'Georgia', serif;
-      font-size: 34px;
-      font-weight: 900;
-      letter-spacing: 3.5px;
-      fill: #001FD1;
-    }
-    .logo-text-bottom {
-      font-family: 'Times New Roman', Times, 'Georgia', serif;
-      font-size: 38px;
-      font-weight: 900;
-      letter-spacing: 6px;
-      fill: #001FD1;
-    }
-  </style>
-
-  <!-- Background Canvas -->
   <rect width="600" height="600" fill="#FFFFFF" />
 
-  <!-- Outer Double Ring -->
-  <!-- Outermost thick circle -->
-  <circle cx="300" cy="300" r="282" fill="none" stroke="#001FD1" stroke-width="8" />
-  
-  <!-- Outer thin boundary circle -->
-  <circle cx="300" cy="300" r="270" fill="none" stroke="#001FD1" stroke-width="3" />
+  <!-- Outer Ring Circle -->
+  <circle cx="300" cy="300" r="280" fill="none" stroke="#0024E6" stroke-width="8" />
 
-  <!-- Inner boundary circle -->
-  <circle cx="300" cy="300" r="186" fill="none" stroke="#001FD1" stroke-width="4" />
+  <!-- Inner Ring Circle -->
+  <circle cx="300" cy="300" r="225" fill="none" stroke="#0024E6" stroke-width="7" />
 
-  <!-- Curved Text: SISTERS OF MARY SCHOOL-GIRLSTOWN, INC. -->
-  <text class="logo-text-top">
-    <textPath href="#topTextArc" startOffset="50%" text-anchor="middle">SISTERS OF MARY SCHOOL-GIRLSTOWN, INC.</textPath>
+  <!-- Top Curved Text -->
+  <text fill="#0024E6" font-family="'Arial Black', 'Helvetica Black', 'Impact', sans-serif" font-weight="900" font-size="28.5" letter-spacing="4.5">
+    <textPath href="#topTextArc" startOffset="50%" text-anchor="middle">
+      SISTERS OF MARY SCHOOL-GIRLSTOWN, INC.
+    </textPath>
   </text>
 
-  <!-- Curved Text: * 1990 * -->
-  <text class="logo-text-bottom">
-    <textPath href="#bottomTextArc" startOffset="50%" text-anchor="middle">✶ 1990 ✶</textPath>
+  <!-- Bottom Curved Text -->
+  <text fill="#0024E6" font-family="'Arial Black', 'Helvetica Black', 'Impact', sans-serif" font-weight="900" font-size="34" letter-spacing="6">
+    <textPath href="#bottomTextArc" startOffset="50%" text-anchor="middle">
+      ★ 1990 ★
+    </textPath>
   </text>
 
-  <!-- Center Emblem (Sisters of Mary Official Symbol) -->
-  <g class="logo-blue">
-    <!-- Top circle (head) -->
-    <circle cx="300" cy="180" r="42" fill="#001FD1" stroke="none" />
+  <!-- CENTRAL EMBLEM -->
+  <g fill="#0024E6">
+    <!-- Top Circle -->
+    <circle cx="300" cy="200" r="46" />
 
-    <!-- Middle horizontal bar -->
-    <path d="M 122,228 L 478,228 L 478,290 L 122,290 Z" fill="#001FD1" stroke="none" />
+    <!-- Center Lower Circle -->
+    <circle cx="300" cy="340" r="46" />
 
-    <!-- Lower inner circle -->
-    <circle cx="300" cy="326" r="42" fill="#001FD1" stroke="none" />
-
-    <!-- Lower thick crescent/U-bowl -->
-    <!-- Formed by outer semicircle arc from 122 to 478 (radius 178) and inner semicircle arc (radius 116) -->
+    <!-- Horizontal Bar & Lower Semicircular Basin (Merged Union Silhouette) -->
+    <!-- Bar top: y=230, Bar bottom: y=292, Left: x=115, Right: x=485 -->
+    <!-- Semicircular Ring outer radius: 185, inner radius: 125 -->
     <path d="
-      M 122, 304
-      A 178,178 0 0,0 478, 304
-      L 416, 304
-      A 116,116 0 0,1 184, 304
+      M 115,230
+      L 485,230
+      L 485,292
+      A 185,185 0 0,1 115,292
+      L 115,230
       Z
-    " fill="#001FD1" stroke="none" />
+    " />
+    <path d="
+      M 115,300
+      A 185,185 0 0,0 485,300
+      L 425,300
+      A 125,125 0 0,1 175,300
+      L 115,300
+      Z
+    " fill="#0024E6" />
+    
+    <!-- Cutout inside bowl to match white background inside cradle -->
+    <path d="
+      M 175,292
+      A 125,125 0 0,0 425,292
+      L 425,292
+      L 175,292
+      Z
+    " fill="#FFFFFF" />
   </g>
 </svg>

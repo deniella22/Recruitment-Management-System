@@ -37,7 +37,7 @@ export async function exportStudentsToPdf(
 
   // Try loading logo into base64 image if available
   let logoImg: HTMLImageElement | null = null;
-  const logoUrl = systemSettings?.schoolLogoUrl || '/school_logo.png';
+  const logoUrl = systemSettings?.schoolLogoUrl || '/school-logo.png';
   try {
     logoImg = await new Promise((resolve) => {
       const img = new Image();
@@ -233,7 +233,7 @@ export async function exportStudentProfilePdf(
 
   // Try loading logo
   let logoImg: HTMLImageElement | null = null;
-  const logoUrl = systemSettings?.schoolLogoUrl || '/school_logo.png';
+  const logoUrl = systemSettings?.schoolLogoUrl || '/school-logo.png';
   try {
     logoImg = await new Promise((resolve) => {
       const img = new Image();

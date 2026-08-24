@@ -190,10 +190,16 @@ export const RecruitmentListsView: React.FC<Props> = ({
   const totalApplicantsAll = lists.reduce((acc, curr) => acc + (curr.totalApplicants || 0), 0);
   const totalPassedAll = lists.reduce((acc, curr) => acc + (curr.passedApplicants || 0), 0);
 
-  const logoSrc = systemSettings.schoolLogoUrl || '/school_logo.png';
+  const logoSrc = systemSettings.schoolLogoUrl || '/school-logo.png';
+  const campusBg = systemSettings.dashboardBgImageUrl || '/school-campus-background.jpg';
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white">
+    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white relative">
+      {/* Subtle Campus Ambient Background */}
+      <div
+        className="fixed inset-0 bg-cover bg-center opacity-15 pointer-events-none -z-10"
+        style={{ backgroundImage: `url(${campusBg})` }}
+      />
       {/* Toast Notification */}
       {notification && (
         <div className="fixed bottom-5 right-5 z-50 animate-in fade-in slide-in-from-bottom-4 duration-200">
@@ -215,7 +221,7 @@ export const RecruitmentListsView: React.FC<Props> = ({
       )}
 
       {/* 1. PROFESSIONAL DARK-BLUE HEADER */}
-      <header className="bg-[#0f1d38] border-b border-blue-900/60 px-6 py-4 sticky top-0 z-30 shadow-xl backdrop-blur-md">
+      <header className="bg-[#0f1d38]/95 border-b border-blue-900/60 px-6 py-4 sticky top-0 z-30 shadow-xl backdrop-blur-md">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           {/* Left: School Logo + Name + Page Title */}
           <div className="flex items-center gap-4">
@@ -223,9 +229,10 @@ export const RecruitmentListsView: React.FC<Props> = ({
               <img
                 src={logoSrc}
                 alt="School Logo"
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-contain"
                 onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = '/school_logo.png';
+                  (e.currentTarget as HTMLImageElement).src = '/school-logo.png';
                 }}
               />
             </div>

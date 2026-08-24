@@ -19,7 +19,7 @@ export const Header: React.FC<Props> = ({
   selectedRecruitmentList,
   onBackToLists,
 }) => {
-  const logoSrc = systemSettings?.schoolLogoUrl || '/school_logo.png';
+  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo.png';
   const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
 
   const getPageTitle = (tab: string) => {
@@ -53,8 +53,9 @@ export const Header: React.FC<Props> = ({
           <img
             src={logoSrc}
             alt={`${schoolName} Logo`}
+            referrerPolicy="no-referrer"
             className="w-full h-full object-contain"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/school_logo.png'; }}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/school-logo.png'; }}
           />
         </div>
 

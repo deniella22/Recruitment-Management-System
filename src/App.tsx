@@ -48,12 +48,12 @@ const getInitialSettings = (): SystemSettings => {
     subTitle: 'Internal Student Recruitment & Information Management System',
     systemName: 'STUDENT RECRUITMENT MANAGEMENT SYSTEM',
     schoolLocation: 'TALISAY, CEBU, PHILIPPINES',
-    schoolLogoUrl: '/school_logo.png',
+    schoolLogoUrl: '/school-logo.png',
     maxExamScore: 100,
     dashboardBgTheme: 'custom',
     dashboardBgGradient: 'from-[#1E3A8A] via-[#1D4ED8] to-[#172554]',
-    dashboardBgImageUrl: '/dashboard_bg.jpg',
-    splashBgImageUrl: '/dashboard_bg.jpg',
+    dashboardBgImageUrl: '/school-campus-background.jpg',
+    splashBgImageUrl: '/school-sunset-background.jpg',
     academicYear: 'SY 2026-2027 Recruitment',
   };
 };
@@ -321,11 +321,11 @@ export default function App() {
       <SplashScreen
         onComplete={() => setShowSplash(false)}
         schoolName={systemSettings.schoolName}
-        logoSrc={systemSettings.schoolLogoUrl || '/school_logo.png'}
+        logoSrc={systemSettings.schoolLogoUrl || '/school-logo.png'}
         subTitle={systemSettings.subTitle}
         systemName={systemSettings.systemName}
         schoolLocation={systemSettings.schoolLocation}
-        splashBgImageUrl={systemSettings.splashBgImageUrl || systemSettings.dashboardBgImageUrl || '/dashboard_bg.jpg'}
+        splashBgImageUrl={systemSettings.splashBgImageUrl || '/school-sunset-background.jpg'}
       />
     );
   }

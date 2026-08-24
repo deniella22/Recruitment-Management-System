@@ -1147,21 +1147,21 @@ ACCURACY & INTEGRITY RULES:
 
     // Fallback: If disk was wiped or container redeployed, reconstruct from DB
     if (filename.startsWith('logo_')) {
-      const logo = dbService.getLogoStream();
+      const logo = dbService.getLogoStream(filename);
       if (logo) {
         res.setHeader('Content-Type', logo.mime);
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         return res.send(logo.data);
       }
     } else if (filename.startsWith('bg_')) {
-      const bg = dbService.getBackgroundStream();
+      const bg = dbService.getBackgroundStream(filename);
       if (bg) {
         res.setHeader('Content-Type', bg.mime);
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         return res.send(bg.data);
       }
     } else if (filename.startsWith('splash_')) {
-      const splash = dbService.getSplashBackgroundStream();
+      const splash = dbService.getSplashBackgroundStream(filename);
       if (splash) {
         res.setHeader('Content-Type', splash.mime);
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
@@ -1184,10 +1184,16 @@ ACCURACY & INTEGRITY RULES:
       res.setHeader('Cache-Control', 'no-cache');
       return res.send(logo.data);
     }
-    const defaultLogo = path.join(process.cwd(), 'public', 'school_logo.png');
-    if (fs.existsSync(defaultLogo)) {
-      res.setHeader('Content-Type', 'image/png');
-      return res.sendFile(defaultLogo);
+    const candidateLogos = [
+      path.join(process.cwd(), 'public', 'school-logo.png'),
+      path.join(process.cwd(), 'public', 'school_logo.png'),
+      path.join(process.cwd(), 'public', 'school_logo.svg'),
+    ];
+    for (const defaultLogo of candidateLogos) {
+      if (fs.existsSync(defaultLogo)) {
+        res.setHeader('Content-Type', defaultLogo.endsWith('.svg') ? 'image/svg+xml' : 'image/png');
+        return res.sendFile(defaultLogo);
+      }
     }
     return res.status(404).send('Default school logo not found');
   });
@@ -1199,14 +1205,14 @@ ACCURACY & INTEGRITY RULES:
       return res.status(403).json({ error: 'Only Super Administrator can update system logo.' });
     }
 
-    const { imageBase64, mimeType, logoUrl } = req.body;
+    const { imageBase64, mimeType, logoUrl, presetName } = req.body;
     const targetImage = imageBase64 || logoUrl;
     if (!targetImage) {
       return res.status(400).json({ error: 'Logo image data is required.' });
     }
 
     try {
-      const result = dbService.saveLogo(targetImage, mimeType);
+      const result = dbService.saveLogo(targetImage, mimeType, presetName);
       dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
@@ -1217,7 +1223,7 @@ ACCURACY & INTEGRITY RULES:
         success: true,
         logoUrl: result.logoUrl,
         settings: result.settings,
-        message: 'System logo saved and persisted successfully.',
+        message: 'System logo saved, persisted, and retained in presets successfully.',
       });
     } catch (err: any) {
       console.error('Logo upload error:', err);
@@ -1236,10 +1242,16 @@ ACCURACY & INTEGRITY RULES:
       res.setHeader('Cache-Control', 'no-cache');
       return res.send(bg.data);
     }
-    const defaultBg = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
-    if (fs.existsSync(defaultBg)) {
-      res.setHeader('Content-Type', 'image/jpeg');
-      return res.sendFile(defaultBg);
+    const candidateBgs = [
+      path.join(process.cwd(), 'public', 'school-campus-background.jpg'),
+      path.join(process.cwd(), 'public', 'school-sunset-background.jpg'),
+      path.join(process.cwd(), 'public', 'dashboard_bg.jpg'),
+    ];
+    for (const defaultBg of candidateBgs) {
+      if (fs.existsSync(defaultBg)) {
+        res.setHeader('Content-Type', 'image/jpeg');
+        return res.sendFile(defaultBg);
+      }
     }
     return res.status(404).send('Default dashboard background not found');
   });
@@ -1251,14 +1263,14 @@ ACCURACY & INTEGRITY RULES:
       return res.status(403).json({ error: 'Only Super Administrator can update system background.' });
     }
 
-    const { imageBase64, mimeType, backgroundUrl } = req.body;
+    const { imageBase64, mimeType, backgroundUrl, presetName } = req.body;
     const targetImage = imageBase64 || backgroundUrl;
     if (!targetImage) {
       return res.status(400).json({ error: 'Background image data is required.' });
     }
 
     try {
-      const result = dbService.saveBackground(targetImage, mimeType);
+      const result = dbService.saveBackground(targetImage, mimeType, presetName);
       dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
@@ -1269,7 +1281,7 @@ ACCURACY & INTEGRITY RULES:
         success: true,
         backgroundUrl: result.backgroundUrl,
         settings: result.settings,
-        message: 'Dashboard background saved and persisted successfully.',
+        message: 'Dashboard background saved, persisted, and retained in presets successfully.',
       });
     } catch (err: any) {
       console.error('Background upload error:', err);
@@ -1288,10 +1300,17 @@ ACCURACY & INTEGRITY RULES:
       res.setHeader('Cache-Control', 'no-cache');
       return res.send(splash.data);
     }
-    const defaultBg = path.join(process.cwd(), 'public', 'dashboard_bg.jpg');
-    if (fs.existsSync(defaultBg)) {
-      res.setHeader('Content-Type', 'image/jpeg');
-      return res.sendFile(defaultBg);
+    const candidateSplashBgs = [
+      path.join(process.cwd(), 'public', 'school-sunset-background.jpg'),
+      path.join(process.cwd(), 'public', 'school-campus-background.jpg'),
+      path.join(process.cwd(), 'public', 'splash_bg.jpg'),
+      path.join(process.cwd(), 'public', 'dashboard_bg.jpg'),
+    ];
+    for (const defaultBg of candidateSplashBgs) {
+      if (fs.existsSync(defaultBg)) {
+        res.setHeader('Content-Type', 'image/jpeg');
+        return res.sendFile(defaultBg);
+      }
     }
     return res.status(404).send('Default splash background not found');
   });
@@ -1303,14 +1322,14 @@ ACCURACY & INTEGRITY RULES:
       return res.status(403).json({ error: 'Only Super Administrator can update splash background.' });
     }
 
-    const { imageBase64, mimeType, splashBackgroundUrl } = req.body;
+    const { imageBase64, mimeType, splashBackgroundUrl, presetName } = req.body;
     const targetImage = imageBase64 || splashBackgroundUrl;
     if (!targetImage) {
       return res.status(400).json({ error: 'Splash background image data is required.' });
     }
 
     try {
-      const result = dbService.saveSplashBackground(targetImage, mimeType);
+      const result = dbService.saveSplashBackground(targetImage, mimeType, presetName);
       dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
@@ -1321,7 +1340,7 @@ ACCURACY & INTEGRITY RULES:
         success: true,
         splashBackgroundUrl: result.splashBackgroundUrl,
         settings: result.settings,
-        message: 'Splash screen background saved and persisted successfully.',
+        message: 'Splash screen background saved, persisted, and retained in presets successfully.',
       });
     } catch (err: any) {
       console.error('Splash background upload error:', err);
@@ -1357,6 +1376,10 @@ ACCURACY & INTEGRITY RULES:
       dashboardBgImageUrl,
       splashBgImageUrl,
       academicYear,
+      logoPresets,
+      dashboardBgPresets,
+      splashBgPresets,
+      customThemePresets,
     } = req.body;
 
     const updates: Partial<SystemSettings> = {};
@@ -1404,6 +1427,22 @@ ACCURACY & INTEGRITY RULES:
       updates.splashBgImageUrl = String(splashBgImageUrl).trim();
     }
 
+    if (Array.isArray(logoPresets)) {
+      updates.logoPresets = logoPresets;
+    }
+
+    if (Array.isArray(dashboardBgPresets)) {
+      updates.dashboardBgPresets = dashboardBgPresets;
+    }
+
+    if (Array.isArray(splashBgPresets)) {
+      updates.splashBgPresets = splashBgPresets;
+    }
+
+    if (Array.isArray(customThemePresets)) {
+      updates.customThemePresets = customThemePresets;
+    }
+
     if (maxExamScore !== undefined) {
       const scoreNum = Number(maxExamScore);
       if (isNaN(scoreNum) || scoreNum <= 0) {
@@ -1418,12 +1457,173 @@ ACCURACY & INTEGRITY RULES:
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Settings Updated',
-        details: `Updated system branding and configuration settings`,
+        details: `Updated system branding, presets, and configuration settings`,
       });
       return res.json(updated);
     } catch (err: any) {
       console.error('Settings update error:', err);
       return res.status(500).json({ error: err.message || 'Failed to update system settings.' });
+    }
+  });
+
+  // 13i. Preset Management Endpoints
+  // Logo Presets
+  app.post('/api/settings/presets/logo', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.addLogoPreset(req.body);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to add logo preset.' });
+    }
+  });
+
+  app.patch('/api/settings/presets/logo/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.updateLogoPreset(req.params.id, req.body);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to update logo preset.' });
+    }
+  });
+
+  app.delete('/api/settings/presets/logo/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.deleteLogoPreset(req.params.id);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to delete logo preset.' });
+    }
+  });
+
+  // Dashboard Background Presets
+  app.post('/api/settings/presets/dashboard-bg', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.addDashboardBgPreset(req.body);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to add background preset.' });
+    }
+  });
+
+  app.patch('/api/settings/presets/dashboard-bg/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.updateDashboardBgPreset(req.params.id, req.body);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to update background preset.' });
+    }
+  });
+
+  app.delete('/api/settings/presets/dashboard-bg/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.deleteDashboardBgPreset(req.params.id);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to delete background preset.' });
+    }
+  });
+
+  // Splash Background Presets
+  app.post('/api/settings/presets/splash-bg', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.addSplashBgPreset(req.body);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to add splash preset.' });
+    }
+  });
+
+  app.patch('/api/settings/presets/splash-bg/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.updateSplashBgPreset(req.params.id, req.body);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to update splash preset.' });
+    }
+  });
+
+  app.delete('/api/settings/presets/splash-bg/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.deleteSplashBgPreset(req.params.id);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to delete splash preset.' });
+    }
+  });
+
+  // Theme Presets
+  app.post('/api/settings/presets/theme', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.addThemePreset(req.body);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to add theme preset.' });
+    }
+  });
+
+  app.patch('/api/settings/presets/theme/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.updateThemePreset(req.params.id, req.body);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to update theme preset.' });
+    }
+  });
+
+  app.delete('/api/settings/presets/theme/:id', (req, res) => {
+    const currentUser = getCurrentUser(req);
+    if (!currentUser || currentUser.role !== 'Super Administrator') {
+      return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
+    }
+    try {
+      const updated = dbService.deleteThemePreset(req.params.id);
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to delete theme preset.' });
     }
   });
 

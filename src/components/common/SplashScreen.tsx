@@ -34,11 +34,11 @@ const WELCOME_LOADING_STAGES = [
 export const SplashScreen: React.FC<SplashScreenProps> = ({
   onComplete,
   schoolName = 'Sisters of Mary School-Girlstown, Inc.',
-  logoSrc = '/school_logo.png',
+  logoSrc = '/school-logo.png',
   subTitle = 'Internal Student Recruitment & Information Management System',
-  systemName = 'MALE STUDENT RECRUITMENT MANAGEMENT SYSTEM',
-  schoolLocation = 'ADLAS, SILANG, CAVITE, PHILIPPINES',
-  splashBgImageUrl = '/dashboard_bg.jpg',
+  systemName = 'STUDENT RECRUITMENT MANAGEMENT SYSTEM',
+  schoolLocation = 'TALISAY, CEBU, PHILIPPINES',
+  splashBgImageUrl = '/school-sunset-background.jpg',
   welcomeUser,
 }) => {
   const [progress, setProgress] = useState(0);
@@ -82,7 +82,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
     return () => clearInterval(interval);
   }, [duration]);
 
-  const activeBg = splashBgImageUrl || '/dashboard_bg.jpg';
+  const activeBg = splashBgImageUrl || '/school-sunset-background.jpg';
   const displaySystemTitle = systemName || subTitle || 'STUDENT RECRUITMENT MANAGEMENT SYSTEM';
 
   return (
@@ -90,7 +90,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       id="recruitment-splash-screen"
       className="fixed inset-0 z-50 flex flex-col justify-between items-center text-white select-none overflow-hidden"
     >
-      {/* 1. Full-screen School/Campus Background Image */}
+      {/* 1. Full-screen School Sunset Background Image */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-700 transform scale-100 brightness-[1.03] contrast-[1.02]"
         style={{
@@ -139,9 +139,10 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
             <img
               src={logoSrc}
               alt={`${schoolName} Logo`}
+              referrerPolicy="no-referrer"
               className="w-full h-full object-contain filter drop-shadow-xs transition-transform duration-500 hover:scale-105"
               onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = '/school_logo.png';
+                (e.currentTarget as HTMLImageElement).src = '/school-logo.png';
               }}
             />
           </div>
