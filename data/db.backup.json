@@ -17,6 +17,96 @@
     "dashboardBgImageUrl": "/school-campus-background.jpg",
     "splashBgImageUrl": "/school-sunset-background.jpg",
     "academicYear": "SY 2026-2027 Recruitment",
-    "updatedAt": "2026-08-20T02:58:34.414Z"
+    "logoPresets": [
+      {
+        "id": "default-blue-logo",
+        "name": "Official Blue Circular Emblem",
+        "url": "/school-logo.png",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "default-vector-emblem",
+        "name": "Vector Emblem",
+        "url": "/school_logo.svg",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "dashboardBgPresets": [
+      {
+        "id": "default-campus-grounds",
+        "name": "School Campus Grounds",
+        "url": "/school-campus-background.jpg",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "default-sunset-campus",
+        "name": "Campus Sunset Panorama",
+        "url": "/school-sunset-background.jpg",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "splashBgPresets": [
+      {
+        "id": "default-sunset-splash",
+        "name": "School Sunset Panorama",
+        "url": "/school-sunset-background.jpg",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "default-campus-splash",
+        "name": "School Campus Grounds",
+        "url": "/school-campus-background.jpg",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "customThemePresets": [
+      {
+        "id": "royal-blue",
+        "name": "Institutional Royal Blue",
+        "gradient": "from-[#1E3A8A] via-[#1D4ED8] to-[#172554]",
+        "colorBadge": "bg-[#1E3A8A]",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "navy-gold",
+        "name": "Navy & Amber Gold",
+        "gradient": "from-[#0F172A] via-[#1E3A8A] to-[#D97706]",
+        "colorBadge": "bg-[#0F172A]",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "emerald",
+        "name": "Academic Emerald",
+        "gradient": "from-[#064E3B] via-[#047857] to-[#022c22]",
+        "colorBadge": "bg-[#064E3B]",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "burgundy",
+        "name": "Classic Burgundy",
+        "gradient": "from-[#691B23] via-[#881337] to-[#4c0519]",
+        "colorBadge": "bg-[#691B23]",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "slate",
+        "name": "Slate Tech",
+        "gradient": "from-[#1e293b] via-[#334155] to-[#0f172a]",
+        "colorBadge": "bg-[#334155]",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      }
+    ],
+    "updatedAt": "2026-08-29T00:07:23.654Z"
   }
 }
