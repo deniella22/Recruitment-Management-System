@@ -92,10 +92,10 @@ export async function deleteRecruitmentList(id: string): Promise<{ success: bool
 
 export async function registerAccount(data: {
   fullName: string;
-  email: string;
   username: string;
   password: string;
   confirmPassword: string;
+  pin?: string;
 }): Promise<{ user: User; token: string; isNewAccount?: boolean }> {
   const res = await fetch('/api/auth/register', {
     method: 'POST',
@@ -107,7 +107,6 @@ export async function registerAccount(data: {
     const err: any = new Error(json.error || 'Failed to create account');
     err.existingAccount = json.existingAccount;
     err.existingUsername = json.existingUsername;
-    err.existingEmail = json.existingEmail;
     throw err;
   }
   return json;
@@ -117,7 +116,6 @@ export async function checkAccountExists(identifier: string): Promise<{
   exists: boolean;
   accountName?: string;
   username?: string;
-  email?: string;
   message?: string;
 }> {
   const res = await fetch('/api/auth/check-account', {
@@ -167,10 +165,10 @@ export async function checkStudentDuplicate(
 
 export async function registerInitialAdmin(data: {
   fullName: string;
-  email: string;
   username: string;
   password: string;
   confirmPassword: string;
+  pin?: string;
 }): Promise<{ user: User; token: string; isNewAccount?: boolean }> {
   const res = await fetch('/api/auth/register-admin', {
     method: 'POST',
@@ -196,19 +194,21 @@ export async function resetAllUsers(): Promise<{ success: boolean; message: stri
 }
 
 export async function loginUser(
-  usernameOrEmail: string,
-  password: string
+  username: string,
+  password: string,
+  pin?: string
 ): Promise<{ user: User; token: string; isNewAccount?: boolean; isFirstLogin?: boolean }> {
   const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: usernameOrEmail, identifier: usernameOrEmail, password }),
+    body: JSON.stringify({ username, identifier: username, password, pin }),
   });
   const json = await res.json();
   if (!res.ok) {
     const err: any = new Error(json.error || 'Invalid credentials');
     err.accountNotFound = json.accountNotFound;
     err.wrongPassword = json.wrongPassword;
+    err.wrongPin = json.wrongPin;
     err.deactivated = json.deactivated;
     err.identifier = json.identifier;
     throw err;

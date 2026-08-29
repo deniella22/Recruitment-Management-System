@@ -324,25 +324,22 @@ function validateAndSanitizeDb(raw: any): DbSchema {
   const rawStudents: StudentRecord[] = Array.isArray(raw?.students) ? raw.students : [];
   const rawLogs: AuditLogEntry[] = Array.isArray(raw?.auditLogs) ? raw.auditLogs : [];
 
-  // Deduplicate and sanitize users strictly by id, normalized username, and normalized email
+  // Deduplicate and sanitize users strictly by id and normalized username
   const seenUserIds = new Set<string>();
   const seenUsernames = new Set<string>();
-  const seenEmails = new Set<string>();
-  const cleanUsers: (User & { passwordHash: string })[] = [];
+  const cleanUsers: (User & { passwordHash: string; pinHash?: string })[] = [];
   const idRemap = new Map<string, string>(); // oldDuplicateId -> primaryId
 
   for (const u of rawUsers) {
     if (!u || !u.id) continue;
     const cleanId = u.id.trim();
     const cleanUsername = (u.username || '').trim().toLowerCase();
-    const cleanEmail = (u.email || '').trim().toLowerCase();
 
     // Check if duplicate of an already processed user
     const existing = cleanUsers.find(
       (existingUser) =>
         existingUser.id === cleanId ||
-        (cleanUsername && existingUser.username.toLowerCase() === cleanUsername) ||
-        (cleanEmail && existingUser.email.toLowerCase() === cleanEmail)
+        (cleanUsername && existingUser.username.toLowerCase() === cleanUsername)
     );
 
     if (existing) {
@@ -360,16 +357,15 @@ function validateAndSanitizeDb(raw: any): DbSchema {
 
     seenUserIds.add(cleanId);
     if (cleanUsername) seenUsernames.add(cleanUsername);
-    if (cleanEmail) seenEmails.add(cleanEmail);
 
     cleanUsers.push({
       ...u,
       id: cleanId,
       fullName: (u.fullName || '').trim(),
       username: (u.username || '').trim(),
-      email: (u.email || '').trim(),
       role: u.role || 'Recruitment Staff',
       status: u.status || 'Active',
+      hasPin: !!((u as any).pinHash || (u as any).pin),
       createdAt: u.createdAt || new Date().toISOString(),
     });
   }
@@ -636,26 +632,22 @@ export const dbService = {
     return db.users.find(
       (u) =>
         u.username.toLowerCase() === cleanId ||
-        u.email.toLowerCase() === cleanId ||
         u.id.toLowerCase() === cleanId
     );
   },
 
-  checkUserExists(email: string, username: string): { exists: boolean; matchedField?: 'email' | 'username'; existingUser?: User } {
+  checkUserExists(username: string): { exists: boolean; matchedField?: 'username'; existingUser?: User } {
     const db = ensureDbExists();
-    const cleanEmail = (email || '').trim().toLowerCase();
     const cleanUsername = (username || '').trim().toLowerCase();
 
     const match = db.users.find((u) => {
-      const uEmail = u.email.toLowerCase();
       const uUser = u.username.toLowerCase();
-      return (cleanUsername && uUser === cleanUsername) || (cleanEmail && uEmail === cleanEmail);
+      return cleanUsername && uUser === cleanUsername;
     });
 
     if (match) {
-      const { passwordHash: _, ...cleanMatch } = match;
-      const matchedField = (cleanUsername && match.username.toLowerCase() === cleanUsername) ? 'username' : 'email';
-      return { exists: true, matchedField, existingUser: cleanMatch };
+      const { passwordHash: _, pinHash: __, ...cleanMatch } = match as any;
+      return { exists: true, matchedField: 'username', existingUser: cleanMatch };
     }
     return { exists: false };
   },
@@ -665,40 +657,40 @@ export const dbService = {
     if (!id) return undefined;
     const user = db.users.find((u) => u.id === id);
     if (!user) return undefined;
-    const { passwordHash, ...userClean } = user;
+    const { passwordHash, pinHash, ...userClean } = user as any;
     return userClean;
   },
 
   createUser(userData: {
     fullName: string;
-    email: string;
     username: string;
     password: string;
+    pin?: string;
     role: User['role'];
   }): User {
     const db = ensureDbExists();
-    const cleanEmail = userData.email.trim().toLowerCase();
     const cleanUsername = userData.username.trim().toLowerCase();
 
     const existing = db.users.find(
-      (u) => u.username.toLowerCase() === cleanUsername || u.email.toLowerCase() === cleanEmail
+      (u) => u.username.toLowerCase() === cleanUsername
     );
     if (existing) {
-      if (existing.username.toLowerCase() === cleanUsername) {
-        throw new Error('An account with this username already exists. Please log in to your existing account.');
-      }
-      throw new Error('An account with this email address already exists. Please log in to your existing account.');
+      throw new Error('An account with this username already exists. Please log in to your existing account.');
     }
 
     const passwordHash = bcrypt.hashSync(userData.password, 10);
-    const newUser: User & { passwordHash: string } = {
+    const pin = (userData.pin || '1234').trim();
+    const pinHash = bcrypt.hashSync(pin, 10);
+
+    const newUser: User & { passwordHash: string; pinHash?: string } = {
       id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       fullName: userData.fullName.trim(),
-      email: cleanEmail,
       username: cleanUsername,
       passwordHash,
+      pinHash,
       role: userData.role,
       status: 'Active',
+      hasPin: true,
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
     };
@@ -713,13 +705,13 @@ export const dbService = {
     };
     saveDb(db);
 
-    console.log(`[DB] Successfully created and persisted account for: ${newUser.fullName} (@${newUser.username}, ${newUser.email}) - Total Users in DB: ${db.users.length}`);
+    console.log(`[DB] Successfully created and persisted account for: ${newUser.fullName} (@${newUser.username}) - Total Users in DB: ${db.users.length}`);
 
-    const { passwordHash: _, ...cleanUser } = newUser;
+    const { passwordHash: _, pinHash: __, ...cleanUser } = newUser;
     return cleanUser;
   },
 
-  updateUser(id: string, updates: Partial<User> & { password?: string }): User {
+  updateUser(id: string, updates: Partial<User> & { password?: string; pin?: string }): User {
     const db = ensureDbExists();
     const userIdx = db.users.findIndex((u) => u.id === id);
     if (userIdx === -1) {
@@ -735,23 +727,33 @@ export const dbService = {
       }
       db.users[userIdx].username = cleanUsername;
     }
-    if (updates.email) {
-      const cleanEmail = updates.email.trim().toLowerCase();
-      const duplicate = db.users.find((u) => u.id !== id && u.email.toLowerCase() === cleanEmail);
-      if (duplicate) {
-        throw new Error('An account with this email address already exists.');
-      }
-      db.users[userIdx].email = cleanEmail;
-    }
     if (updates.role) db.users[userIdx].role = updates.role;
     if (updates.status) db.users[userIdx].status = updates.status;
     if (updates.password) {
       db.users[userIdx].passwordHash = bcrypt.hashSync(updates.password, 10);
     }
+    if (updates.pin) {
+      (db.users[userIdx] as any).pinHash = bcrypt.hashSync(updates.pin.trim(), 10);
+      db.users[userIdx].hasPin = true;
+    }
 
     saveDb(db);
-    const { passwordHash, ...cleanUser } = db.users[userIdx];
+    const { passwordHash, pinHash, ...cleanUser } = db.users[userIdx] as any;
     return cleanUser;
+  },
+
+  verifyPin(inputPin: string, user: { pinHash?: string; pin?: string }): boolean {
+    const cleanPin = (inputPin || '').trim();
+    if (!cleanPin) return false;
+    if (user.pin && user.pin === cleanPin) return true;
+    if (user.pinHash) {
+      try {
+        return bcrypt.compareSync(cleanPin, user.pinHash);
+      } catch {
+        return false;
+      }
+    }
+    return cleanPin === '1234';
   },
 
   deleteUser(id: string): boolean {

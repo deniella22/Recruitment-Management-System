@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, User, Mail, Lock, AlertCircle, Building2 } from 'lucide-react';
+import { ShieldCheck, User, Lock, KeyRound, AlertCircle } from 'lucide-react';
 import { registerInitialAdmin } from '../lib/api';
 import { saveAccountToDevice } from '../lib/accountStorage';
 import { User as UserType, SystemSettings } from '../types';
@@ -13,16 +13,22 @@ export const AdminRegistrationModal: React.FC<Props> = ({ onSuccess, systemSetti
   const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo.png';
   const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!fullName.trim() || !username.trim() || !password) {
+      setError('Please fill in all required fields.');
+      return;
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
@@ -34,14 +40,24 @@ export const AdminRegistrationModal: React.FC<Props> = ({ onSuccess, systemSetti
       return;
     }
 
+    if (pin && !/^\d{4}$/.test(pin)) {
+      setError('Security PIN must be exactly 4 numeric digits (0-9).');
+      return;
+    }
+
+    if (pin && pin !== confirmPin) {
+      setError('Security PINs do not match.');
+      return;
+    }
+
     try {
       setLoading(true);
       const res = await registerInitialAdmin({
-        fullName,
-        email,
-        username,
+        fullName: fullName.trim(),
+        username: username.trim(),
         password,
         confirmPassword,
+        pin: pin || '1234',
       });
       saveAccountToDevice(res.user);
       onSuccess(res.user, res.token);
@@ -106,25 +122,6 @@ export const AdminRegistrationModal: React.FC<Props> = ({ onSuccess, systemSetti
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
-              Email Address <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                <Mail className="w-4 h-4" />
-              </div>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. admin@som-girlstown.edu.ph"
-                className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all font-medium"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
               Username <span className="text-red-500">*</span>
             </label>
             <div className="relative">
@@ -136,7 +133,7 @@ export const AdminRegistrationModal: React.FC<Props> = ({ onSuccess, systemSetti
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Choose username"
+                placeholder="Choose administrator username"
                 className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all font-medium"
               />
             </div>
@@ -177,6 +174,50 @@ export const AdminRegistrationModal: React.FC<Props> = ({ onSuccess, systemSetti
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Re-enter password"
                   className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all font-medium"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                4-Digit PIN <span className="text-gray-400 font-normal text-[11px]">(Optional, default 1234)</span>
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <input
+                  type="password"
+                  maxLength={4}
+                  pattern="[0-9]{4}"
+                  inputMode="numeric"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="e.g. 1234"
+                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all font-medium"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                Confirm 4-Digit PIN
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <input
+                  type="password"
+                  maxLength={4}
+                  pattern="[0-9]{4}"
+                  inputMode="numeric"
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="Re-enter 4 digits"
+                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all font-medium"
                 />
               </div>
             </div>

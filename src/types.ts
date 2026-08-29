@@ -3,12 +3,13 @@ export type UserRole = 'Super Administrator' | 'Recruitment Staff' | 'Viewer';
 export interface User {
   id: string;
   fullName: string;
-  email: string;
   username: string;
   role: UserRole;
   status: 'Active' | 'Inactive';
   createdAt: string;
   lastLoginAt?: string;
+  hasPin?: boolean;
+  pin?: string;
 }
 
 export type AdmissionStatus = 'A - PASS' | 'B - PENDING';
@@ -144,7 +145,6 @@ export interface SavedAccountInfo {
   id: string;
   fullName: string;
   username: string;
-  email: string;
   lastLoginAt?: string;
 }
 

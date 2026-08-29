@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Lock,
   User as UserIcon,
-  Mail,
+  KeyRound,
   AlertCircle,
   Shield,
   UserPlus,
@@ -11,7 +11,6 @@ import {
   EyeOff,
   CheckCircle2,
   RefreshCw,
-  Users,
   ChevronRight,
   X,
   Trash2,
@@ -37,14 +36,16 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
   // Login inputs
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginPin, setLoginPin] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Register inputs
   const [regFullName, setRegFullName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [regPin, setRegPin] = useState('');
+  const [regConfirmPin, setRegConfirmPin] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
   // Saved remembered accounts on this device
@@ -61,7 +62,6 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
   const [existingAccountWarning, setExistingAccountWarning] = useState<{
     message: string;
     username?: string;
-    email?: string;
   } | null>(null);
 
   // 2. Account Not Found Alert (during login)
@@ -94,7 +94,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     setSavedAccount(primaryAccount);
     setOtherSavedAccounts(otherAccounts);
     if (primaryAccount && !loginIdentifier) {
-      setLoginIdentifier(primaryAccount.username || primaryAccount.email);
+      setLoginIdentifier(primaryAccount.username);
     }
   };
 
@@ -127,12 +127,13 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     setSavedAccount(primaryAccount);
     setOtherSavedAccounts(otherAccounts);
     if (primaryAccount) {
-      setLoginIdentifier(primaryAccount.username || primaryAccount.email);
+      setLoginIdentifier(primaryAccount.username);
     } else {
       setLoginIdentifier('');
       setUseManualLogin(true);
     }
     setLoginPassword('');
+    setLoginPin('');
     setDeviceStorageNotice(`Account '${accountName}' removed from this device. (Your account and data remain safe on the server)`);
   };
 
@@ -142,13 +143,13 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
 
     const identifierToUse = loginIdentifier.trim();
     if (!identifierToUse || !loginPassword) {
-      setError('Please enter your username or email and password.');
+      setError('Please enter your username and password.');
       return;
     }
 
     try {
       setLoading(true);
-      const res = await loginUser(identifierToUse, loginPassword);
+      const res = await loginUser(identifierToUse, loginPassword, loginPin ? loginPin.trim() : undefined);
       // Persist saved account on device without duplication
       saveAccountToDevice(res.user);
       onSuccess(res.user, res.token, false);
@@ -159,7 +160,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
         setSavedAccount(primaryAccount);
         setOtherSavedAccounts(otherAccounts);
         setAccountNotFoundWarning({
-          message: err.message || "We couldn't find an account using those credentials.",
+          message: err.message || "We couldn't find an account matching that username.",
           identifier: identifierToUse,
         });
       } else if (err.wrongPassword) {
@@ -167,7 +168,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
         setWrongPasswordWarning(true);
         setLoginPassword('');
       } else {
-        setError(err.message || 'Invalid username/email or password. Please verify your credentials.');
+        setError(err.message || 'Invalid username, password, or security PIN. Please verify your credentials.');
       }
     } finally {
       setLoading(false);
@@ -182,10 +183,6 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
       setError('Please enter your full name.');
       return;
     }
-    if (!regEmail.trim() || !regEmail.includes('@')) {
-      setError('Please enter a valid email address.');
-      return;
-    }
     if (!regUsername.trim()) {
       setError('Please choose a username.');
       return;
@@ -198,15 +195,23 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
       setError('Passwords do not match. Please re-enter your password.');
       return;
     }
+    if (regPin && !/^\d{4}$/.test(regPin)) {
+      setError('4-Digit Security PIN must be exactly 4 numeric digits (0-9).');
+      return;
+    }
+    if (regPin && regPin !== regConfirmPin) {
+      setError('Security PINs do not match.');
+      return;
+    }
 
     try {
       setLoading(true);
       const res = await registerAccount({
         fullName: regFullName.trim(),
-        email: regEmail.trim().toLowerCase(),
         username: regUsername.trim().toLowerCase(),
         password: regPassword,
         confirmPassword: regConfirmPassword,
+        pin: regPin || '1234',
       });
 
       // Save to device storage without duplication
@@ -215,9 +220,8 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     } catch (err: any) {
       if (err.existingAccount) {
         setExistingAccountWarning({
-          message: err.message || 'An account with this email/username already exists. Please log in to your existing account.',
+          message: err.message || 'An account with this username already exists. Please log in to your existing account.',
           username: err.existingUsername,
-          email: err.existingEmail,
         });
       } else {
         setError(err.message || 'Failed to create account. Please check your details.');
@@ -227,18 +231,17 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     }
   };
 
-  const switchToLoginWithExisting = (usernameOrEmail?: string) => {
+  const switchToLoginWithExisting = (username?: string) => {
     clearAllWarnings();
     setMode('login');
     setUseManualLogin(true);
-    if (usernameOrEmail) {
-      setLoginIdentifier(usernameOrEmail);
+    if (username) {
+      setLoginIdentifier(username);
     } else if (regUsername) {
       setLoginIdentifier(regUsername);
-    } else if (regEmail) {
-      setLoginIdentifier(regEmail);
     }
     setLoginPassword('');
+    setLoginPin('');
   };
 
   const selectSavedAccount = (acc: SavedAccountInfo) => {
@@ -248,15 +251,15 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
       id: acc.id,
       fullName: acc.fullName,
       username: acc.username,
-      email: acc.email,
       role: 'Recruitment Staff',
       status: 'Active',
       createdAt: new Date().toISOString(),
     });
     setSavedAccount(primaryAccount);
     setOtherSavedAccounts(otherAccounts);
-    setLoginIdentifier(primaryAccount.username || primaryAccount.email);
+    setLoginIdentifier(primaryAccount.username);
     setLoginPassword('');
+    setLoginPin('');
     setUseManualLogin(false);
   };
 
@@ -345,7 +348,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                     Existing Account Found
                   </h4>
                   <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed font-medium">
-                    An account with this email/username already exists. Please log in to your existing account.
+                    An account with this username already exists. Please log in to your existing account.
                   </p>
                 </div>
               </div>
@@ -353,7 +356,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
               <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => switchToLoginWithExisting(existingAccountWarning.username || existingAccountWarning.email)}
+                  onClick={() => switchToLoginWithExisting(existingAccountWarning.username)}
                   className="flex-1 py-2.5 px-3 bg-[#1E3A8A] hover:bg-blue-900 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                 >
                   <LogIn className="w-3.5 h-3.5" />
@@ -364,9 +367,10 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                   onClick={() => {
                     setExistingAccountWarning(null);
                     setRegUsername('');
-                    setRegEmail('');
                     setRegPassword('');
                     setRegConfirmPassword('');
+                    setRegPin('');
+                    setRegConfirmPin('');
                   }}
                   className="py-2.5 px-3 bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
                 >
@@ -386,7 +390,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                     Account Not Found
                   </h4>
                   <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed font-medium">
-                    We couldn't find an account using those credentials.
+                    We couldn't find an account matching that username.
                   </p>
                 </div>
               </div>
@@ -398,11 +402,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                     const id = accountNotFoundWarning.identifier;
                     setMode('register');
                     clearAllWarnings();
-                    if (id.includes('@')) {
-                      setRegEmail(id);
-                    } else {
-                      setRegUsername(id);
-                    }
+                    setRegUsername(id);
                   }}
                   className="flex-1 py-2.5 px-3 bg-[#1E3A8A] hover:bg-blue-900 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                 >
@@ -414,6 +414,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                   onClick={() => {
                     setAccountNotFoundWarning(null);
                     setLoginPassword('');
+                    setLoginPin('');
                   }}
                   className="py-2.5 px-3 bg-white hover:bg-amber-100/60 text-amber-900 border border-amber-300 font-bold text-xs rounded-xl transition-all cursor-pointer text-center"
                 >
@@ -480,7 +481,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                           {savedAccount.fullName}
                         </h3>
                         <p className="text-[11px] text-gray-500 font-medium truncate">
-                          @{savedAccount.username} &bull; {savedAccount.email}
+                          @{savedAccount.username}
                         </p>
                       </div>
                     </div>
@@ -519,6 +520,27 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                         >
                           {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                        4-Digit PIN <span className="text-gray-400 font-normal">(Optional)</span>
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                          <KeyRound className="w-4 h-4" />
+                        </div>
+                        <input
+                          type="password"
+                          maxLength={4}
+                          pattern="[0-9]{4}"
+                          inputMode="numeric"
+                          value={loginPin}
+                          onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          placeholder="4-Digit PIN (if set)"
+                          className="w-full pl-10 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-xs tracking-widest font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all"
+                        />
                       </div>
                     </div>
 
@@ -594,6 +616,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                         setUseManualLogin(true);
                         setLoginIdentifier('');
                         setLoginPassword('');
+                        setLoginPin('');
                         clearAllWarnings();
                       }}
                       className="text-blue-800 hover:underline cursor-pointer"
@@ -619,7 +642,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                 <form onSubmit={handleLoginSubmit} className="space-y-3.5">
                   <div>
                     <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
-                      Username or Email Address
+                      Username
                     </label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
@@ -630,7 +653,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                         required
                         value={loginIdentifier}
                         onChange={(e) => setLoginIdentifier(e.target.value)}
-                        placeholder="Enter username or email"
+                        placeholder="Enter your username"
                         className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all"
                       />
                     </div>
@@ -659,6 +682,27 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                       >
                         {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                      4-Digit Security PIN <span className="text-gray-400 font-normal">(Optional)</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                        <KeyRound className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="password"
+                        maxLength={4}
+                        pattern="[0-9]{4}"
+                        inputMode="numeric"
+                        value={loginPin}
+                        onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="4-Digit PIN (if configured)"
+                        className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs tracking-widest font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all"
+                      />
                     </div>
                   </div>
 
@@ -715,43 +759,22 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
-                    Username
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                      <UserIcon className="w-4 h-4" />
-                    </div>
-                    <input
-                      type="text"
-                      required
-                      value={regUsername}
-                      onChange={(e) => setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
-                      placeholder="e.g. maria_santos"
-                      className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all"
-                    />
+              <div>
+                <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                  Username
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                    <UserIcon className="w-4 h-4" />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                      <Mail className="w-4 h-4" />
-                    </div>
-                    <input
-                      type="email"
-                      required
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="maria@sms.edu"
-                      className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all"
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={regUsername}
+                    onChange={(e) => setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
+                    placeholder="Choose username (e.g. maria_santos)"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all"
+                  />
                 </div>
               </div>
 
@@ -797,6 +820,50 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                       onChange={(e) => setRegConfirmPassword(e.target.value)}
                       placeholder="Repeat"
                       className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                    4-Digit PIN <span className="text-gray-400 font-normal text-[10px]">(Default: 1234)</span>
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                      <KeyRound className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="password"
+                      maxLength={4}
+                      pattern="[0-9]{4}"
+                      inputMode="numeric"
+                      value={regPin}
+                      onChange={(e) => setRegPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="e.g. 1234"
+                      className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs tracking-widest font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                    Confirm PIN
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                      <KeyRound className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="password"
+                      maxLength={4}
+                      pattern="[0-9]{4}"
+                      inputMode="numeric"
+                      value={regConfirmPin}
+                      onChange={(e) => setRegConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      placeholder="Repeat PIN"
+                      className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-gray-200 rounded-xl text-xs tracking-widest font-semibold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A] focus:border-transparent transition-all"
                     />
                   </div>
                 </div>

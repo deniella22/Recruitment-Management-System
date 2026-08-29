@@ -52,21 +52,19 @@ async function startServer() {
     });
   });
 
-  // 1b. Check if Username or Email Exists
+  // 1b. Check if Username Exists
   app.post('/api/auth/check-account', (req, res) => {
-    const { identifier, email, username } = req.body;
-    const checkEmail = (email || identifier || '').trim();
+    const { identifier, username } = req.body;
     const checkUsername = (username || identifier || '').trim();
 
-    const result = dbService.checkUserExists(checkEmail, checkUsername);
+    const result = dbService.checkUserExists(checkUsername);
     if (result.exists && result.existingUser) {
       return res.json({
         exists: true,
         matchedField: result.matchedField,
         accountName: result.existingUser.fullName,
         username: result.existingUser.username,
-        email: result.existingUser.email,
-        message: 'An account with this email/username already exists. Please log in to your existing account.',
+        message: 'An account with this username already exists. Please log in to your existing account.',
       });
     }
     return res.json({ exists: false });
@@ -75,9 +73,9 @@ async function startServer() {
   // 2. User Registration (Admin or Staff Account Creation)
   app.post('/api/auth/register', (req, res) => {
     try {
-      const { fullName, email, username, password, confirmPassword, role } = req.body;
+      const { fullName, username, password, confirmPassword, pin, role } = req.body;
 
-      if (!fullName || !email || !username || !password) {
+      if (!fullName || !username || !password) {
         return res.status(400).json({ error: 'All fields are required.' });
       }
 
@@ -89,14 +87,17 @@ async function startServer() {
         return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
       }
 
+      if (pin && !/^\d{4}$/.test(pin.trim())) {
+        return res.status(400).json({ error: 'PIN must be exactly 4 digits (0-9).' });
+      }
+
       // Check for existing account first
-      const check = dbService.checkUserExists(email, username);
+      const check = dbService.checkUserExists(username);
       if (check.exists && check.existingUser) {
         return res.status(409).json({
-          error: 'An account with this email/username already exists. Please log in to your existing account.',
+          error: 'An account with this username already exists. Please log in to your existing account.',
           existingAccount: true,
           existingUsername: check.existingUser.username,
-          existingEmail: check.existingUser.email,
           matchedField: check.matchedField,
         });
       }
@@ -107,9 +108,9 @@ async function startServer() {
 
       const newUser = dbService.createUser({
         fullName: fullName.trim(),
-        email: email.trim(),
         username: username.trim(),
         password,
+        pin: pin ? pin.trim() : '1234',
         role: userRole,
       });
 
@@ -140,9 +141,9 @@ async function startServer() {
         return res.status(400).json({ error: 'System already has an administrator account. Please log in or create a staff account.' });
       }
 
-      const { fullName, email, username, password, confirmPassword } = req.body;
+      const { fullName, username, password, confirmPassword, pin } = req.body;
 
-      if (!fullName || !email || !username || !password) {
+      if (!fullName || !username || !password) {
         return res.status(400).json({ error: 'All fields are required.' });
       }
 
@@ -154,11 +155,15 @@ async function startServer() {
         return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
       }
 
+      if (pin && !/^\d{4}$/.test(pin.trim())) {
+        return res.status(400).json({ error: 'Security PIN must be exactly 4 numeric digits.' });
+      }
+
       const newUser = dbService.createUser({
         fullName: fullName.trim(),
-        email: email.trim(),
         username: username.trim(),
         password,
+        pin: pin ? pin.trim() : '1234',
         role: 'Super Administrator',
       });
 
@@ -167,7 +172,7 @@ async function startServer() {
         userId: newUser.id,
         userName: newUser.fullName,
         action: 'System Initialized',
-        details: `Created initial Super Administrator account: ${newUser.username} (${newUser.email})`,
+        details: `Created initial Super Administrator account: @${newUser.username} (${newUser.fullName})`,
       });
 
       return res.json({
@@ -241,22 +246,22 @@ async function startServer() {
     }
   });
 
-  // 3. User Login (Supports Username or Email with Distinct Error Diagnostics)
+  // 3. User Login (Authenticates with Username, Password, and optional 4-Digit PIN)
   app.post('/api/auth/login', (req, res) => {
-    const { username, identifier, password } = req.body;
+    const { username, identifier, password, pin } = req.body;
     const loginId = (identifier || username || '').trim();
 
     if (!loginId || !password) {
-      return res.status(400).json({ error: 'Username/email and password are required.' });
+      return res.status(400).json({ error: 'Username and password are required.' });
     }
 
     const userWithHash = dbService.getUserByUsernameOrEmail(loginId);
     if (!userWithHash) {
       return res.status(401).json({
-        error: "We couldn't find an account using those credentials.",
+        error: "We couldn't find an account matching that username.",
         accountNotFound: true,
         identifier: loginId,
-        message: "We couldn't find an account using those credentials.",
+        message: "We couldn't find an account matching that username.",
       });
     }
 
@@ -277,16 +282,28 @@ async function startServer() {
       });
     }
 
+    // Check PIN if provided or if user requires PIN
+    if (pin !== undefined && pin !== null && String(pin).trim() !== '') {
+      const pinMatches = dbService.verifyPin(String(pin).trim(), userWithHash);
+      if (!pinMatches) {
+        return res.status(401).json({
+          error: 'Incorrect 4-Digit Security PIN. Please try again.',
+          wrongPin: true,
+          message: 'Incorrect 4-Digit Security PIN.',
+        });
+      }
+    }
+
     const isFirstLogin = !userWithHash.lastLoginAt;
     dbService.updateLastLogin(userWithHash.id);
     dbService.addAuditLog({
       userId: userWithHash.id,
       userName: userWithHash.fullName,
       action: 'Login',
-      details: `User ${userWithHash.username} (${userWithHash.fullName}) logged in successfully`,
+      details: `User @${userWithHash.username} (${userWithHash.fullName}) logged in successfully`,
     });
 
-    const { passwordHash, ...cleanUser } = userWithHash;
+    const { passwordHash, pinHash, ...cleanUser } = userWithHash as any;
 
     return res.json({
       user: cleanUser,
@@ -1643,17 +1660,17 @@ ACCURACY & INTEGRITY RULES:
       return res.status(403).json({ error: 'Access restricted to Super Administrator.' });
     }
 
-    const { fullName, email, username, password, role } = req.body;
-    if (!fullName || !email || !username || !password || !role) {
-      return res.status(400).json({ error: 'All user fields are required.' });
+    const { fullName, username, password, pin, role } = req.body;
+    if (!fullName || !username || !password || !role) {
+      return res.status(400).json({ error: 'All user fields (Full Name, Username, Password, Role) are required.' });
     }
 
     try {
       const newUser = dbService.createUser({
         fullName: fullName.trim(),
-        email: email.trim(),
         username: username.trim(),
         password,
+        pin: pin ? pin.trim() : '1234',
         role,
       });
 
@@ -1661,7 +1678,7 @@ ACCURACY & INTEGRITY RULES:
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'User Created',
-        details: `Created new staff account: ${newUser.username} (${newUser.role})`,
+        details: `Created new staff account: @${newUser.username} (${newUser.role})`,
       });
 
       return res.status(201).json(newUser);

@@ -5,38 +5,33 @@ const SAVED_ACCOUNTS_KEY = 'sms_saved_accounts';
 
 /**
  * Normalizes and deduplicates a list of saved accounts.
- * Strict deduplication by ID, lowercase username, and lowercase email.
+ * Strict deduplication by ID and lowercase username.
  */
 export function deduplicateSavedAccounts(accounts: SavedAccountInfo[]): SavedAccountInfo[] {
   if (!Array.isArray(accounts)) return [];
 
   const seenIds = new Set<string>();
   const seenUsernames = new Set<string>();
-  const seenEmails = new Set<string>();
   const deduplicated: SavedAccountInfo[] = [];
 
   for (const acc of accounts) {
-    if (!acc || (!acc.id && !acc.username && !acc.email)) continue;
+    if (!acc || (!acc.id && !acc.username)) continue;
 
     const id = (acc.id || '').trim();
     const username = (acc.username || '').trim().toLowerCase();
-    const email = (acc.email || '').trim().toLowerCase();
 
     // Check if already seen
     const idSeen = id && seenIds.has(id);
     const userSeen = username && seenUsernames.has(username);
-    const emailSeen = email && seenEmails.has(email);
 
-    if (!idSeen && !userSeen && !emailSeen) {
+    if (!idSeen && !userSeen) {
       if (id) seenIds.add(id);
       if (username) seenUsernames.add(username);
-      if (email) seenEmails.add(email);
 
       deduplicated.push({
-        id: id || `usr_${username || email}`,
+        id: id || `usr_${username}`,
         fullName: acc.fullName || acc.username || 'User',
         username: acc.username || '',
-        email: acc.email || '',
         lastLoginAt: acc.lastLoginAt || new Date().toISOString(),
       });
     }
@@ -68,7 +63,7 @@ export function getSavedAccountsFromDevice(): {
     const lastRaw = localStorage.getItem(LAST_ACCOUNT_KEY);
     if (lastRaw) {
       const parsedLast = JSON.parse(lastRaw);
-      if (parsedLast && (parsedLast.id || parsedLast.username || parsedLast.email)) {
+      if (parsedLast && (parsedLast.id || parsedLast.username)) {
         lastAcc = parsedLast;
       }
     }
@@ -85,12 +80,11 @@ export function getSavedAccountsFromDevice(): {
     }
 
     const primary = cleanList[0];
-    // "Other saved accounts" strictly excludes primary by ID, username, and email
+    // "Other saved accounts" strictly excludes primary by ID and username
     const others = cleanList.slice(1).filter((acc) => {
       const sameId = primary.id && acc.id === primary.id;
       const sameUser = primary.username && acc.username.toLowerCase() === primary.username.toLowerCase();
-      const sameEmail = primary.email && acc.email.toLowerCase() === primary.email.toLowerCase();
-      return !sameId && !sameUser && !sameEmail;
+      return !sameId && !sameUser;
     });
 
     // Write back cleaned state so dirty duplicates are pruned immediately
@@ -117,7 +111,6 @@ export function saveAccountToDevice(user: User): {
       id: user.id,
       fullName: user.fullName,
       username: user.username,
-      email: user.email,
       lastLoginAt: new Date().toISOString(),
     };
 
@@ -128,13 +121,11 @@ export function saveAccountToDevice(user: User): {
     // Filter out any matching entry
     const cleanId = (user.id || '').trim();
     const cleanUser = (user.username || '').trim().toLowerCase();
-    const cleanEmail = (user.email || '').trim().toLowerCase();
 
     const remaining = existing.filter((acc) => {
       const matchId = cleanId && acc.id === cleanId;
       const matchUser = cleanUser && acc.username.toLowerCase() === cleanUser;
-      const matchEmail = cleanEmail && acc.email.toLowerCase() === cleanEmail;
-      return !matchId && !matchUser && !matchEmail;
+      return !matchId && !matchUser;
     });
 
     const updatedList = [newEntry, ...remaining].slice(0, 5);
@@ -153,7 +144,6 @@ export function saveAccountToDevice(user: User): {
       id: user.id,
       fullName: user.fullName,
       username: user.username,
-      email: user.email,
       lastLoginAt: new Date().toISOString(),
     };
     return { primaryAccount: fallback, otherAccounts: [] };
@@ -164,12 +154,12 @@ export function saveAccountToDevice(user: User): {
  * Removes an account from this device's saved accounts list.
  * Does NOT delete the account from the database.
  */
-export function removeAccountFromDevice(idOrUsernameOrEmail: string): {
+export function removeAccountFromDevice(idOrUsername: string): {
   primaryAccount: SavedAccountInfo | null;
   otherAccounts: SavedAccountInfo[];
 } {
   try {
-    const target = (idOrUsernameOrEmail || '').trim().toLowerCase();
+    const target = (idOrUsername || '').trim().toLowerCase();
     if (!target) return getSavedAccountsFromDevice();
 
     const { primaryAccount, otherAccounts } = getSavedAccountsFromDevice();
@@ -178,8 +168,7 @@ export function removeAccountFromDevice(idOrUsernameOrEmail: string): {
     const remaining = existing.filter((acc) => {
       const matchId = acc.id && acc.id.toLowerCase() === target;
       const matchUser = acc.username && acc.username.toLowerCase() === target;
-      const matchEmail = acc.email && acc.email.toLowerCase() === target;
-      return !matchId && !matchUser && !matchEmail;
+      return !matchId && !matchUser;
     });
 
     const cleanList = deduplicateSavedAccounts(remaining);

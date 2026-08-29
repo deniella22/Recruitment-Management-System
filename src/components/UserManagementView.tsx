@@ -24,9 +24,9 @@ export const UserManagementView: React.FC = () => {
   // New User Form State
   const [showAddForm, setShowAddForm] = useState(false);
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [role, setRole] = useState<UserRole>('Recruitment Staff');
   const [submitting, setSubmitting] = useState(false);
 
@@ -51,8 +51,13 @@ export const UserManagementView: React.FC = () => {
     setError(null);
     setSuccessMsg(null);
 
-    if (!fullName || !email || !username || !password) {
-      setError('All fields are required.');
+    if (!fullName || !username || !password) {
+      setError('Full name, username, and password are required.');
+      return;
+    }
+
+    if (pin && !/^\d{4}$/.test(pin)) {
+      setError('4-Digit Security PIN must be exactly 4 numeric digits.');
       return;
     }
 
@@ -60,17 +65,17 @@ export const UserManagementView: React.FC = () => {
       setSubmitting(true);
       await createUser({
         fullName,
-        email,
         username,
         password,
+        pin: pin || '1234',
         role,
       });
-      setSuccessMsg(`User account '${username}' created successfully.`);
+      setSuccessMsg(`User account '@${username}' created successfully.`);
       setShowAddForm(false);
       setFullName('');
-      setEmail('');
       setUsername('');
       setPassword('');
+      setPin('');
       setRole('Recruitment Staff');
       loadUsers();
     } catch (err: any) {
@@ -167,18 +172,6 @@ export const UserManagementView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block font-bold text-gray-700 uppercase mb-1">Email Address</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. sister.maria@som-girlstown.edu.ph"
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
-              />
-            </div>
-
-            <div>
               <label className="block font-bold text-gray-700 uppercase mb-1">Username</label>
               <input
                 type="text"
@@ -197,8 +190,22 @@ export const UserManagementView: React.FC = () => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
+                placeholder="Password (at least 6 characters)"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
+              />
+            </div>
+
+            <div>
+              <label className="block font-bold text-gray-700 uppercase mb-1">4-Digit Security PIN (Optional)</label>
+              <input
+                type="password"
+                maxLength={4}
+                pattern="[0-9]{4}"
+                inputMode="numeric"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="4 digits (default 1234)"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-gray-200 rounded-xl tracking-widest focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
               />
             </div>
 
@@ -246,7 +253,6 @@ export const UserManagementView: React.FC = () => {
                 <tr>
                   <th className="py-3.5 px-4">Full Name</th>
                   <th className="py-3.5 px-4">Username</th>
-                  <th className="py-3.5 px-4">Email</th>
                   <th className="py-3.5 px-4">Role</th>
                   <th className="py-3.5 px-4">Account Status</th>
                   <th className="py-3.5 px-4 text-right">Actions</th>
@@ -256,8 +262,7 @@ export const UserManagementView: React.FC = () => {
                 {users.map((u) => (
                   <tr key={u.id} className="hover:bg-blue-50/50 transition-colors">
                     <td className="py-3.5 px-4 font-bold text-gray-900">{u.fullName}</td>
-                    <td className="py-3.5 px-4 font-mono font-semibold text-gray-800">{u.username}</td>
-                    <td className="py-3.5 px-4 text-gray-600">{u.email}</td>
+                    <td className="py-3.5 px-4 font-mono font-semibold text-gray-800">@{u.username}</td>
                     <td className="py-3.5 px-4">
                       <span className="inline-flex items-center gap-1 font-bold text-xs text-gray-800">
                         <Shield className="w-3.5 h-3.5 text-[#1E3A8A]" />
