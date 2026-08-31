@@ -31,7 +31,7 @@ interface Props {
 }
 
 export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, systemSettings }) => {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'landing' | 'login' | 'register'>('landing');
 
   // Login inputs
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -134,7 +134,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     }
     setLoginPassword('');
     setLoginPin('');
-    setDeviceStorageNotice(`Account '${accountName}' removed from this device. (Your account and data remain safe on the server)`);
+    setDeviceStorageNotice(`Account '${accountName}' removed from this device. (Your account and data remain safe in the database)`);
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -261,6 +261,7 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
     setLoginPassword('');
     setLoginPin('');
     setUseManualLogin(false);
+    setMode('login');
   };
 
   const logoSrc = settings.schoolLogoUrl || '/school-logo.png';
@@ -298,45 +299,173 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
               </p>
             </div>
 
-            <p className="text-xs text-gray-500 font-medium pt-0.5">
-              Create a new account or log in to your existing account.
+            <p className="text-xs text-gray-500 font-semibold pt-0.5 italic">
+              "Manage Recruitment. Preserve Every Record."
             </p>
           </div>
 
-          {/* Mode Switcher Tabs */}
-          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-2xl border border-slate-200/80">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('login');
-                clearAllWarnings();
-              }}
-              className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                mode === 'login'
-                  ? 'bg-white text-[#1E3A8A] shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Login to Account</span>
-            </button>
+          {/* Mode Switcher / Navigation Header */}
+          {mode !== 'landing' && (
+            <div className="flex items-center justify-between pb-1 border-b border-gray-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('landing');
+                  clearAllWarnings();
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-900 hover:text-blue-700 py-1 px-2.5 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all cursor-pointer"
+              >
+                <span>&larr; Back to Main Menu</span>
+              </button>
+              <span className="text-[11px] font-black uppercase tracking-wider text-gray-400">
+                {mode === 'login' ? 'Existing Account' : 'New Account'}
+              </span>
+            </div>
+          )}
 
-            <button
-              type="button"
-              onClick={() => {
-                setMode('register');
-                clearAllWarnings();
-              }}
-              className={`py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                mode === 'register'
-                  ? 'bg-white text-[#1E3A8A] shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Create New Account</span>
-            </button>
-          </div>
+          {/* 1. LANDING MODE */}
+          {mode === 'landing' && (
+            <div className="space-y-4 pt-1">
+              {/* Quick Resume Saved Account Card (if present) */}
+              {savedAccount && (
+                <div className="p-4 bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50/50 border-2 border-blue-200 rounded-2xl space-y-3 shadow-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 bg-[#1E3A8A] text-white rounded-xl flex items-center justify-center font-black text-base uppercase shadow-xs shrink-0">
+                        {savedAccount.fullName.charAt(0) || 'U'}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-900 rounded-full text-[9px] font-black uppercase tracking-wider">
+                          <CheckCircle2 className="w-2.5 h-2.5 text-blue-700" />
+                          <span>Saved Workspace</span>
+                        </div>
+                        <h3 className="text-xs font-extrabold text-gray-900 truncate mt-0.5">
+                          {savedAccount.fullName}
+                        </h3>
+                        <p className="text-[11px] text-gray-500 font-medium truncate">
+                          @{savedAccount.username}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      title="Remove saved account shortcut from this browser"
+                      onClick={(e) => handleRemoveFromDevice(savedAccount.id || savedAccount.username, savedAccount.fullName, e)}
+                      className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-all cursor-pointer shrink-0 ml-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('login');
+                      setUseManualLogin(false);
+                      clearAllWarnings();
+                    }}
+                    className="w-full py-2.5 px-4 bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    <span>Restore Workspace for {savedAccount.fullName.split(' ')[0]}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Main Primary Choice Buttons */}
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  id="btn-login-existing-account"
+                  onClick={() => {
+                    setMode('login');
+                    setUseManualLogin(true);
+                    clearAllWarnings();
+                  }}
+                  className="w-full p-4 bg-gradient-to-r from-[#1E3A8A] via-[#1D4ED8] to-[#1E3A8A] hover:brightness-110 text-white rounded-2xl shadow-md hover:shadow-lg transition-all flex items-center justify-between text-left group cursor-pointer border border-blue-900/30"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center border border-white/20 group-hover:scale-105 transition-transform">
+                      <LogIn className="w-5 h-5 text-amber-300" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black tracking-tight">
+                        Login to Existing Account
+                      </h3>
+                      <p className="text-[11px] text-blue-100 font-normal mt-0.5">
+                        Restore persistent candidate records & workspace
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-blue-200 group-hover:translate-x-1 transition-transform" />
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-create-new-account"
+                  onClick={() => {
+                    setMode('register');
+                    clearAllWarnings();
+                  }}
+                  className="w-full p-4 bg-white hover:bg-slate-50 text-gray-800 rounded-2xl border-2 border-slate-200 hover:border-blue-300 shadow-xs hover:shadow-md transition-all flex items-center justify-between text-left group cursor-pointer"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-blue-50 text-[#1E3A8A] flex items-center justify-center border border-blue-100 group-hover:scale-105 transition-transform">
+                      <UserPlus className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-[#1E3A8A] tracking-tight">
+                        Create New Account
+                      </h3>
+                      <p className="text-[11px] text-gray-500 font-normal mt-0.5">
+                        Set up a new isolated recruitment workspace
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+
+              {/* Other saved accounts if any */}
+              {otherSavedAccounts.length > 0 && (
+                <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    Other saved accounts on this device:
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    {otherSavedAccounts.map((acc) => (
+                      <div
+                        key={acc.id || acc.username}
+                        className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 text-xs transition-all"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => selectSavedAccount(acc)}
+                          className="text-left flex-1 min-w-0 cursor-pointer flex items-center gap-2"
+                        >
+                          <div className="w-6 h-6 rounded-md bg-[#1E3A8A] text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                            {acc.fullName.charAt(0) || 'U'}
+                          </div>
+                          <div className="truncate">
+                            <span className="font-bold text-gray-800">{acc.fullName}</span>
+                            <span className="text-gray-500 text-[11px] ml-1">(@{acc.username})</span>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          title="Remove from device"
+                          onClick={(e) => handleRemoveFromDevice(acc.id || acc.username, acc.fullName, e)}
+                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 1. Existing Account Conflict Alert (During Register) */}
           {existingAccountWarning && (
@@ -716,10 +845,33 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                     ) : (
                       <>
                         <LogIn className="w-4 h-4" />
-                        <span>Log In to System</span>
+                        <span>Log In & Restore Workspace</span>
                       </>
                     )}
                   </button>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-between text-xs pt-2 gap-2 text-gray-500 font-bold border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('landing');
+                        clearAllWarnings();
+                      }}
+                      className="text-gray-600 hover:text-gray-900 cursor-pointer"
+                    >
+                      &larr; Back to Main Menu
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('register');
+                        clearAllWarnings();
+                      }}
+                      className="text-blue-800 hover:underline cursor-pointer"
+                    >
+                      Need a new account? Create one
+                    </button>
+                  </div>
 
                   {savedAccount && useManualLogin && (
                     <div className="text-center pt-1">
@@ -887,10 +1039,33 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
                 ) : (
                   <>
                     <UserPlus className="w-4 h-4" />
-                    <span>Create Account & Start</span>
+                    <span>Create Account & Open Workspace</span>
                   </>
                 )}
               </button>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between text-xs pt-2 gap-2 text-gray-500 font-bold border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('landing');
+                    clearAllWarnings();
+                  }}
+                  className="text-gray-600 hover:text-gray-900 cursor-pointer"
+                >
+                  &larr; Back to Main Menu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    clearAllWarnings();
+                  }}
+                  className="text-blue-800 hover:underline cursor-pointer"
+                >
+                  Already have an account? Log In
+                </button>
+              </div>
             </form>
           )}
 

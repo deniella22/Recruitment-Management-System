@@ -10,6 +10,7 @@ import {
   fetchAuthStatus,
   fetchDashboardStats,
   fetchStudents,
+  fetchRecruitmentListById,
   deleteStudent,
   downloadExcelReport,
   exportStudentsToExcel,
@@ -117,6 +118,21 @@ export default function App() {
           // Ignore storage error
         }
       }
+
+      // If user is authenticated, check for saved active recruitment list to seamlessly resume workspace
+      if (status.currentUser) {
+        const savedListId = localStorage.getItem('sms_active_recruitment_list_id');
+        if (savedListId) {
+          try {
+            const list = await fetchRecruitmentListById(savedListId);
+            if (list) {
+              setSelectedRecruitmentList(list as any);
+            }
+          } catch (err) {
+            localStorage.removeItem('sms_active_recruitment_list_id');
+          }
+        }
+      }
     } catch (err: any) {
       console.error('Failed to initialize auth status:', err);
       setAuthError(err?.message || 'Failed to initialize system connection.');
@@ -165,6 +181,7 @@ export default function App() {
     setStudents([]);
     setDashboardStats(null);
     setSelectedRecruitmentList(null); // Return to Recruitment Lists Dashboard after Login
+    localStorage.removeItem('sms_active_recruitment_list_id');
     setCurrentUser(user);
     setHasUsers(true);
     if (isNewAccount) {
@@ -176,6 +193,7 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('sms_auth_token');
+    localStorage.removeItem('sms_active_recruitment_list_id');
     setCurrentUser(null);
     setSelectedRecruitmentList(null);
     setStudents([]);
@@ -396,6 +414,7 @@ export default function App() {
         currentUser={currentUser}
         systemSettings={systemSettings}
         onSelectList={(list) => {
+          localStorage.setItem('sms_active_recruitment_list_id', list.id);
           setSelectedRecruitmentList(list);
           setActiveTab('dashboard');
         }}
@@ -454,6 +473,7 @@ export default function App() {
         systemSettings={systemSettings}
         selectedRecruitmentList={selectedRecruitmentList}
         onBackToLists={() => {
+          localStorage.removeItem('sms_active_recruitment_list_id');
           setSelectedRecruitmentList(null);
           setActiveTab('dashboard');
         }}
@@ -468,6 +488,7 @@ export default function App() {
           systemSettings={systemSettings}
           selectedRecruitmentList={selectedRecruitmentList}
           onBackToLists={() => {
+            localStorage.removeItem('sms_active_recruitment_list_id');
             setSelectedRecruitmentList(null);
             setActiveTab('dashboard');
           }}

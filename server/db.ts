@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
+import pg from 'pg';
 import { User, StudentRecord, SiblingRecord, AuditLogEntry, SystemSettings, BrandingPreset, ThemePreset, RecruitmentList, RecruitmentListWithStats, PaginatedResult } from '../src/types.js';
 
 export function sanitizeStudentRecord(s: any): StudentRecord {
@@ -571,6 +572,123 @@ function loadDbFromDisk(): DbSchema {
   return initialDb;
 }
 
+let pgPool: pg.Pool | null = null;
+let pgInitialized = false;
+let dbDriverType: 'PostgreSQL' | 'Local Persistent File' = 'Local Persistent File';
+
+function getPgPool(): pg.Pool | null {
+  const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONNECTION_STRING;
+  if (!dbUrl || dbUrl.trim() === '') return null;
+  if (!pgPool) {
+    const cleanUrl = dbUrl.trim();
+    const isLocal = cleanUrl.includes('localhost') || cleanUrl.includes('127.0.0.1');
+    pgPool = new pg.Pool({
+      connectionString: cleanUrl,
+      ssl: isLocal ? false : { rejectUnauthorized: false },
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+    pgPool.on('error', (err) => {
+      console.error('[DB] Unexpected error on idle PostgreSQL client:', err);
+    });
+  }
+  return pgPool;
+}
+
+export function getDatabaseStatus(): {
+  driver: 'PostgreSQL' | 'Local Persistent File';
+  pgConnected: boolean;
+  userCount: number;
+  studentCount: number;
+  recruitmentListCount: number;
+} {
+  const db = ensureDbExists();
+  return {
+    driver: dbDriverType,
+    pgConnected: pgInitialized,
+    userCount: db.users.length,
+    studentCount: db.students.length,
+    recruitmentListCount: (db.recruitmentLists || []).length,
+  };
+}
+
+export async function initDatabaseAsync(): Promise<void> {
+  // Always load from local disk / backup first for instant readiness
+  loadDbFromDisk();
+
+  const pool = getPgPool();
+  if (!pool) {
+    if (process.env.NODE_ENV === 'production' && !process.env.AIS_SANDBOX) {
+      console.warn('======================================================================');
+      console.warn('[DB WARNING] Running in PRODUCTION mode without DATABASE_URL!');
+      console.warn('Render container filesystems are ephemeral and reset on redeployments.');
+      console.warn('To ensure 100% permanent data persistence across restarts and redeploys:');
+      console.warn('1. Create a PostgreSQL Database on Render (or Neon/Supabase).');
+      console.warn('2. Add the DATABASE_URL environment variable in your Render dashboard.');
+      console.warn('======================================================================');
+    } else {
+      console.log('[DB] Persistence: Using local crash-safe atomic persistent disk storage.');
+    }
+    dbDriverType = 'Local Persistent File';
+    return;
+  }
+
+  try {
+    console.log('[DB] Connecting to PostgreSQL database for production cloud persistence...');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_store (
+        key VARCHAR(128) PRIMARY KEY,
+        data JSONB NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Check if cloud copy exists
+    const res = await pool.query('SELECT data FROM system_store WHERE key = $1', ['main_db']);
+    if (res.rows.length > 0 && res.rows[0].data) {
+      const cloudDb = res.rows[0].data;
+      const valid = validateAndSanitizeDb(cloudDb);
+
+      // Check if local file has data that needs migration (e.g. if local has records and cloud has 0 users)
+      const localCurrent = ensureDbExists();
+      if (valid.users.length === 0 && localCurrent.users.length > 0) {
+        console.log(`[DB Migration] Migrating ${localCurrent.users.length} user(s) and ${localCurrent.students.length} record(s) from local storage into PostgreSQL...`);
+        await pool.query(
+          'INSERT INTO system_store (key, data, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()',
+          ['main_db', JSON.stringify(localCurrent)]
+        );
+        inMemoryDb = localCurrent;
+      } else {
+        inMemoryDb = valid;
+        try {
+          fs.writeFileSync(DB_FILE, JSON.stringify(valid, null, 2), 'utf-8');
+          fs.writeFileSync(DB_BACKUP_FILE, JSON.stringify(valid, null, 2), 'utf-8');
+        } catch (fErr) {}
+      }
+
+      pgInitialized = true;
+      dbDriverType = 'PostgreSQL';
+      console.log(`[DB] Successfully loaded persistent state from PostgreSQL (${inMemoryDb.users.length} users, ${inMemoryDb.students.length} student records, ${(inMemoryDb.recruitmentLists || []).length} lists).`);
+    } else {
+      // First-time PostgreSQL initialization: migrate all current database state into PostgreSQL
+      const current = ensureDbExists();
+      await pool.query(
+        'INSERT INTO system_store (key, data, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()',
+        ['main_db', JSON.stringify(current)]
+      );
+      pgInitialized = true;
+      dbDriverType = 'PostgreSQL';
+      console.log(`[DB Migration] Initialized PostgreSQL store and migrated current application data (${current.users.length} users, ${current.students.length} student records).`);
+    }
+  } catch (err: any) {
+    console.error('[DB ERROR] Failed to connect to PostgreSQL:', err.message);
+    if (process.env.NODE_ENV === 'production') {
+      console.warn('[DB] Falling back to local file storage temporarily.');
+    }
+  }
+}
+
 function ensureDbExists(): DbSchema {
   if (inMemoryDb) {
     return inMemoryDb;
@@ -602,8 +720,18 @@ function saveDb(db: DbSchema): void {
       fs.writeFileSync(DB_FILE, jsonString, 'utf-8');
     } catch (directErr) {
       console.error('[DB] Fallback direct write failed:', directErr);
-      throw new Error('Database write failure: Unable to persist data to disk.');
     }
+  }
+
+  // 3. Persist to PostgreSQL cloud database if connected
+  const pool = getPgPool();
+  if (pool && pgInitialized) {
+    pool.query(
+      'INSERT INTO system_store (key, data, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()',
+      ['main_db', jsonString]
+    ).catch((pgErr) => {
+      console.error('[DB] PostgreSQL persistent write warning:', pgErr.message);
+    });
   }
 }
 

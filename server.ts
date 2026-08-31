@@ -3,12 +3,13 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
-import { dbService } from './server/db.js';
+import { dbService, initDatabaseAsync, getDatabaseStatus } from './server/db.js';
 import { generateStudentRecordsExcel } from './server/excelExport.js';
 import { applySmartOcrCorrection } from './server/ocrCorrection.js';
 import { User, StudentRecord, AdmissionStatus, SystemSettings } from './src/types.js';
 
 async function startServer() {
+  await initDatabaseAsync();
   const app = express();
   const PORT = 3000;
 
@@ -43,12 +44,14 @@ async function startServer() {
     const users = dbService.getUsers();
     const settings = dbService.getSettings();
     const currentUser = getCurrentUser(req);
+    const dbStatus = getDatabaseStatus();
     const isConfigured = users.length > 0 || Boolean(settings.setupCompleted);
     res.json({
       hasUsers: isConfigured,
       setupCompleted: isConfigured,
       currentUser,
       settings,
+      database: dbStatus,
     });
   });
 

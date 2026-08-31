@@ -154,10 +154,23 @@ export const ScanFormView: React.FC<Props> = ({
   const [showCorrectionsDrawer, setShowCorrectionsDrawer] = useState<boolean>(false);
 
   // Refs
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nativeCameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Callback ref to attach stream immediately when <video> mounts into DOM
+  const setVideoRef = useCallback((node: HTMLVideoElement | null) => {
+    videoRef.current = node;
+    if (node && streamRef.current) {
+      if (node.srcObject !== streamRef.current) {
+        node.srcObject = streamRef.current;
+      }
+      node.play().catch((playErr) => {
+        console.warn('[Camera] Autoplay promise notice:', playErr);
+      });
+    }
+  }, []);
 
   // Clipboard paste listener
   useEffect(() => {
@@ -191,11 +204,28 @@ export const ScanFormView: React.FC<Props> = ({
     };
   }, []);
 
+  // Synchronize stream to video if camera active state updates
+  useEffect(() => {
+    if (isCameraActive && videoRef.current && streamRef.current) {
+      if (videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
+      }
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isCameraActive]);
+
   // Camera Management
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {}
+      });
       streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setIsCameraActive(false);
   }, []);
@@ -230,19 +260,25 @@ export const ScanFormView: React.FC<Props> = ({
       }
 
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
       setIsCameraActive(true);
       setCameraFacingMode(facing);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
     } catch (err: any) {
-      console.warn('Camera error:', err);
+      console.warn('[Camera] Initialization error:', err);
       setIsCameraActive(false);
       const errMsg = err?.message || String(err);
-      if (errMsg.includes('Permission') || errMsg.includes('NotAllowedError')) {
-        setCameraError('Camera access was denied. You can still upload or snap document images with native capture.');
+      if (errMsg.includes('Permission') || errMsg.includes('NotAllowedError') || err.name === 'NotAllowedError') {
+        setCameraError('Camera access was denied. Please allow camera permission in your browser settings and try again.');
+      } else if (err.name === 'NotFoundError' || errMsg.includes('NotFound')) {
+        setCameraError('No camera found on this device. Please use "Select File" to upload the document.');
+      } else if (err.name === 'NotReadableError' || errMsg.includes('in use')) {
+        setCameraError('Camera is currently in use by another application. Please close other camera apps and retry.');
       } else {
-        setCameraError(`Camera initialization: ${errMsg || 'Restricted'}. Use file upload instead.`);
+        setCameraError(`Camera initialization failed: ${errMsg || 'Restricted'}. You can still upload or snap with native camera.`);
       }
     }
   };
@@ -714,11 +750,15 @@ export const ScanFormView: React.FC<Props> = ({
               {isCameraActive ? (
                 <>
                   <video
-                    ref={videoRef}
+                    ref={setVideoRef}
                     autoPlay
                     playsInline
                     muted
-                    className="w-full h-full max-h-[420px] object-cover"
+                    onLoadedMetadata={(e) => {
+                      const v = e.currentTarget;
+                      v.play().catch(() => {});
+                    }}
+                    className="w-full h-full min-h-[340px] max-h-[440px] object-cover bg-black block"
                   />
                   {/* Document Alignment Frame */}
                   <div className="absolute inset-6 sm:inset-10 border-2 border-dashed border-cyan-400/80 rounded-2xl pointer-events-none flex flex-col justify-between p-4 shadow-[0_0_20px_rgba(34,211,238,0.2)]">
