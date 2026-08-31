@@ -167,10 +167,12 @@ export const AuthScreen: React.FC<Props> = ({
       onSuccess(res.user, res.token, false);
     } catch (err: any) {
       if (err.accountNotFound) {
-        // Backend confirms account does not exist -> remove from device saved accounts
-        const { primaryAccount, otherAccounts } = removeAccountFromDevice(identifierToUse);
-        setSavedAccount(primaryAccount);
-        setOtherSavedAccounts(otherAccounts);
+        // If this was attempted via saved account card, remove it from saved list
+        if (!useManualLogin && savedAccount) {
+          const { primaryAccount, otherAccounts } = removeAccountFromDevice(identifierToUse);
+          setSavedAccount(primaryAccount);
+          setOtherSavedAccounts(otherAccounts);
+        }
         setAccountNotFoundWarning({
           message: err.message || "We couldn't find an account matching that username.",
           identifier: identifierToUse,
@@ -179,8 +181,11 @@ export const AuthScreen: React.FC<Props> = ({
         // Account exists, but password was wrong
         setWrongPasswordWarning(true);
         setLoginPassword('');
+      } else if (err.wrongPin) {
+        setError(err.message || 'Incorrect 4-Digit Security PIN. Please try again.');
+        setLoginPin('');
       } else {
-        setError(err.message || 'Invalid username, password, or security PIN. Please verify your credentials.');
+        setError(err.message || 'Invalid credentials. Please verify your username and password.');
       }
     } finally {
       setLoading(false);

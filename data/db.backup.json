@@ -1,11 +1,278 @@
 {
-  "users": [],
-  "recruitmentLists": [],
-  "students": [],
-  "auditLogs": [],
+  "users": [
+    {
+      "id": "usr_1788161295784_er0tt",
+      "fullName": "Officer Alice",
+      "username": "officer_alice",
+      "passwordHash": "$2b$10$lZ6FBPQF7gcQqsrGOYkSn.nVXSklsH0PYKNQtLj4k5NPXd1auGh8y",
+      "pinHash": "$2b$10$Xt1/34a11fpEWJjY5iq.cO5ObW5Znfb5WBt0n.2UP70ZfOZHaAfiu",
+      "role": "Super Administrator",
+      "status": "Active",
+      "hasPin": true,
+      "createdAt": "2026-08-31T07:28:15.784Z",
+      "lastLoginAt": "2026-08-31T07:28:15.785Z"
+    },
+    {
+      "id": "usr_1788161296010_sdlqd",
+      "fullName": "Officer Bob",
+      "username": "officer_bob",
+      "passwordHash": "$2b$10$iVPZbaU2D9VFiAsvJNbPF.AhQ83aV9scg74J05AzGSMCskz4qfOJC",
+      "pinHash": "$2b$10$f93GzpEFeChoq/weoJJa5uhjpfaRHjhrrqQX9AoEwK538P61m8oU6",
+      "role": "Recruitment Officer",
+      "status": "Active",
+      "hasPin": true,
+      "createdAt": "2026-08-31T07:28:16.010Z",
+      "lastLoginAt": "2026-08-31T07:28:16.011Z"
+    },
+    {
+      "id": "usr_1788161319793_ov5vr",
+      "fullName": "System Administrator",
+      "username": "admin",
+      "passwordHash": "$2b$10$VG4F4USVU5KqbfGHkWsslepBQy6EmWQN5gl8LXw0FPCcMuHBGvtgi",
+      "pinHash": "$2b$10$mUq9F7eME.trZYpfu1XT2.e1nLD3RI/Vbo4dgxDvIvtlVA8eL5/T.",
+      "role": "Super Administrator",
+      "status": "Active",
+      "hasPin": true,
+      "createdAt": "2026-08-31T07:28:39.793Z",
+      "lastLoginAt": "2026-08-31T07:28:40.019Z"
+    },
+    {
+      "id": "usr_1788161320255_mdbmk",
+      "fullName": "Alice Walker",
+      "username": "alice_walker",
+      "passwordHash": "$2b$10$/GD0v1GjGkiyjWUH1zd8MeiasMRP7ARGYiR0A42GtUWOiSevbHO0O",
+      "pinHash": "$2b$10$9SCwJIQLz/J54zmvXRa6I.K0fK62b7hfuJi9B/7MgDB137M1Q6BN6",
+      "role": "Recruitment Officer",
+      "status": "Active",
+      "hasPin": true,
+      "createdAt": "2026-08-31T07:28:40.255Z",
+      "lastLoginAt": "2026-08-31T07:28:40.256Z"
+    },
+    {
+      "id": "usr_1788161320498_wk94n",
+      "fullName": "Bob Martinez",
+      "username": "bob_martinez",
+      "passwordHash": "$2b$10$f0hShpg47Wo3fwZS8uBsCeZDTa85eg2UH2xUoe6fhPGxmDEW2hN6m",
+      "pinHash": "$2b$10$SCIqBQvBlrTvDmQWjxQdHuLh4BNZGz5CnEDSQvN19WzXpqJVBcfAy",
+      "role": "Recruitment Officer",
+      "status": "Active",
+      "hasPin": true,
+      "createdAt": "2026-08-31T07:28:40.498Z",
+      "lastLoginAt": "2026-08-31T07:28:40.499Z"
+    }
+  ],
+  "recruitmentLists": [
+    {
+      "id": "rcl_1788161295784_6aoag",
+      "userId": "usr_1788161295784_er0tt",
+      "name": "SY 2026-2027 Recruitment",
+      "schoolName": "Sisters of Mary School – Talisay, Cebu",
+      "branch": "Talisay, Cebu",
+      "archived": false,
+      "createdAt": "2026-08-31T07:28:15.784Z",
+      "updatedAt": "2026-08-31T07:28:15.784Z"
+    },
+    {
+      "id": "rcl_1788161296010_lf36a",
+      "userId": "usr_1788161296010_sdlqd",
+      "name": "SY 2026-2027 Recruitment",
+      "schoolName": "Sisters of Mary School – Talisay, Cebu",
+      "branch": "Talisay, Cebu",
+      "archived": false,
+      "createdAt": "2026-08-31T07:28:16.010Z",
+      "updatedAt": "2026-08-31T07:28:16.010Z"
+    },
+    {
+      "id": "rcl_1788161296022_ckl3v",
+      "userId": "usr_1788161295784_er0tt",
+      "name": "Alice STEM Batch 2026",
+      "schoolName": "Sisters of Mary School",
+      "branch": "Talisay, Cebu",
+      "archived": false,
+      "createdAt": "2026-08-31T07:28:16.022Z",
+      "updatedAt": "2026-08-31T07:28:16.022Z"
+    },
+    {
+      "id": "rcl_1788161319793_qf0mm",
+      "userId": "usr_1788161319793_ov5vr",
+      "name": "SY 2026-2027 Recruitment",
+      "schoolName": "Sisters of Mary School – Talisay, Cebu",
+      "branch": "Talisay, Cebu",
+      "archived": false,
+      "createdAt": "2026-08-31T07:28:39.793Z",
+      "updatedAt": "2026-08-31T07:28:39.793Z"
+    },
+    {
+      "id": "rcl_1788161320255_cbbmq",
+      "userId": "usr_1788161320255_mdbmk",
+      "name": "SY 2026-2027 Recruitment",
+      "schoolName": "Sisters of Mary School – Talisay, Cebu",
+      "branch": "Talisay, Cebu",
+      "archived": false,
+      "createdAt": "2026-08-31T07:28:40.255Z",
+      "updatedAt": "2026-08-31T07:28:40.255Z"
+    },
+    {
+      "id": "rcl_1788161320498_c3fpt",
+      "userId": "usr_1788161320498_wk94n",
+      "name": "SY 2026-2027 Recruitment",
+      "schoolName": "Sisters of Mary School – Talisay, Cebu",
+      "branch": "Talisay, Cebu",
+      "archived": false,
+      "createdAt": "2026-08-31T07:28:40.498Z",
+      "updatedAt": "2026-08-31T07:28:40.498Z"
+    },
+    {
+      "id": "rcl_1788161320502_93lzh",
+      "userId": "usr_1788161320255_mdbmk",
+      "name": "Alice Batch 2026",
+      "schoolName": "Sisters of Mary School",
+      "branch": "Talisay, Cebu",
+      "archived": false,
+      "createdAt": "2026-08-31T07:28:40.502Z",
+      "updatedAt": "2026-08-31T07:28:40.502Z"
+    }
+  ],
+  "students": [
+    {
+      "id": "std_1788161320513_bh6s9",
+      "userId": "usr_1788161320255_mdbmk",
+      "recruitmentListId": "rcl_1788161320502_93lzh",
+      "idPhotoUrl": "",
+      "lastName": "Clara",
+      "surname": "Clara",
+      "firstName": "Maria",
+      "middleName": "Santos",
+      "birthdate": "2012-05-15",
+      "birthday": "2012-05-15",
+      "age": 12,
+      "gender": "Female",
+      "sitioStreet": "",
+      "barangay": "Poblacion",
+      "municipality": "Talisay City",
+      "province": "Cebu",
+      "address": "Poblacion",
+      "elementarySchool": "Talisay Central Elementary School",
+      "school": "Talisay Central Elementary School",
+      "schoolAddress": "",
+      "reportCardSy": "SY2025-2026 Submitted",
+      "lrn": "123456789012",
+      "grading": "",
+      "currentGrade": "Grade 6",
+      "oldGraduateRemarks": "",
+      "fatherName": "",
+      "fatherOccupation": "",
+      "motherName": "",
+      "motherOccupation": "",
+      "guardianName": "",
+      "guardianRelation": "Mother",
+      "guardianOccupation": "",
+      "cellphoneNumber": "09171234567",
+      "cellphoneOwner": "Parent/Guardian",
+      "messengerAccount": "",
+      "messengerOwner": "Applicant/Parent",
+      "birthCertificatePsa": "Yes",
+      "psaFatherNameAge": "",
+      "fatherReligion": "Roman Catholic",
+      "psaMotherNameAge": "",
+      "motherReligion": "Roman Catholic",
+      "birthOrder": 1,
+      "numberOfChildren": 1,
+      "baptizedCatholic": "Yes",
+      "denomination": "",
+      "confirmedCatholic": "Yes",
+      "siblings": [],
+      "numSiblings": 0,
+      "parishPlace": "",
+      "parishPriest": "",
+      "remarks": "A - PASS",
+      "additionalNotes": "",
+      "examScore": 85,
+      "healthStatus": "Normal / Fit for schooling",
+      "studentSignature": "Signed / Confirmed",
+      "createdAt": "2026-08-31T07:28:40.513Z",
+      "updatedAt": "2026-08-31T07:28:40.513Z",
+      "createdBy": "Alice Walker",
+      "updatedBy": "Alice Walker"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "log_1788161320514_q0afp",
+      "userId": "usr_1788161320255_mdbmk",
+      "userName": "Alice Walker",
+      "action": "Student Added",
+      "details": "Encoded new student: Clara, Maria (LRN: 123456789012) - Status: A - PASS",
+      "timestamp": "2026-08-31T07:28:40.514Z"
+    },
+    {
+      "id": "log_1788161320503_koagx",
+      "userId": "usr_1788161320255_mdbmk",
+      "userName": "Alice Walker",
+      "action": "Recruitment List Created",
+      "details": "Created new recruitment list: \"Alice Batch 2026\" for Talisay, Cebu",
+      "timestamp": "2026-08-31T07:28:40.503Z"
+    },
+    {
+      "id": "log_1788161320499_0l5gu",
+      "userId": "usr_1788161320498_wk94n",
+      "userName": "Bob Martinez",
+      "action": "Account Created",
+      "details": "Created new account: Bob Martinez (@bob_martinez) - Role: Recruitment Officer",
+      "timestamp": "2026-08-31T07:28:40.499Z"
+    },
+    {
+      "id": "log_1788161320257_0rgb3",
+      "userId": "usr_1788161320255_mdbmk",
+      "userName": "Alice Walker",
+      "action": "Account Created",
+      "details": "Created new account: Alice Walker (@alice_walker) - Role: Recruitment Officer",
+      "timestamp": "2026-08-31T07:28:40.257Z"
+    },
+    {
+      "id": "log_1788161320020_eyvpq",
+      "userId": "usr_1788161319793_ov5vr",
+      "userName": "System Administrator",
+      "action": "Login",
+      "details": "User @admin (System Administrator) logged in successfully",
+      "timestamp": "2026-08-31T07:28:40.020Z"
+    },
+    {
+      "id": "log_1788161319794_y4t1d",
+      "userId": "usr_1788161319793_ov5vr",
+      "userName": "System Administrator",
+      "action": "Account Created",
+      "details": "Created new account: System Administrator (@admin) - Role: Super Administrator",
+      "timestamp": "2026-08-31T07:28:39.794Z"
+    },
+    {
+      "id": "log_1788161296022_ih52k",
+      "userId": "usr_1788161295784_er0tt",
+      "userName": "Officer Alice",
+      "action": "Recruitment List Created",
+      "details": "Created new recruitment list: \"Alice STEM Batch 2026\" for Talisay, Cebu",
+      "timestamp": "2026-08-31T07:28:16.022Z"
+    },
+    {
+      "id": "log_1788161296011_ajqfo",
+      "userId": "usr_1788161296010_sdlqd",
+      "userName": "Officer Bob",
+      "action": "Account Created",
+      "details": "Created new account: Officer Bob (@officer_bob) - Role: Recruitment Officer",
+      "timestamp": "2026-08-31T07:28:16.011Z"
+    },
+    {
+      "id": "log_1788161295785_isixg",
+      "userId": "usr_1788161295784_er0tt",
+      "userName": "Officer Alice",
+      "action": "Account Created",
+      "details": "Created new account: Officer Alice (@officer_alice) - Role: Super Administrator",
+      "timestamp": "2026-08-31T07:28:15.785Z"
+    }
+  ],
   "settings": {
     "id": "system_default_settings",
-    "setupCompleted": false,
+    "setupCompleted": true,
     "schoolName": "Sisters of Mary School – Talisay, Cebu",
     "subTitle": "Internal Student Recruitment & Information Management System",
     "systemName": "Student Recruitment Management System",
@@ -107,6 +374,7 @@
         "createdAt": "2026-01-01T00:00:00.000Z"
       }
     ],
-    "updatedAt": "2026-08-29T00:07:23.654Z"
+    "updatedAt": "2026-08-31T07:28:40.498Z",
+    "administratorUserId": "usr_1788161319793_ov5vr"
   }
 }

@@ -584,6 +584,8 @@ function loadDbFromDisk(): DbSchema {
 let pgPool: pg.Pool | null = null;
 let pgInitialized = false;
 let dbDriverType: 'PostgreSQL' | 'Local Persistent File' = 'Local Persistent File';
+let dbReady = false;
+let dbInitializationError: string | null = null;
 
 function getPgPool(): pg.Pool | null {
   const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONNECTION_STRING;
@@ -594,7 +596,7 @@ function getPgPool(): pg.Pool | null {
     pgPool = new pg.Pool({
       connectionString: cleanUrl,
       ssl: isLocal ? false : { rejectUnauthorized: false },
-      max: 10,
+      max: 15,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
     });
@@ -605,9 +607,22 @@ function getPgPool(): pg.Pool | null {
   return pgPool;
 }
 
+export function isDatabaseHealthy(): { healthy: boolean; message?: string } {
+  const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONNECTION_STRING;
+  if (dbUrl && !pgInitialized && !dbReady) {
+    return {
+      healthy: false,
+      message: dbInitializationError || 'PostgreSQL database connection is unavailable.',
+    };
+  }
+  return { healthy: true };
+}
+
 export function getDatabaseStatus(): {
   driver: 'PostgreSQL' | 'Local Persistent File';
   pgConnected: boolean;
+  isReady: boolean;
+  error: string | null;
   userCount: number;
   studentCount: number;
   recruitmentListCount: number;
@@ -616,6 +631,8 @@ export function getDatabaseStatus(): {
   return {
     driver: dbDriverType,
     pgConnected: pgInitialized,
+    isReady: dbReady,
+    error: dbInitializationError,
     userCount: db.users.length,
     studentCount: db.students.length,
     recruitmentListCount: (db.recruitmentLists || []).length,
@@ -623,28 +640,23 @@ export function getDatabaseStatus(): {
 }
 
 export async function initDatabaseAsync(): Promise<void> {
-  // Always load from local disk / backup first for instant readiness
-  loadDbFromDisk();
-
   const pool = getPgPool();
+
   if (!pool) {
-    if (process.env.NODE_ENV === 'production' && !process.env.AIS_SANDBOX) {
-      console.warn('======================================================================');
-      console.warn('[DB WARNING] Running in PRODUCTION mode without DATABASE_URL!');
-      console.warn('Render container filesystems are ephemeral and reset on redeployments.');
-      console.warn('To ensure 100% permanent data persistence across restarts and redeploys:');
-      console.warn('1. Create a PostgreSQL Database on Render (or Neon/Supabase).');
-      console.warn('2. Add the DATABASE_URL environment variable in your Render dashboard.');
-      console.warn('======================================================================');
-    } else {
-      console.log('[DB] Persistence: Using local crash-safe atomic persistent disk storage.');
-    }
+    // Local development mode without PostgreSQL
+    console.log('[DB] Persistence: Using local atomic persistent disk storage.');
+    loadDbFromDisk();
     dbDriverType = 'Local Persistent File';
+    dbReady = true;
+    dbInitializationError = null;
     return;
   }
 
+  // Production PostgreSQL Mode
   try {
-    console.log('[DB] Connecting to PostgreSQL database for production cloud persistence...');
+    console.log('[DB] Connecting to PostgreSQL database for authoritative persistence...');
+    
+    // Create schema table if not exists
     await pool.query(`
       CREATE TABLE IF NOT EXISTS system_store (
         key VARCHAR(128) PRIMARY KEY,
@@ -653,24 +665,37 @@ export async function initDatabaseAsync(): Promise<void> {
       );
     `);
 
-    // Check if cloud copy exists
+    // Check if cloud database record exists
     const res = await pool.query('SELECT data FROM system_store WHERE key = $1', ['main_db']);
+
     if (res.rows.length > 0 && res.rows[0].data) {
       const cloudDb = res.rows[0].data;
       const valid = validateAndSanitizeDb(cloudDb);
 
-      // Check if local file has data that needs migration (e.g. if local has records and cloud has 0 users)
-      const localCurrent = ensureDbExists();
-      if (valid.users.length === 0 && localCurrent.users.length > 0) {
+      // Check if local file has data from prior local execution that needs migration into PostgreSQL
+      let localCurrent: DbSchema | null = null;
+      try {
+        if (fs.existsSync(DB_FILE)) {
+          const rawLocal = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
+          localCurrent = validateAndSanitizeDb(rawLocal);
+        }
+      } catch (readErr) {
+        // Non-critical local read
+      }
+
+      if (localCurrent && valid.users.length === 0 && localCurrent.users.length > 0) {
         console.log(`[DB Migration] Migrating ${localCurrent.users.length} user(s) and ${localCurrent.students.length} record(s) from local storage into PostgreSQL...`);
+        const jsonMerged = JSON.stringify(localCurrent);
         await pool.query(
           'INSERT INTO system_store (key, data, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()',
-          ['main_db', JSON.stringify(localCurrent)]
+          ['main_db', jsonMerged]
         );
         inMemoryDb = localCurrent;
       } else {
         inMemoryDb = valid;
+        // Mirror PostgreSQL state to local disk for offline inspection
         try {
+          if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
           fs.writeFileSync(DB_FILE, JSON.stringify(valid, null, 2), 'utf-8');
           fs.writeFileSync(DB_BACKUP_FILE, JSON.stringify(valid, null, 2), 'utf-8');
         } catch (fErr) {}
@@ -678,23 +703,33 @@ export async function initDatabaseAsync(): Promise<void> {
 
       pgInitialized = true;
       dbDriverType = 'PostgreSQL';
-      console.log(`[DB] Successfully loaded persistent state from PostgreSQL (${inMemoryDb.users.length} users, ${inMemoryDb.students.length} student records, ${(inMemoryDb.recruitmentLists || []).length} lists).`);
+      dbReady = true;
+      dbInitializationError = null;
+      console.log(`[DB] Successfully connected to authoritative PostgreSQL (${inMemoryDb.users.length} users, ${inMemoryDb.students.length} student records, ${(inMemoryDb.recruitmentLists || []).length} lists).`);
     } else {
-      // First-time PostgreSQL initialization: migrate all current database state into PostgreSQL
-      const current = ensureDbExists();
+      // First-time PostgreSQL initialization: migrate local disk data or initialize clean schema
+      console.log('[DB] PostgreSQL table empty. Initializing authoritative database in cloud...');
+      const seedDb = loadDbFromDisk();
+      const seedJson = JSON.stringify(seedDb);
       await pool.query(
         'INSERT INTO system_store (key, data, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()',
-        ['main_db', JSON.stringify(current)]
+        ['main_db', seedJson]
       );
+      inMemoryDb = seedDb;
       pgInitialized = true;
       dbDriverType = 'PostgreSQL';
-      console.log(`[DB Migration] Initialized PostgreSQL store and migrated current application data (${current.users.length} users, ${current.students.length} student records).`);
+      dbReady = true;
+      dbInitializationError = null;
+      console.log(`[DB Migration] Initialized PostgreSQL store and seeded authoritative data (${seedDb.users.length} users, ${seedDb.students.length} student records).`);
     }
   } catch (err: any) {
     console.error('[DB ERROR] Failed to connect to PostgreSQL:', err.message);
-    if (process.env.NODE_ENV === 'production') {
-      console.warn('[DB] Falling back to local file storage temporarily.');
-    }
+    pgInitialized = false;
+    dbReady = false;
+    dbInitializationError = err.message || 'Database connection error';
+    dbDriverType = 'PostgreSQL';
+    // Do NOT silently use ephemeral disk as truth when PostgreSQL is required in production
+    console.error('[DB ERROR] Database is marked UNAVAILABLE. Incoming requests requiring persistent state will be protected against data masking.');
   }
 }
 
@@ -705,43 +740,52 @@ function ensureDbExists(): DbSchema {
   return loadDbFromDisk();
 }
 
-function saveDb(db: DbSchema): void {
+async function saveDb(db: DbSchema): Promise<void> {
   // Update in-memory copy immediately
   inMemoryDb = db;
 
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-
   const jsonString = JSON.stringify(db, null, 2);
 
+  // 1. Authoritative write to PostgreSQL if configured and initialized
+  const pool = getPgPool();
+  if (pool && pgInitialized) {
+    try {
+      await pool.query(
+        'INSERT INTO system_store (key, data, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()',
+        ['main_db', jsonString]
+      );
+    } catch (pgErr: any) {
+      console.error('[DB ERROR] PostgreSQL persistent write failure:', pgErr.message);
+      throw new Error(`Database persistence failed: ${pgErr.message}`);
+    }
+  }
+
+  // 2. Atomic disk backup / mirror write
   try {
-    // 1. Atomic write via temporary file
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
     fs.writeFileSync(DB_TMP_FILE, jsonString, 'utf-8');
     fs.renameSync(DB_TMP_FILE, DB_FILE);
-
-    // 2. Update persistent backup file
     fs.writeFileSync(DB_BACKUP_FILE, jsonString, 'utf-8');
   } catch (err) {
-    console.error('[DB] Critical error saving database file:', err);
-    // Direct fallback write
+    console.error('[DB] Critical error saving local database file backup:', err);
     try {
       fs.writeFileSync(DB_FILE, jsonString, 'utf-8');
     } catch (directErr) {
       console.error('[DB] Fallback direct write failed:', directErr);
     }
   }
+}
 
-  // 3. Persist to PostgreSQL cloud database if connected
-  const pool = getPgPool();
-  if (pool && pgInitialized) {
-    pool.query(
-      'INSERT INTO system_store (key, data, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW()',
-      ['main_db', jsonString]
-    ).catch((pgErr) => {
-      console.error('[DB] PostgreSQL persistent write warning:', pgErr.message);
-    });
-  }
+export function normalizeAccountIdentifier(str: string): string {
+  if (!str) return '';
+  return str
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export const dbService = {
@@ -755,64 +799,121 @@ export const dbService = {
     return db.users.map(({ passwordHash, ...user }) => user);
   },
 
-  getUserByUsername(username: string): (User & { passwordHash: string }) | undefined {
+  getUserByUsername(username: string): (User & { passwordHash: string; pinHash?: string }) | undefined {
     const db = ensureDbExists();
-    const clean = (username || '').trim().toLowerCase();
-    if (!clean) return undefined;
-    return db.users.find((u) => u.username.toLowerCase() === clean);
+    const raw = (username || '').trim();
+    if (!raw) return undefined;
+    const norm = normalizeAccountIdentifier(raw);
+    const rawLower = raw.toLowerCase();
+    return db.users.find((u) => {
+      const uNorm = normalizeAccountIdentifier(u.username);
+      const uRaw = (u.username || '').toLowerCase();
+      return uNorm === norm || uRaw === rawLower || uNorm === rawLower;
+    });
   },
 
-  getUserByUsernameOrEmail(identifier: string): (User & { passwordHash: string }) | undefined {
+  getUserByUsernameOrEmail(identifier: string): (User & { passwordHash: string; pinHash?: string }) | undefined {
     const db = ensureDbExists();
-    const cleanId = (identifier || '').trim().toLowerCase();
-    if (!cleanId) return undefined;
-    return db.users.find(
-      (u) =>
-        u.username.toLowerCase() === cleanId ||
-        u.id.toLowerCase() === cleanId
-    );
+    const raw = (identifier || '').trim();
+    if (!raw) return undefined;
+
+    const norm = normalizeAccountIdentifier(raw);
+    const rawLower = raw.toLowerCase();
+
+    // 1. Exact or normalized username match
+    let found = db.users.find((u) => {
+      const uNorm = normalizeAccountIdentifier(u.username);
+      const uRaw = (u.username || '').toLowerCase();
+      return uNorm === norm || uRaw === rawLower || uNorm === rawLower || uRaw === norm;
+    });
+
+    if (found) return found;
+
+    // 2. Match by user ID
+    found = db.users.find((u) => {
+      const uId = (u.id || '').trim().toLowerCase();
+      return uId === norm || uId === rawLower;
+    });
+
+    if (found) return found;
+
+    // 3. Match by Full Name (case-insensitive)
+    found = db.users.find((u) => {
+      const uFullNameNorm = normalizeAccountIdentifier(u.fullName);
+      const uFullNameRaw = (u.fullName || '').trim().toLowerCase();
+      return uFullNameNorm === norm || uFullNameRaw === rawLower;
+    });
+
+    return found;
   },
 
-  checkUserExists(username: string): { exists: boolean; matchedField?: 'username'; existingUser?: User } {
+  checkUserExists(username: string): { exists: boolean; matchedField?: 'username' | 'fullName'; existingUser?: User } {
     const db = ensureDbExists();
-    const cleanUsername = (username || '').trim().toLowerCase();
+    const raw = (username || '').trim();
+    if (!raw) return { exists: false };
+
+    const norm = normalizeAccountIdentifier(raw);
+    const rawLower = raw.toLowerCase();
 
     const match = db.users.find((u) => {
-      const uUser = u.username.toLowerCase();
-      return cleanUsername && uUser === cleanUsername;
+      const uNorm = normalizeAccountIdentifier(u.username);
+      const uRaw = (u.username || '').toLowerCase();
+      return (norm && uNorm === norm) || (rawLower && uRaw === rawLower);
     });
 
     if (match) {
       const { passwordHash: _, pinHash: __, ...cleanMatch } = match as any;
       return { exists: true, matchedField: 'username', existingUser: cleanMatch };
     }
+
+    const nameMatch = db.users.find((u) => {
+      const uFullNameNorm = normalizeAccountIdentifier(u.fullName);
+      const uFullNameRaw = (u.fullName || '').trim().toLowerCase();
+      return (norm && uFullNameNorm === norm) || (rawLower && uFullNameRaw === rawLower);
+    });
+
+    if (nameMatch) {
+      const { passwordHash: _, pinHash: __, ...cleanMatch } = nameMatch as any;
+      return { exists: true, matchedField: 'fullName', existingUser: cleanMatch };
+    }
+
     return { exists: false };
   },
 
   getUserById(id: string): User | undefined {
     const db = ensureDbExists();
     if (!id) return undefined;
-    const user = db.users.find((u) => u.id === id);
+    const cleanId = id.trim();
+    const user = db.users.find((u) => u.id === cleanId || u.id.toLowerCase() === cleanId.toLowerCase());
     if (!user) return undefined;
     const { passwordHash, pinHash, ...userClean } = user as any;
     return userClean;
   },
 
-  createUser(userData: {
+  async createUser(userData: {
     fullName: string;
     username: string;
     password: string;
     pin?: string;
     role: User['role'];
-  }): User {
+  }): Promise<User> {
     const db = ensureDbExists();
-    const cleanUsername = userData.username.trim().toLowerCase();
+    const cleanUsername = normalizeAccountIdentifier(userData.username);
+    const cleanFullName = userData.fullName.trim();
 
-    const existing = db.users.find(
-      (u) => u.username.toLowerCase() === cleanUsername
-    );
+    if (!cleanUsername) {
+      throw new Error('A valid username is required.');
+    }
+    if (!cleanFullName) {
+      throw new Error('Full Name is required.');
+    }
+
+    const existing = db.users.find((u) => {
+      const uNorm = normalizeAccountIdentifier(u.username);
+      return uNorm === cleanUsername;
+    });
     if (existing) {
-      throw new Error('An account with this username already exists. Please log in to your existing account.');
+      throw new Error(`An account with the username "${cleanUsername}" already exists. Please log in to your existing account.`);
     }
 
     const passwordHash = bcrypt.hashSync(userData.password, 10);
@@ -821,7 +922,7 @@ export const dbService = {
 
     const newUser: User & { passwordHash: string; pinHash?: string } = {
       id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-      fullName: userData.fullName.trim(),
+      fullName: cleanFullName,
       username: cleanUsername,
       passwordHash,
       pinHash,
@@ -855,15 +956,15 @@ export const dbService = {
       administratorUserId: newUser.role === 'Super Administrator' ? newUser.id : (db.settings?.administratorUserId || newUser.id),
       updatedAt: new Date().toISOString(),
     };
-    saveDb(db);
+    await saveDb(db);
 
-    console.log(`[DB] Successfully created and persisted account for: ${newUser.fullName} (@${newUser.username}) with default workspace - Total Users in DB: ${db.users.length}`);
+    console.log(`[DB] Successfully created and persisted account for: ${newUser.fullName} (@${newUser.username}) with ID ${newUser.id} - Total Users in DB: ${db.users.length}`);
 
     const { passwordHash: _, pinHash: __, ...cleanUser } = newUser;
     return cleanUser;
   },
 
-  updateUser(id: string, updates: Partial<User> & { password?: string; pin?: string }): User {
+  async updateUser(id: string, updates: Partial<User> & { password?: string; pin?: string }): Promise<User> {
     const db = ensureDbExists();
     const userIdx = db.users.findIndex((u) => u.id === id);
     if (userIdx === -1) {
@@ -889,7 +990,7 @@ export const dbService = {
       db.users[userIdx].hasPin = true;
     }
 
-    saveDb(db);
+    await saveDb(db);
     const { passwordHash, pinHash, ...cleanUser } = db.users[userIdx] as any;
     return cleanUser;
   },
@@ -908,7 +1009,7 @@ export const dbService = {
     return cleanPin === '1234';
   },
 
-  deleteUser(id: string): boolean {
+  async deleteUser(id: string): Promise<boolean> {
     const db = ensureDbExists();
     const initialLen = db.users.length;
     db.users = db.users.filter((u) => u.id !== id);
@@ -917,13 +1018,13 @@ export const dbService = {
         db.settings.setupCompleted = false;
         delete db.settings.administratorUserId;
       }
-      saveDb(db);
+      await saveDb(db);
       return true;
     }
     return false;
   },
 
-  resetUsers(): void {
+  async resetUsers(): Promise<void> {
     const db = ensureDbExists();
     db.users = [];
     if (db.settings) {
@@ -931,11 +1032,11 @@ export const dbService = {
       delete db.settings.administratorUserId;
       db.settings.updatedAt = new Date().toISOString();
     }
-    saveDb(db);
+    await saveDb(db);
     console.log('[DB] All user accounts have been reset. Settings and logo preserved.');
   },
 
-  deleteUserAccount(userId: string): { success: boolean; deletedStudentsCount: number } {
+  async deleteUserAccount(userId: string): Promise<{ success: boolean; deletedStudentsCount: number }> {
     const db = ensureDbExists();
     const initialUsersCount = db.users.length;
     db.users = db.users.filter((u) => u.id !== userId);
@@ -953,7 +1054,7 @@ export const dbService = {
     // Remove audit logs for this user
     db.auditLogs = db.auditLogs.filter((log) => log.userId !== userId);
 
-    saveDb(db);
+    await saveDb(db);
     return {
       success: db.users.length !== initialUsersCount,
       deletedStudentsCount,
@@ -964,12 +1065,12 @@ export const dbService = {
     return bcrypt.compareSync(password, passwordHash);
   },
 
-  updateLastLogin(userId: string): void {
+  async updateLastLogin(userId: string): Promise<void> {
     const db = ensureDbExists();
     const user = db.users.find((u) => u.id === userId);
     if (user) {
       user.lastLoginAt = new Date().toISOString();
-      saveDb(db);
+      await saveDb(db);
     }
   },
 
@@ -1037,10 +1138,10 @@ export const dbService = {
     return list.find((r) => r.id === id && r.userId === userId);
   },
 
-  createRecruitmentList(
+  async createRecruitmentList(
     data: { name: string; schoolName?: string; branch?: string; userId?: string },
     operatorName: string
-  ): RecruitmentList {
+  ): Promise<RecruitmentList> {
     const db = ensureDbExists();
     if (!db.recruitmentLists) db.recruitmentLists = [];
     if (!data.userId) throw new Error('User ID is required to create a recruitment list');
@@ -1062,7 +1163,7 @@ export const dbService = {
       if (duplicate.archived) {
         duplicate.archived = false;
         duplicate.updatedAt = new Date().toISOString();
-        saveDb(db);
+        await saveDb(db);
         return duplicate;
       }
       throw new Error(`A recruitment list named "${cleanName}" for ${cleanBranch} already exists.`);
@@ -1081,16 +1182,16 @@ export const dbService = {
     };
 
     db.recruitmentLists.push(newList);
-    saveDb(db);
+    await saveDb(db);
     return newList;
   },
 
-  updateRecruitmentList(
+  async updateRecruitmentList(
     id: string,
     updates: Partial<RecruitmentList>,
     operatorName: string,
     userId?: string
-  ): RecruitmentList {
+  ): Promise<RecruitmentList> {
     const db = ensureDbExists();
     if (!db.recruitmentLists) db.recruitmentLists = [];
     const idx = db.recruitmentLists.findIndex((r) => r.id === id && (!userId || r.userId === userId));
@@ -1122,11 +1223,11 @@ export const dbService = {
     };
 
     db.recruitmentLists[idx] = updated;
-    saveDb(db);
+    await saveDb(db);
     return updated;
   },
 
-  deleteRecruitmentList(id: string, userId?: string): { success: boolean; deletedStudentsCount: number } {
+  async deleteRecruitmentList(id: string, userId?: string): Promise<{ success: boolean; deletedStudentsCount: number }> {
     const db = ensureDbExists();
     if (!userId || !db.recruitmentLists) return { success: false, deletedStudentsCount: 0 };
     const list = db.recruitmentLists.find((r) => r.id === id && r.userId === userId);
@@ -1138,7 +1239,7 @@ export const dbService = {
     db.students = db.students.filter((s) => !(s.recruitmentListId === id && s.userId === userId));
     const deletedStudentsCount = beforeCount - db.students.length;
 
-    saveDb(db);
+    await saveDb(db);
     return { success: true, deletedStudentsCount };
   },
 
@@ -1276,10 +1377,10 @@ export const dbService = {
     );
   },
 
-  createStudent(
+  async createStudent(
     studentData: Partial<StudentRecord> & { userId?: string },
     operatorName: string
-  ): StudentRecord {
+  ): Promise<StudentRecord> {
     const db = ensureDbExists();
 
     let rListId = studentData.recruitmentListId ? studentData.recruitmentListId.trim() : undefined;
@@ -1304,17 +1405,17 @@ export const dbService = {
     });
 
     db.students.push(sanitized);
-    saveDb(db);
+    await saveDb(db);
 
     return sanitized;
   },
 
-  updateStudent(
+  async updateStudent(
     id: string,
     updates: Partial<StudentRecord>,
     operatorName: string,
     userId?: string
-  ): StudentRecord {
+  ): Promise<StudentRecord> {
     const db = ensureDbExists();
     const idx = db.students.findIndex((s) => s.id === id && (!userId || s.userId === userId));
     if (idx === -1) {
@@ -1347,18 +1448,18 @@ export const dbService = {
 
     const sanitized = sanitizeStudentRecord(merged);
     db.students[idx] = sanitized;
-    saveDb(db);
+    await saveDb(db);
 
     return sanitized;
   },
 
-  deleteStudent(id: string, userId?: string): boolean {
+  async deleteStudent(id: string, userId?: string): Promise<boolean> {
     const db = ensureDbExists();
     if (!userId) return false;
     const initialLen = db.students.length;
     db.students = db.students.filter((s) => !(s.id === id && s.userId === userId));
     if (db.students.length !== initialLen) {
-      saveDb(db);
+      await saveDb(db);
       return true;
     }
     return false;
@@ -1503,7 +1604,7 @@ export const dbService = {
   },
 
   // AUDIT LOGS
-  addAuditLog(entry: { userId: string; userName: string; action: string; details: string }): AuditLogEntry {
+  async addAuditLog(entry: { userId: string; userName: string; action: string; details: string }): Promise<AuditLogEntry> {
     const db = ensureDbExists();
     const newEntry: AuditLogEntry = {
       id: 'log_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
@@ -1519,7 +1620,7 @@ export const dbService = {
     if (db.auditLogs.length > 500) {
       db.auditLogs = db.auditLogs.slice(0, 500);
     }
-    saveDb(db);
+    await saveDb(db);
     return newEntry;
   },
 
@@ -1538,11 +1639,11 @@ export const dbService = {
     };
   },
 
-  saveLogo(
+  async saveLogo(
     dataString: string,
     mimeTypeOverride?: string,
     presetName?: string
-  ): { logoUrl: string; settings: SystemSettings } {
+  ): Promise<{ logoUrl: string; settings: SystemSettings }> {
     const db = ensureDbExists();
     ensureUploadsDir();
 
@@ -1631,7 +1732,7 @@ export const dbService = {
         logoPresets: currentPresets,
         updatedAt: new Date().toISOString(),
       };
-      saveDb(db);
+      await saveDb(db);
 
       return { logoUrl, settings: db.settings };
     } else {
@@ -1668,16 +1769,16 @@ export const dbService = {
         delete db.settings.schoolLogoData;
         delete db.settings.schoolLogoMime;
       }
-      saveDb(db);
+      await saveDb(db);
       return { logoUrl, settings: db.settings };
     }
   },
 
-  saveBackground(
+  async saveBackground(
     dataString: string,
     mimeTypeOverride?: string,
     presetName?: string
-  ): { backgroundUrl: string; settings: SystemSettings } {
+  ): Promise<{ backgroundUrl: string; settings: SystemSettings }> {
     const db = ensureDbExists();
     ensureUploadsDir();
 
@@ -1754,7 +1855,7 @@ export const dbService = {
         dashboardBgPresets: currentPresets,
         updatedAt: new Date().toISOString(),
       };
-      saveDb(db);
+      await saveDb(db);
 
       return { backgroundUrl, settings: db.settings };
     } else {
@@ -1793,7 +1894,7 @@ export const dbService = {
         delete db.settings.dashboardBgImageData;
         delete db.settings.dashboardBgImageMime;
       }
-      saveDb(db);
+      await saveDb(db);
       return { backgroundUrl, settings: db.settings };
     }
   },
@@ -1944,11 +2045,11 @@ export const dbService = {
     return null;
   },
 
-  saveSplashBackground(
+  async saveSplashBackground(
     dataString: string,
     mimeTypeOverride?: string,
     presetName?: string
-  ): { splashBackgroundUrl: string; settings: SystemSettings } {
+  ): Promise<{ splashBackgroundUrl: string; settings: SystemSettings }> {
     const db = ensureDbExists();
     ensureUploadsDir();
 
@@ -2010,7 +2111,7 @@ export const dbService = {
         splashBgPresets: currentPresets,
         updatedAt: new Date().toISOString(),
       };
-      saveDb(db);
+      await saveDb(db);
 
       return { splashBackgroundUrl, settings: db.settings };
     } else {
@@ -2049,7 +2150,7 @@ export const dbService = {
         delete db.settings.splashBgImageData;
         delete db.settings.splashBgImageMime;
       }
-      saveDb(db);
+      await saveDb(db);
       return { splashBackgroundUrl, settings: db.settings };
     }
   },
@@ -2128,7 +2229,7 @@ export const dbService = {
   },
 
   // PRESET MANAGEMENT METHODS
-  addLogoPreset(preset: Partial<BrandingPreset>): SystemSettings {
+  async addLogoPreset(preset: Partial<BrandingPreset>): Promise<SystemSettings> {
     const db = ensureDbExists();
     if (!preset.url) throw new Error('Logo preset URL or image data is required.');
     const presets = Array.isArray(db.settings.logoPresets) ? [...db.settings.logoPresets] : [...DEFAULT_LOGO_PRESETS];
@@ -2150,11 +2251,11 @@ export const dbService = {
     }
     db.settings.logoPresets = presets;
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  updateLogoPreset(id: string, updates: Partial<BrandingPreset>): SystemSettings {
+  async updateLogoPreset(id: string, updates: Partial<BrandingPreset>): Promise<SystemSettings> {
     const db = ensureDbExists();
     const presets = Array.isArray(db.settings.logoPresets) ? [...db.settings.logoPresets] : [...DEFAULT_LOGO_PRESETS];
     const targetIdx = presets.findIndex((p) => p.id === id);
@@ -2166,11 +2267,11 @@ export const dbService = {
     };
     db.settings.logoPresets = presets;
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  deleteLogoPreset(id: string): SystemSettings {
+  async deleteLogoPreset(id: string): Promise<SystemSettings> {
     const db = ensureDbExists();
     const presets = Array.isArray(db.settings.logoPresets) ? [...db.settings.logoPresets] : [...DEFAULT_LOGO_PRESETS];
     const target = presets.find((p) => p.id === id);
@@ -2210,11 +2311,11 @@ export const dbService = {
     }
 
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  addDashboardBgPreset(preset: Partial<BrandingPreset>): SystemSettings {
+  async addDashboardBgPreset(preset: Partial<BrandingPreset>): Promise<SystemSettings> {
     const db = ensureDbExists();
     if (!preset.url) throw new Error('Background preset URL or image data is required.');
     const presets = Array.isArray(db.settings.dashboardBgPresets) ? [...db.settings.dashboardBgPresets] : [...DEFAULT_DASHBOARD_BG_PRESETS];
@@ -2235,11 +2336,11 @@ export const dbService = {
     }
     db.settings.dashboardBgPresets = presets;
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  updateDashboardBgPreset(id: string, updates: Partial<BrandingPreset>): SystemSettings {
+  async updateDashboardBgPreset(id: string, updates: Partial<BrandingPreset>): Promise<SystemSettings> {
     const db = ensureDbExists();
     const presets = Array.isArray(db.settings.dashboardBgPresets) ? [...db.settings.dashboardBgPresets] : [...DEFAULT_DASHBOARD_BG_PRESETS];
     const targetIdx = presets.findIndex((p) => p.id === id);
@@ -2251,11 +2352,11 @@ export const dbService = {
     };
     db.settings.dashboardBgPresets = presets;
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  deleteDashboardBgPreset(id: string): SystemSettings {
+  async deleteDashboardBgPreset(id: string): Promise<SystemSettings> {
     const db = ensureDbExists();
     const presets = Array.isArray(db.settings.dashboardBgPresets) ? [...db.settings.dashboardBgPresets] : [...DEFAULT_DASHBOARD_BG_PRESETS];
     const target = presets.find((p) => p.id === id);
@@ -2294,11 +2395,11 @@ export const dbService = {
     }
 
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  addSplashBgPreset(preset: Partial<BrandingPreset>): SystemSettings {
+  async addSplashBgPreset(preset: Partial<BrandingPreset>): Promise<SystemSettings> {
     const db = ensureDbExists();
     if (!preset.url) throw new Error('Splash preset URL or image data is required.');
     const presets = Array.isArray(db.settings.splashBgPresets) ? [...db.settings.splashBgPresets] : [...DEFAULT_SPLASH_BG_PRESETS];
@@ -2319,11 +2420,11 @@ export const dbService = {
     }
     db.settings.splashBgPresets = presets;
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  updateSplashBgPreset(id: string, updates: Partial<BrandingPreset>): SystemSettings {
+  async updateSplashBgPreset(id: string, updates: Partial<BrandingPreset>): Promise<SystemSettings> {
     const db = ensureDbExists();
     const presets = Array.isArray(db.settings.splashBgPresets) ? [...db.settings.splashBgPresets] : [...DEFAULT_SPLASH_BG_PRESETS];
     const targetIdx = presets.findIndex((p) => p.id === id);
@@ -2335,11 +2436,11 @@ export const dbService = {
     };
     db.settings.splashBgPresets = presets;
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  deleteSplashBgPreset(id: string): SystemSettings {
+  async deleteSplashBgPreset(id: string): Promise<SystemSettings> {
     const db = ensureDbExists();
     const presets = Array.isArray(db.settings.splashBgPresets) ? [...db.settings.splashBgPresets] : [...DEFAULT_SPLASH_BG_PRESETS];
     const target = presets.find((p) => p.id === id);
@@ -2378,11 +2479,11 @@ export const dbService = {
     }
 
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  addThemePreset(preset: Partial<ThemePreset>): SystemSettings {
+  async addThemePreset(preset: Partial<ThemePreset>): Promise<SystemSettings> {
     const db = ensureDbExists();
     if (!preset.gradient) throw new Error('Theme gradient class string is required.');
     const presets = Array.isArray(db.settings.customThemePresets) ? [...db.settings.customThemePresets] : [...DEFAULT_THEME_PRESETS];
@@ -2402,11 +2503,11 @@ export const dbService = {
     }
     db.settings.customThemePresets = presets;
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  updateThemePreset(id: string, updates: Partial<ThemePreset>): SystemSettings {
+  async updateThemePreset(id: string, updates: Partial<ThemePreset>): Promise<SystemSettings> {
     const db = ensureDbExists();
     const presets = Array.isArray(db.settings.customThemePresets) ? [...db.settings.customThemePresets] : [...DEFAULT_THEME_PRESETS];
     const targetIdx = presets.findIndex((p) => p.id === id);
@@ -2419,11 +2520,11 @@ export const dbService = {
     };
     db.settings.customThemePresets = presets;
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  deleteThemePreset(id: string): SystemSettings {
+  async deleteThemePreset(id: string): Promise<SystemSettings> {
     const db = ensureDbExists();
     const presets = Array.isArray(db.settings.customThemePresets) ? [...db.settings.customThemePresets] : [...DEFAULT_THEME_PRESETS];
     const target = presets.find((p) => p.id === id);
@@ -2439,28 +2540,28 @@ export const dbService = {
     }
 
     db.settings.updatedAt = new Date().toISOString();
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 
-  updateSettings(newSettings: Partial<SystemSettings>): SystemSettings {
+  async updateSettings(newSettings: Partial<SystemSettings>): Promise<SystemSettings> {
     const db = ensureDbExists();
 
     // If new base64 logo provided in batch update
     if (newSettings.schoolLogoUrl && (newSettings.schoolLogoUrl.startsWith('data:image') || newSettings.schoolLogoUrl.length > 500)) {
-      this.saveLogo(newSettings.schoolLogoUrl);
+      await this.saveLogo(newSettings.schoolLogoUrl);
       delete newSettings.schoolLogoUrl;
     }
 
     // If new base64 background provided in batch update
     if (newSettings.dashboardBgImageUrl && (newSettings.dashboardBgImageUrl.startsWith('data:image') || newSettings.dashboardBgImageUrl.length > 500)) {
-      this.saveBackground(newSettings.dashboardBgImageUrl);
+      await this.saveBackground(newSettings.dashboardBgImageUrl);
       delete newSettings.dashboardBgImageUrl;
     }
 
     // If new base64 splash background provided in batch update
     if (newSettings.splashBgImageUrl && (newSettings.splashBgImageUrl.startsWith('data:image') || newSettings.splashBgImageUrl.length > 500)) {
-      this.saveSplashBackground(newSettings.splashBgImageUrl);
+      await this.saveSplashBackground(newSettings.splashBgImageUrl);
       delete newSettings.splashBgImageUrl;
     }
 
@@ -2470,7 +2571,7 @@ export const dbService = {
       ...newSettings,
       updatedAt: new Date().toISOString(),
     };
-    saveDb(db);
+    await saveDb(db);
     return db.settings;
   },
 };

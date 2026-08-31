@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
-import { dbService, initDatabaseAsync, getDatabaseStatus } from './server/db.js';
+import { dbService, initDatabaseAsync, getDatabaseStatus, isDatabaseHealthy } from './server/db.js';
 import { generateStudentRecordsExcel } from './server/excelExport.js';
 import { applySmartOcrCorrection } from './server/ocrCorrection.js';
 import { User, StudentRecord, AdmissionStatus, SystemSettings } from './src/types.js';
@@ -37,7 +37,28 @@ async function startServer() {
     return user || null;
   };
 
+  // Database availability check middleware for mutation routes
+  const requireHealthyDatabase = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!isDatabaseHealthy()) {
+      return res.status(503).json({
+        error: 'Database is currently connecting or unavailable. Please retry in a few seconds.',
+        databaseUnavailable: true,
+      });
+    }
+    next();
+  };
+
   // --- API ROUTES ---
+
+  // Health check endpoint
+  app.get('/api/health', (req, res) => {
+    const dbStatus = getDatabaseStatus();
+    res.json({
+      status: 'ok',
+      database: dbStatus,
+      healthy: isDatabaseHealthy(),
+    });
+  });
 
   // 1. Auth Status & Check
   app.get('/api/auth/status', (req, res) => {
@@ -74,7 +95,7 @@ async function startServer() {
   });
 
   // 2. User Registration (Admin or Staff Account Creation)
-  app.post('/api/auth/register', (req, res) => {
+  app.post('/api/auth/register', requireHealthyDatabase, async (req, res) => {
     try {
       const { fullName, username, password, confirmPassword, pin, role } = req.body;
 
@@ -109,7 +130,7 @@ async function startServer() {
       // First user becomes Super Admin, subsequent users get specified role or Recruitment Staff
       const userRole = users.length === 0 ? 'Super Administrator' : (role || 'Recruitment Staff');
 
-      const newUser = dbService.createUser({
+      const newUser = await dbService.createUser({
         fullName: fullName.trim(),
         username: username.trim(),
         password,
@@ -117,8 +138,8 @@ async function startServer() {
         role: userRole,
       });
 
-      dbService.updateLastLogin(newUser.id);
-      dbService.addAuditLog({
+      await dbService.updateLastLogin(newUser.id);
+      await dbService.addAuditLog({
         userId: newUser.id,
         userName: newUser.fullName,
         action: 'Account Created',
@@ -137,7 +158,7 @@ async function startServer() {
   });
 
   // 2a. Initial Admin Creation (First Use Alias)
-  app.post('/api/auth/register-admin', (req, res) => {
+  app.post('/api/auth/register-admin', requireHealthyDatabase, async (req, res) => {
     try {
       const users = dbService.getUsers();
       if (users.length > 0) {
@@ -162,7 +183,7 @@ async function startServer() {
         return res.status(400).json({ error: 'Security PIN must be exactly 4 numeric digits.' });
       }
 
-      const newUser = dbService.createUser({
+      const newUser = await dbService.createUser({
         fullName: fullName.trim(),
         username: username.trim(),
         password,
@@ -170,8 +191,8 @@ async function startServer() {
         role: 'Super Administrator',
       });
 
-      dbService.updateLastLogin(newUser.id);
-      dbService.addAuditLog({
+      await dbService.updateLastLogin(newUser.id);
+      await dbService.addAuditLog({
         userId: newUser.id,
         userName: newUser.fullName,
         action: 'System Initialized',
@@ -190,10 +211,10 @@ async function startServer() {
   });
 
   // 2b. Reset User Accounts (Preserves logo, background, and system settings)
-  app.post('/api/auth/reset-users', (req, res) => {
+  app.post('/api/auth/reset-users', requireHealthyDatabase, async (req, res) => {
     try {
-      dbService.resetUsers();
-      dbService.addAuditLog({
+      await dbService.resetUsers();
+      await dbService.addAuditLog({
         userId: 'system',
         userName: 'System Administrator',
         action: 'Account Reset',
@@ -209,14 +230,14 @@ async function startServer() {
   });
 
   // 2c. Delete Current User Account & Associated Student Records
-  app.delete('/api/auth/account', (req, res) => {
+  app.delete('/api/auth/account', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
       return res.status(401).json({ error: 'Authentication required to delete account.' });
     }
 
     try {
-      const result = dbService.deleteUserAccount(currentUser.id);
+      const result = await dbService.deleteUserAccount(currentUser.id);
       if (result.success) {
         return res.json({
           success: true,
@@ -229,14 +250,14 @@ async function startServer() {
     }
   });
 
-  app.post('/api/auth/delete-account', (req, res) => {
+  app.post('/api/auth/delete-account', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
       return res.status(401).json({ error: 'Authentication required to delete account.' });
     }
 
     try {
-      const result = dbService.deleteUserAccount(currentUser.id);
+      const result = await dbService.deleteUserAccount(currentUser.id);
       if (result.success) {
         return res.json({
           success: true,
@@ -260,6 +281,7 @@ async function startServer() {
 
     const userWithHash = dbService.getUserByUsernameOrEmail(loginId);
     if (!userWithHash) {
+      console.warn(`[AUTH] Login failed: Account "${loginId}" not found in persistent database.`);
       return res.status(401).json({
         error: "We couldn't find an account matching that username.",
         accountNotFound: true,
@@ -277,10 +299,12 @@ async function startServer() {
 
     const isMatch = dbService.verifyPassword(password, userWithHash.passwordHash);
     if (!isMatch) {
+      console.warn(`[AUTH] Login failed: Incorrect password for user @${userWithHash.username} (${userWithHash.fullName}).`);
       return res.status(401).json({
         error: 'Incorrect password. Please try again.',
         wrongPassword: true,
         accountExists: true,
+        identifier: userWithHash.username,
         message: 'Incorrect password. Please try again.',
       });
     }
@@ -292,6 +316,8 @@ async function startServer() {
         return res.status(401).json({
           error: 'Incorrect 4-Digit Security PIN. Please try again.',
           wrongPin: true,
+          accountExists: true,
+          identifier: userWithHash.username,
           message: 'Incorrect 4-Digit Security PIN.',
         });
       }
@@ -337,7 +363,7 @@ async function startServer() {
     return res.json(lists);
   });
 
-  app.post('/api/recruitment-lists', (req, res) => {
+  app.post('/api/recruitment-lists', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -348,7 +374,7 @@ async function startServer() {
     }
 
     try {
-      const newList = dbService.createRecruitmentList(
+      const newList = await dbService.createRecruitmentList(
         {
           userId: currentUser.id,
           name: name.trim(),
@@ -358,7 +384,7 @@ async function startServer() {
         currentUser.fullName
       );
 
-      dbService.addAuditLog({
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Recruitment List Created',
@@ -383,7 +409,7 @@ async function startServer() {
     return res.json(list);
   });
 
-  app.put('/api/recruitment-lists/:id', (req, res) => {
+  app.put('/api/recruitment-lists/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -391,7 +417,7 @@ async function startServer() {
     const { name, schoolName, branch, archived } = req.body;
 
     try {
-      const updated = dbService.updateRecruitmentList(
+      const updated = await dbService.updateRecruitmentList(
         req.params.id,
         {
           ...(name !== undefined && { name: name.trim() }),
@@ -403,7 +429,7 @@ async function startServer() {
         currentUser.id
       );
 
-      dbService.addAuditLog({
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Recruitment List Updated',
@@ -416,7 +442,7 @@ async function startServer() {
     }
   });
 
-  app.delete('/api/recruitment-lists/:id', (req, res) => {
+  app.delete('/api/recruitment-lists/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -427,9 +453,9 @@ async function startServer() {
 
     try {
       const existing = dbService.getRecruitmentListById(req.params.id, currentUser.id);
-      const result = dbService.deleteRecruitmentList(req.params.id, currentUser.id);
+      const result = await dbService.deleteRecruitmentList(req.params.id, currentUser.id);
       if (result.success) {
-        dbService.addAuditLog({
+        await dbService.addAuditLog({
           userId: currentUser.id,
           userName: currentUser.fullName,
           action: 'Recruitment List Deleted',
@@ -566,7 +592,7 @@ async function startServer() {
   });
 
   // 8. Add Student Record (Official Recruitment Personal Information Form)
-  app.post('/api/students', (req, res) => {
+  app.post('/api/students', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
       return res.status(401).json({ error: 'Authentication required to encode student records.' });
@@ -643,7 +669,7 @@ async function startServer() {
     }
 
     try {
-      const newStudent = dbService.createStudent(
+      const newStudent = await dbService.createStudent(
         {
           ...body,
           userId: currentUser.id,
@@ -663,7 +689,7 @@ async function startServer() {
         currentUser.fullName
       );
 
-      dbService.addAuditLog({
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Student Added',
@@ -684,7 +710,7 @@ async function startServer() {
   });
 
   // 9. Update Student Record
-  app.put('/api/students/:id', (req, res) => {
+  app.put('/api/students/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
       return res.status(401).json({ error: 'Authentication required to update student records.' });
@@ -726,7 +752,7 @@ async function startServer() {
     try {
       const isStatusChange = remarks && remarks !== existing.remarks;
 
-      const updated = dbService.updateStudent(
+      const updated = await dbService.updateStudent(
         studentId,
         {
           ...body,
@@ -738,7 +764,7 @@ async function startServer() {
         currentUser.id
       );
 
-      dbService.addAuditLog({
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: isStatusChange ? 'Status Changed' : 'Student Edited',
@@ -754,7 +780,7 @@ async function startServer() {
   });
 
   // 10. Delete Student Record
-  app.delete('/api/students/:id', (req, res) => {
+  app.delete('/api/students/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
       return res.status(401).json({ error: 'Authentication required to delete student records.' });
@@ -769,9 +795,9 @@ async function startServer() {
       return res.status(404).json({ error: 'Student record not found.' });
     }
 
-    const success = dbService.deleteStudent(req.params.id, currentUser.id);
+    const success = await dbService.deleteStudent(req.params.id, currentUser.id);
     if (success) {
-      dbService.addAuditLog({
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Student Deleted',
@@ -1234,7 +1260,7 @@ ACCURACY & INTEGRITY RULES:
   });
 
   // 13b. PUT/PATCH/POST /api/settings/logo - Upload & save system logo permanently
-  const handleLogoSave = (req: express.Request, res: express.Response) => {
+  const handleLogoSave = async (req: express.Request, res: express.Response) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can update system logo.' });
@@ -1247,8 +1273,8 @@ ACCURACY & INTEGRITY RULES:
     }
 
     try {
-      const result = dbService.saveLogo(targetImage, mimeType, presetName);
-      dbService.addAuditLog({
+      const result = await dbService.saveLogo(targetImage, mimeType, presetName);
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Logo Updated',
@@ -1265,9 +1291,9 @@ ACCURACY & INTEGRITY RULES:
       return res.status(500).json({ error: err.message || 'Failed to save system logo.' });
     }
   };
-  app.put('/api/settings/logo', handleLogoSave);
-  app.patch('/api/settings/logo', handleLogoSave);
-  app.post('/api/settings/logo', handleLogoSave);
+  app.put('/api/settings/logo', requireHealthyDatabase, handleLogoSave);
+  app.patch('/api/settings/logo', requireHealthyDatabase, handleLogoSave);
+  app.post('/api/settings/logo', requireHealthyDatabase, handleLogoSave);
 
   // 13c. GET /api/settings/background - Stream active background image directly
   app.get('/api/settings/background', (req, res) => {
@@ -1292,7 +1318,7 @@ ACCURACY & INTEGRITY RULES:
   });
 
   // 13d. PUT/PATCH/POST /api/settings/background - Upload & save system background permanently
-  const handleBgSave = (req: express.Request, res: express.Response) => {
+  const handleBgSave = async (req: express.Request, res: express.Response) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can update system background.' });
@@ -1305,8 +1331,8 @@ ACCURACY & INTEGRITY RULES:
     }
 
     try {
-      const result = dbService.saveBackground(targetImage, mimeType, presetName);
-      dbService.addAuditLog({
+      const result = await dbService.saveBackground(targetImage, mimeType, presetName);
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Background Updated',
@@ -1323,9 +1349,9 @@ ACCURACY & INTEGRITY RULES:
       return res.status(500).json({ error: err.message || 'Failed to save system background.' });
     }
   };
-  app.put('/api/settings/background', handleBgSave);
-  app.patch('/api/settings/background', handleBgSave);
-  app.post('/api/settings/background', handleBgSave);
+  app.put('/api/settings/background', requireHealthyDatabase, handleBgSave);
+  app.patch('/api/settings/background', requireHealthyDatabase, handleBgSave);
+  app.post('/api/settings/background', requireHealthyDatabase, handleBgSave);
 
   // 13e. GET /api/settings/splash-background - Stream active splash background image directly
   app.get('/api/settings/splash-background', (req, res) => {
@@ -1351,7 +1377,7 @@ ACCURACY & INTEGRITY RULES:
   });
 
   // 13f. PUT/PATCH/POST /api/settings/splash-background - Upload & save splash screen background permanently
-  const handleSplashBgSave = (req: express.Request, res: express.Response) => {
+  const handleSplashBgSave = async (req: express.Request, res: express.Response) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can update splash background.' });
@@ -1364,8 +1390,8 @@ ACCURACY & INTEGRITY RULES:
     }
 
     try {
-      const result = dbService.saveSplashBackground(targetImage, mimeType, presetName);
-      dbService.addAuditLog({
+      const result = await dbService.saveSplashBackground(targetImage, mimeType, presetName);
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Splash Background Updated',
@@ -1382,9 +1408,9 @@ ACCURACY & INTEGRITY RULES:
       return res.status(500).json({ error: err.message || 'Failed to save splash screen background.' });
     }
   };
-  app.put('/api/settings/splash-background', handleSplashBgSave);
-  app.patch('/api/settings/splash-background', handleSplashBgSave);
-  app.post('/api/settings/splash-background', handleSplashBgSave);
+  app.put('/api/settings/splash-background', requireHealthyDatabase, handleSplashBgSave);
+  app.patch('/api/settings/splash-background', requireHealthyDatabase, handleSplashBgSave);
+  app.post('/api/settings/splash-background', requireHealthyDatabase, handleSplashBgSave);
 
   // 13g. GET /api/settings
   app.get('/api/settings', (req, res) => {
@@ -1393,7 +1419,7 @@ ACCURACY & INTEGRITY RULES:
   });
 
   // 13h. PUT /api/settings
-  app.put('/api/settings', (req, res) => {
+  app.put('/api/settings', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can update system settings.' });
@@ -1487,8 +1513,8 @@ ACCURACY & INTEGRITY RULES:
     }
 
     try {
-      const updated = dbService.updateSettings(updates);
-      dbService.addAuditLog({
+      const updated = await dbService.updateSettings(updates);
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Settings Updated',
@@ -1503,39 +1529,39 @@ ACCURACY & INTEGRITY RULES:
 
   // 13i. Preset Management Endpoints
   // Logo Presets
-  app.post('/api/settings/presets/logo', (req, res) => {
+  app.post('/api/settings/presets/logo', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.addLogoPreset(req.body);
+      const updated = await dbService.addLogoPreset(req.body);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to add logo preset.' });
     }
   });
 
-  app.patch('/api/settings/presets/logo/:id', (req, res) => {
+  app.patch('/api/settings/presets/logo/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.updateLogoPreset(req.params.id, req.body);
+      const updated = await dbService.updateLogoPreset(req.params.id, req.body);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to update logo preset.' });
     }
   });
 
-  app.delete('/api/settings/presets/logo/:id', (req, res) => {
+  app.delete('/api/settings/presets/logo/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.deleteLogoPreset(req.params.id);
+      const updated = await dbService.deleteLogoPreset(req.params.id);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to delete logo preset.' });
@@ -1543,39 +1569,39 @@ ACCURACY & INTEGRITY RULES:
   });
 
   // Dashboard Background Presets
-  app.post('/api/settings/presets/dashboard-bg', (req, res) => {
+  app.post('/api/settings/presets/dashboard-bg', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.addDashboardBgPreset(req.body);
+      const updated = await dbService.addDashboardBgPreset(req.body);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to add background preset.' });
     }
   });
 
-  app.patch('/api/settings/presets/dashboard-bg/:id', (req, res) => {
+  app.patch('/api/settings/presets/dashboard-bg/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.updateDashboardBgPreset(req.params.id, req.body);
+      const updated = await dbService.updateDashboardBgPreset(req.params.id, req.body);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to update background preset.' });
     }
   });
 
-  app.delete('/api/settings/presets/dashboard-bg/:id', (req, res) => {
+  app.delete('/api/settings/presets/dashboard-bg/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.deleteDashboardBgPreset(req.params.id);
+      const updated = await dbService.deleteDashboardBgPreset(req.params.id);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to delete background preset.' });
@@ -1583,39 +1609,39 @@ ACCURACY & INTEGRITY RULES:
   });
 
   // Splash Background Presets
-  app.post('/api/settings/presets/splash-bg', (req, res) => {
+  app.post('/api/settings/presets/splash-bg', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.addSplashBgPreset(req.body);
+      const updated = await dbService.addSplashBgPreset(req.body);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to add splash preset.' });
     }
   });
 
-  app.patch('/api/settings/presets/splash-bg/:id', (req, res) => {
+  app.patch('/api/settings/presets/splash-bg/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.updateSplashBgPreset(req.params.id, req.body);
+      const updated = await dbService.updateSplashBgPreset(req.params.id, req.body);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to update splash preset.' });
     }
   });
 
-  app.delete('/api/settings/presets/splash-bg/:id', (req, res) => {
+  app.delete('/api/settings/presets/splash-bg/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.deleteSplashBgPreset(req.params.id);
+      const updated = await dbService.deleteSplashBgPreset(req.params.id);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to delete splash preset.' });
@@ -1623,39 +1649,39 @@ ACCURACY & INTEGRITY RULES:
   });
 
   // Theme Presets
-  app.post('/api/settings/presets/theme', (req, res) => {
+  app.post('/api/settings/presets/theme', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.addThemePreset(req.body);
+      const updated = await dbService.addThemePreset(req.body);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to add theme preset.' });
     }
   });
 
-  app.patch('/api/settings/presets/theme/:id', (req, res) => {
+  app.patch('/api/settings/presets/theme/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.updateThemePreset(req.params.id, req.body);
+      const updated = await dbService.updateThemePreset(req.params.id, req.body);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to update theme preset.' });
     }
   });
 
-  app.delete('/api/settings/presets/theme/:id', (req, res) => {
+  app.delete('/api/settings/presets/theme/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Only Super Administrator can manage presets.' });
     }
     try {
-      const updated = dbService.deleteThemePreset(req.params.id);
+      const updated = await dbService.deleteThemePreset(req.params.id);
       return res.json(updated);
     } catch (err: any) {
       return res.status(400).json({ error: err.message || 'Failed to delete theme preset.' });
@@ -1672,7 +1698,7 @@ ACCURACY & INTEGRITY RULES:
     return res.json(users);
   });
 
-  app.post('/api/users', (req, res) => {
+  app.post('/api/users', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Access restricted to Super Administrator.' });
@@ -1684,7 +1710,7 @@ ACCURACY & INTEGRITY RULES:
     }
 
     try {
-      const newUser = dbService.createUser({
+      const newUser = await dbService.createUser({
         fullName: fullName.trim(),
         username: username.trim(),
         password,
@@ -1692,7 +1718,7 @@ ACCURACY & INTEGRITY RULES:
         role,
       });
 
-      dbService.addAuditLog({
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'User Created',
@@ -1705,15 +1731,15 @@ ACCURACY & INTEGRITY RULES:
     }
   });
 
-  app.put('/api/users/:id', (req, res) => {
+  app.put('/api/users/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Access restricted to Super Administrator.' });
     }
 
     try {
-      const updated = dbService.updateUser(req.params.id, req.body);
-      dbService.addAuditLog({
+      const updated = await dbService.updateUser(req.params.id, req.body);
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'User Updated',
@@ -1725,7 +1751,7 @@ ACCURACY & INTEGRITY RULES:
     }
   });
 
-  app.delete('/api/users/:id', (req, res) => {
+  app.delete('/api/users/:id', requireHealthyDatabase, async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser || currentUser.role !== 'Super Administrator') {
       return res.status(403).json({ error: 'Access restricted to Super Administrator.' });
@@ -1735,9 +1761,9 @@ ACCURACY & INTEGRITY RULES:
       return res.status(400).json({ error: 'Cannot delete your own administrator account.' });
     }
 
-    const deleted = dbService.deleteUser(req.params.id);
+    const deleted = await dbService.deleteUser(req.params.id);
     if (deleted) {
-      dbService.addAuditLog({
+      await dbService.addAuditLog({
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'User Deleted',
