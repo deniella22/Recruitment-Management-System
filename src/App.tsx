@@ -398,15 +398,12 @@ export default function App() {
     );
   }
 
-  // 1. First-time system launch: No administrator exists -> AdminRegistrationModal
-  if (!hasUsers) {
-    return <AdminRegistrationModal onSuccess={handleAuthSuccess} systemSettings={systemSettings} />;
-  }
-
-  // 2. Not logged in -> AuthScreen (Login / Register / Remembered Accounts)
+  // 1. Not logged in -> AuthScreen (Login to Existing Account / Create New Account based on Database state)
   if (!currentUser) {
     return (
       <AuthScreen
+        hasExistingAccounts={hasUsers}
+        initialMode={hasUsers ? 'login' : 'register'}
         onSuccess={handleAuthSuccess}
         onResetAccounts={() => {
           setCurrentUser(null);
@@ -522,6 +519,7 @@ export default function App() {
           {activeTab === 'students' && (
             <StudentListView
               students={students}
+              loading={loadingStudents}
               onViewStudent={handleViewStudentProfile}
               onEditStudent={handleEditStudent}
               onDeleteStudent={(s) => setStudentToDelete(s)}

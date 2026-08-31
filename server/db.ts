@@ -833,6 +833,21 @@ export const dbService = {
     };
 
     db.users.push(newUser);
+
+    // Ensure default recruitment workspace list is initialized for the user
+    if (!db.recruitmentLists) db.recruitmentLists = [];
+    const defaultList: RecruitmentList = {
+      id: 'rcl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      userId: newUser.id,
+      name: 'SY 2026-2027 Recruitment',
+      schoolName: (db.settings?.schoolName || 'Sisters of Mary School').trim(),
+      branch: 'Talisay, Cebu',
+      archived: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    db.recruitmentLists.push(defaultList);
+
     db.settings = {
       ...DEFAULT_SETTINGS,
       ...db.settings,
@@ -842,7 +857,7 @@ export const dbService = {
     };
     saveDb(db);
 
-    console.log(`[DB] Successfully created and persisted account for: ${newUser.fullName} (@${newUser.username}) - Total Users in DB: ${db.users.length}`);
+    console.log(`[DB] Successfully created and persisted account for: ${newUser.fullName} (@${newUser.username}) with default workspace - Total Users in DB: ${db.users.length}`);
 
     const { passwordHash: _, pinHash: __, ...cleanUser } = newUser;
     return cleanUser;
@@ -969,9 +984,28 @@ export const dbService = {
   getRecruitmentListsWithStats(userId?: string, includeArchived = false): RecruitmentListWithStats[] {
     const db = ensureDbExists();
     if (!userId) return [];
-    const lists = (db.recruitmentLists || []).filter(
+    if (!db.recruitmentLists) db.recruitmentLists = [];
+    let lists = db.recruitmentLists.filter(
       (r) => r.userId === userId && (includeArchived || !r.archived)
     );
+
+    // If user has 0 lists, automatically provision default recruitment list in database
+    if (lists.length === 0) {
+      const defaultList: RecruitmentList = {
+        id: 'rcl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        userId,
+        name: 'SY 2026-2027 Recruitment',
+        schoolName: (db.settings?.schoolName || 'Sisters of Mary School').trim(),
+        branch: 'Talisay, Cebu',
+        archived: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      db.recruitmentLists.push(defaultList);
+      saveDb(db);
+      lists = [defaultList];
+    }
+
     const userStudents = db.students.filter((s) => s.userId === userId);
 
     return lists.map((list) => {

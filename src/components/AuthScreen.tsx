@@ -28,10 +28,22 @@ interface Props {
   onSuccess: (user: UserType, token: string, isNewAccount?: boolean) => void;
   onResetAccounts?: () => void;
   systemSettings?: SystemSettings;
+  hasExistingAccounts?: boolean;
+  initialMode?: 'landing' | 'login' | 'register';
 }
 
-export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, systemSettings }) => {
-  const [mode, setMode] = useState<'landing' | 'login' | 'register'>('landing');
+export const AuthScreen: React.FC<Props> = ({
+  onSuccess,
+  onResetAccounts,
+  systemSettings,
+  hasExistingAccounts = true,
+  initialMode,
+}) => {
+  const [mode, setMode] = useState<'landing' | 'login' | 'register'>(() => {
+    if (initialMode) return initialMode;
+    if (hasExistingAccounts === false) return 'register';
+    return 'landing';
+  });
 
   // Login inputs
   const [loginIdentifier, setLoginIdentifier] = useState('');
@@ -892,6 +904,19 @@ export const AuthScreen: React.FC<Props> = ({ onSuccess, onResetAccounts, system
           {/* 2. CREATE NEW ACCOUNT MODE */}
           {mode === 'register' && (
             <form onSubmit={handleRegisterSubmit} className="space-y-3">
+              {!hasExistingAccounts && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                  <Shield className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-extrabold uppercase tracking-wide text-[10px] text-amber-900">
+                      First-Time System Initialization
+                    </p>
+                    <p className="text-[11px] text-amber-800 leading-snug mt-0.5">
+                      No recruitment account was found in the database. Create your primary administrator account to initialize your workspace.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
                   Full Name & Title

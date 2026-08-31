@@ -20,6 +20,7 @@ import { StudentRecord, UserRole } from '../types';
 interface Props {
   students: StudentRecord[];
   allStudents?: StudentRecord[];
+  loading?: boolean;
   onViewStudent: (student: StudentRecord) => void;
   onEditStudent: (student: StudentRecord) => void;
   onDeleteStudent: (student: StudentRecord) => void;
@@ -40,6 +41,7 @@ interface Props {
 export const StudentListView: React.FC<Props> = ({
   students,
   allStudents,
+  loading = false,
   onViewStudent,
   onEditStudent,
   onDeleteStudent,
@@ -265,7 +267,13 @@ export const StudentListView: React.FC<Props> = ({
 
       {/* Student Records Table */}
       <div className="bg-white rounded-2xl border border-blue-100 shadow-xs overflow-hidden">
-        {students.length === 0 ? (
+        {loading ? (
+          <div className="py-16 text-center text-gray-400 space-y-3">
+            <div className="w-9 h-9 border-3 border-[#1E3A8A] border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="font-bold text-sm text-gray-700">Loading student records from recruitment database...</p>
+            <p className="text-xs text-gray-400">Synchronizing persistent workspace records...</p>
+          </div>
+        ) : students.length === 0 ? (
           <div className="py-16 text-center text-gray-400">
             <Users className="w-12 h-12 mx-auto text-blue-200 mb-3" />
             <p className="font-bold text-base text-gray-700">No student records available.</p>
