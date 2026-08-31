@@ -542,7 +542,13 @@ async function startServer() {
     const currentUser = getCurrentUser(req);
     const candidate = req.body || {};
     const excludeId = req.body?.excludeId;
-    const recruitmentListId = req.body?.recruitmentListId;
+    let recruitmentListId = req.body?.recruitmentListId ? String(req.body.recruitmentListId).trim() : undefined;
+    if (!recruitmentListId && currentUser) {
+      const userLists = dbService.getRecruitmentLists(currentUser.id, false);
+      if (userLists.length > 0) {
+        recruitmentListId = userLists[0].id;
+      }
+    }
 
     const result = dbService.checkDuplicate(candidate, currentUser?.id, excludeId, recruitmentListId);
     return res.json(result);
@@ -571,6 +577,15 @@ async function startServer() {
     const lastName = String(body.lastName || body.surname || '').trim();
     const firstName = String(body.firstName || '').trim();
     const birthdate = String(body.birthdate || body.birthday || '').trim();
+
+    // Resolve target recruitment list ID
+    let recruitmentListId = body.recruitmentListId ? String(body.recruitmentListId).trim() : undefined;
+    if (!recruitmentListId && currentUser) {
+      const userLists = dbService.getRecruitmentLists(currentUser.id, false);
+      if (userLists.length > 0) {
+        recruitmentListId = userLists[0].id;
+      }
+    }
 
     // Required Field Validations matching official workflow
     if (!lrn) {
@@ -613,7 +628,7 @@ async function startServer() {
       },
       currentUser.id,
       undefined,
-      body.recruitmentListId
+      recruitmentListId
     );
 
     if (dupCheck.duplicateStatus === 'EXACT') {
@@ -632,7 +647,7 @@ async function startServer() {
         {
           ...body,
           userId: currentUser.id,
-          recruitmentListId: body.recruitmentListId ? body.recruitmentListId.trim() : undefined,
+          recruitmentListId,
           lrn,
           lastName,
           surname: lastName,

@@ -460,6 +460,9 @@ export const ScanFormView: React.FC<Props> = ({
       const cleanLrn = lrn.trim();
       const cleanSn = lastName.trim();
       const cleanFn = firstName.trim();
+      const activeListId =
+        recruitmentListId ||
+        (typeof localStorage !== 'undefined' ? localStorage.getItem('sms_active_recruitment_list_id') || undefined : undefined);
 
       if ((cleanLrn && cleanLrn.length >= 6) || (cleanSn && cleanFn)) {
         try {
@@ -474,7 +477,7 @@ export const ScanFormView: React.FC<Props> = ({
               address: address,
             },
             undefined,
-            recruitmentListId
+            activeListId
           );
 
           if (res.duplicateStatus === 'EXACT' || res.duplicateStatus === 'POSSIBLE') {
@@ -566,8 +569,12 @@ export const ScanFormView: React.FC<Props> = ({
     setSaving(true);
 
     try {
+      const activeListId =
+        recruitmentListId ||
+        (typeof localStorage !== 'undefined' ? localStorage.getItem('sms_active_recruitment_list_id') || undefined : undefined);
+
       const studentPayload: any = {
-        recruitmentListId,
+        recruitmentListId: activeListId,
         photoUrl: photoUrl || undefined,
         // Section A
         lastName: cleanLastName,

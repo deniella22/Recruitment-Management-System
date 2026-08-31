@@ -393,10 +393,19 @@ function validateAndSanitizeDb(raw: any): DbSchema {
     if (s.userId && idRemap.has(s.userId)) {
       cleanUserId = idRemap.get(s.userId)!;
     }
+    let rId = s.recruitmentListId ? s.recruitmentListId.trim() : undefined;
+    if (!rId && cleanUserId) {
+      const userList =
+        cleanRecruitmentLists.find((r) => r.userId === cleanUserId && !r.archived) ||
+        cleanRecruitmentLists.find((r) => r.userId === cleanUserId);
+      if (userList) {
+        rId = userList.id;
+      }
+    }
     return sanitizeStudentRecord({
       ...s,
       userId: cleanUserId,
-      recruitmentListId: s.recruitmentListId ? s.recruitmentListId.trim() : undefined,
+      recruitmentListId: rId,
     });
   });
 
@@ -1105,7 +1114,7 @@ export const dbService = {
     if (!userId) return [];
     let list = db.students.filter((s) => s.userId === userId);
     if (recruitmentListId) {
-      list = list.filter((s) => s.recruitmentListId === recruitmentListId);
+      list = list.filter((s) => s.recruitmentListId === recruitmentListId || !s.recruitmentListId);
     }
     return list;
   },
@@ -1128,7 +1137,7 @@ export const dbService = {
     let records = db.students.filter((s) => s.userId === params.userId);
 
     if (params.recruitmentListId) {
-      records = records.filter((s) => s.recruitmentListId === params.recruitmentListId);
+      records = records.filter((s) => s.recruitmentListId === params.recruitmentListId || !s.recruitmentListId);
     }
 
     // Search filter
@@ -1220,7 +1229,7 @@ export const dbService = {
     const db = ensureDbExists();
     if (!userId) return undefined;
     return db.students.find(
-      (s) => s.id === id && s.userId === userId && (!recruitmentListId || s.recruitmentListId === recruitmentListId)
+      (s) => s.id === id && s.userId === userId && (!recruitmentListId || !s.recruitmentListId || s.recruitmentListId === recruitmentListId)
     );
   },
 
@@ -1229,7 +1238,7 @@ export const dbService = {
     if (!userId) return undefined;
     const cleanLrn = lrn.trim();
     return db.students.find(
-      (s) => s.lrn.trim() === cleanLrn && s.userId === userId && (!recruitmentListId || s.recruitmentListId === recruitmentListId)
+      (s) => s.lrn.trim() === cleanLrn && s.userId === userId && (!recruitmentListId || !s.recruitmentListId || s.recruitmentListId === recruitmentListId)
     );
   },
 
@@ -1239,14 +1248,23 @@ export const dbService = {
   ): StudentRecord {
     const db = ensureDbExists();
 
+    let rListId = studentData.recruitmentListId ? studentData.recruitmentListId.trim() : undefined;
+    if (!rListId && studentData.userId) {
+      const userLists = (db.recruitmentLists || []).filter((r) => r.userId === studentData.userId && !r.archived);
+      if (userLists.length > 0) {
+        rListId = userLists[0].id;
+      }
+    }
+
     // Strict duplicate check before creating a record
-    const dupCheck = this.checkDuplicate(studentData, studentData.userId, undefined, studentData.recruitmentListId);
+    const dupCheck = this.checkDuplicate(studentData, studentData.userId, undefined, rListId);
     if (dupCheck.duplicateStatus === 'EXACT') {
       throw new Error(dupCheck.message || `Duplicate student record: ${dupCheck.existingRecord?.lastName || dupCheck.existingRecord?.surname}, ${dupCheck.existingRecord?.firstName} (LRN: ${dupCheck.existingRecord?.lrn || 'N/A'}) already exists in this recruitment list.`);
     }
 
     const sanitized = sanitizeStudentRecord({
       ...studentData,
+      recruitmentListId: rListId,
       createdBy: operatorName,
       updatedBy: operatorName,
     });

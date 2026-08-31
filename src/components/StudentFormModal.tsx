@@ -318,8 +318,13 @@ export const StudentFormModal: React.FC<Props> = ({
     setLoading(true);
 
     try {
+      const activeListId =
+        recruitmentListId ||
+        (studentToEdit as any)?.recruitmentListId ||
+        (typeof localStorage !== 'undefined' ? localStorage.getItem('sms_active_recruitment_list_id') || undefined : undefined);
+
       const studentPayload: any = {
-        recruitmentListId,
+        recruitmentListId: activeListId,
         // Section A
         photoUrl: photoUrl || undefined,
         lastName: cleanLastName,
@@ -415,6 +420,10 @@ export const StudentFormModal: React.FC<Props> = ({
         onClose={onClose}
         onSuccess={onSuccess}
         maxExamScore={maxExamScore}
+        recruitmentListId={
+          recruitmentListId ||
+          (typeof localStorage !== 'undefined' ? localStorage.getItem('sms_active_recruitment_list_id') || undefined : undefined)
+        }
       />
     );
   }

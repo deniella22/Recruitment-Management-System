@@ -225,9 +225,20 @@ export default function App() {
     if (selectedStudentForProfile && selectedStudentForProfile.id === savedStudent.id) {
       setSelectedStudentForProfile(savedStudent);
     }
+    // Optimistically update local student array immediately for instant UI responsiveness
+    setStudents((prev) => {
+      const idx = prev.findIndex((s) => s.id === savedStudent.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = savedStudent;
+        return next;
+      }
+      return [savedStudent, ...prev];
+    });
+    // Immediately reload authoritative fresh data and metrics from the database
     loadStudentData();
     showToast(
-      `Student record for ${savedStudent.surname}, ${savedStudent.firstName} saved successfully.`
+      `Student record for ${savedStudent.surname || savedStudent.lastName || 'Student'}, ${savedStudent.firstName} saved successfully.`
     );
   };
 
