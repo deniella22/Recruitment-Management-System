@@ -90,9 +90,10 @@ async function startServer() {
 
   // Database availability check middleware for mutation routes
   const requireHealthyDatabase = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (!isDatabaseHealthy()) {
+    const health = isDatabaseHealthy();
+    if (!health.healthy) {
       return res.status(503).json({
-        error: 'Database is currently connecting or unavailable. Please retry in a few seconds.',
+        error: health.message || 'Database is currently connecting or unavailable. Please retry in a few seconds.',
         databaseUnavailable: true,
       });
     }
