@@ -808,7 +808,7 @@ async function startServer() {
     return res.status(500).json({ error: 'Failed to delete student record.' });
   });
 
-  // 10b. OCR Document Scanning (Gemini 3.6 Flash Multimodal Document Processing)
+  // 10b. OCR Document Scanning (Gemini Multimodal Document Processing)
   app.post('/api/ocr-scan', async (req, res) => {
     const currentUser = getCurrentUser(req);
     if (!currentUser) {
@@ -817,16 +817,43 @@ async function startServer() {
 
     const { imageBase64, mimeType } = req.body;
     if (!imageBase64 || typeof imageBase64 !== 'string' || imageBase64.trim().length === 0) {
-      return res.status(400).json({ error: 'Image file or camera scan data is required for OCR processing.' });
+      return res.status(400).json({ error: 'Please upload a valid JPG, PNG, or WEBP image.' });
     }
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
+        console.error('[OCR] GEMINI_API_KEY environment variable is not configured on server.');
         return res.status(500).json({
-          error: 'OCR configuration error. Please contact the system administrator.',
+          error: 'OCR is not configured. Please contact the system administrator.',
         });
       }
+
+      let cleanBase64 = imageBase64;
+      let cleanMimeType = (mimeType || 'image/jpeg').split(';')[0].trim().toLowerCase();
+
+      if (imageBase64.includes(';base64,')) {
+        const parts = imageBase64.split(';base64,');
+        const headerMime = parts[0].replace('data:', '').trim().toLowerCase();
+        if (headerMime) {
+          cleanMimeType = headerMime.split(';')[0].trim();
+        }
+        cleanBase64 = parts[1];
+      }
+      cleanBase64 = cleanBase64.replace(/\s+/g, '');
+
+      // Normalize common image MIME aliases for Gemini compatibility
+      if (cleanMimeType === 'image/jpg' || cleanMimeType === 'image/pjpeg' || cleanMimeType === 'image/jfif') {
+        cleanMimeType = 'image/jpeg';
+      } else if (cleanMimeType === 'image/x-png') {
+        cleanMimeType = 'image/png';
+      }
+
+      if (!['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(cleanMimeType)) {
+        cleanMimeType = 'image/jpeg';
+      }
+
+      console.log(`[OCR] Request received - MIME: ${cleanMimeType}, Base64 length: ${cleanBase64.length} chars (~${Math.round((cleanBase64.length * 0.75) / 1024)} KB)`);
 
       const ai = new GoogleGenAI({
         apiKey,
@@ -836,16 +863,6 @@ async function startServer() {
           },
         },
       });
-
-      let cleanBase64 = imageBase64;
-      let cleanMimeType = mimeType || 'image/jpeg';
-
-      if (imageBase64.includes(';base64,')) {
-        const parts = imageBase64.split(';base64,');
-        cleanMimeType = parts[0].replace('data:', '') || cleanMimeType;
-        cleanBase64 = parts[1];
-      }
-      cleanBase64 = cleanBase64.replace(/\s+/g, '');
 
       const schema = {
         type: Type.OBJECT,
@@ -964,7 +981,7 @@ async function startServer() {
       };
 
       let responseText = '';
-      // Primary model: gemini-3.6-flash, with robust fallback models for peak reliability
+      let successfulModel = '';
       const candidateModels = [
         'gemini-3.6-flash',
         'gemini-flash-latest',
@@ -975,6 +992,7 @@ async function startServer() {
 
       for (const modelName of candidateModels) {
         try {
+          console.log(`[OCR] Requesting document extraction with model: ${modelName}`);
           const response = await ai.models.generateContent({
             model: modelName,
             contents: {
@@ -1054,12 +1072,13 @@ ACCURACY & INTEGRITY RULES:
 
           responseText = response.text || '';
           if (responseText && responseText.trim()) {
-            break; // Succeeded!
+            successfulModel = modelName;
+            console.log(`[OCR] Successfully extracted content using ${modelName}. Response length: ${responseText.length}`);
+            break;
           }
         } catch (modelErr: any) {
           lastErr = modelErr;
-          console.warn(`OCR attempt with model ${modelName} returned error:`, modelErr?.message || modelErr);
-          // Small pause before trying fallback model if 503 or 429
+          console.warn(`[OCR] Model ${modelName} returned error:`, modelErr?.message || modelErr);
           await new Promise((r) => setTimeout(r, 250));
         }
       }
@@ -1077,7 +1096,7 @@ ACCURACY & INTEGRITY RULES:
       try {
         parsed = JSON.parse(cleanResultText);
       } catch (parseErr) {
-        console.error('Failed to parse Gemini OCR JSON:', parseErr, cleanResultText);
+        console.error('[OCR] Failed to parse JSON response:', parseErr, cleanResultText);
         parsed = { extractedData: {} };
       }
 
@@ -1089,6 +1108,9 @@ ACCURACY & INTEGRITY RULES:
       const detectedNotes = parsed.detectedNotes || '';
       const uncertainFields = parsed.uncertainFields || [];
       const rawSummary = parsed.rawSummary || '';
+
+      const detectedFieldsCount = Object.values(rawExtractedData).filter(v => v !== null && v !== undefined && v !== '' && v !== 0).length;
+      console.log(`[OCR] Extraction summary: Model=${successfulModel}, detectedFieldsCount=${detectedFieldsCount}, correctionsApplied=${corrections.length}`);
 
       dbService.addAuditLog({
         userId: currentUser.id,
@@ -1109,10 +1131,10 @@ ACCURACY & INTEGRITY RULES:
         rawSummary,
       });
     } catch (err: any) {
-      console.error('OCR Scanning Error Details:', err);
+      console.error('[OCR] Scanning error caught in route handler:', err);
       const errMsg = err?.message || String(err);
 
-      let userFriendlyError = 'OCR temporarily unavailable. The document image was preserved. Please retry OCR.';
+      let userFriendlyError = 'The OCR service is temporarily unavailable. Please try again.';
       let statusCode = 500;
 
       if (
@@ -1124,7 +1146,7 @@ ACCURACY & INTEGRITY RULES:
         errMsg.includes('403') ||
         errMsg.includes('PERMISSION_DENIED')
       ) {
-        userFriendlyError = 'OCR configuration error. Please contact the system administrator.';
+        userFriendlyError = 'OCR is not configured. Please contact the system administrator.';
         statusCode = 500;
       } else if (
         errMsg.includes('503') ||
@@ -1134,7 +1156,7 @@ ACCURACY & INTEGRITY RULES:
         errMsg.includes('rate limit') ||
         errMsg.includes('429')
       ) {
-        userFriendlyError = 'The scanning service is temporarily busy. Please retry in a moment.';
+        userFriendlyError = 'The OCR service is temporarily unavailable. Please try again.';
         statusCode = 503;
       } else if (
         errMsg.includes('ECONNREFUSED') ||
@@ -1143,7 +1165,7 @@ ACCURACY & INTEGRITY RULES:
         errMsg.includes('ENOTFOUND') ||
         errMsg.includes('ETIMEDOUT')
       ) {
-        userFriendlyError = 'Connection problem. Check your internet connection and retry OCR.';
+        userFriendlyError = 'Unable to connect to the OCR service. Please check your connection and try again.';
         statusCode = 502;
       } else if (
         errMsg.includes('400') ||
@@ -1152,7 +1174,7 @@ ACCURACY & INTEGRITY RULES:
         errMsg.includes('corrupted') ||
         errMsg.includes('cannot decode')
       ) {
-        userFriendlyError = 'Unable to process this image. Please try a clearer document image.';
+        userFriendlyError = 'The document could not be read clearly. Please try a clearer image.';
         statusCode = 400;
       } else if (
         errMsg.includes('404') ||
@@ -1160,7 +1182,7 @@ ACCURACY & INTEGRITY RULES:
         errMsg.includes('is no longer available') ||
         errMsg.includes('not found')
       ) {
-        userFriendlyError = 'OCR service unavailable. Please try OCR again.';
+        userFriendlyError = 'The OCR service is temporarily unavailable. Please try again.';
         statusCode = 503;
       }
 

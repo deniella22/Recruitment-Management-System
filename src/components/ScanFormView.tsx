@@ -311,18 +311,58 @@ export const ScanFormView: React.FC<Props> = ({
   // File Upload Handlers
   const handleFileSelected = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      alert('Please upload a valid image file (JPEG, PNG, WebP).');
+      setOcrError('Please upload a valid JPG, PNG, or WEBP image.');
       return;
     }
     setSelectedFile(file);
     stopCamera();
+    setOcrError(null);
 
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        setImagePreview(reader.result);
-        runOcrScan(reader.result);
+        const rawDataUrl = reader.result;
+        // Optimize resolution if oversized to ensure fast, reliable upload without losing OCR readability
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 2048;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+              setImagePreview(optimizedDataUrl);
+              runOcrScan(optimizedDataUrl);
+              return;
+            }
+          }
+
+          setImagePreview(rawDataUrl);
+          runOcrScan(rawDataUrl);
+        };
+        img.onerror = () => {
+          setImagePreview(rawDataUrl);
+          runOcrScan(rawDataUrl);
+        };
+        img.src = rawDataUrl;
       }
+    };
+    reader.onerror = () => {
+      setOcrError('Failed to read the selected file. Please try selecting the image again.');
     };
     reader.readAsDataURL(file);
   };
@@ -736,7 +776,15 @@ export const ScanFormView: React.FC<Props> = ({
               <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-black text-sm text-red-950">
-                  Unable to read the document. Please upload a clearer image and try again.
+                  {ocrError.includes('configured')
+                    ? 'OCR Service Configuration Required'
+                    : ocrError.includes('temporarily') || ocrError.includes('busy')
+                    ? 'OCR Service Temporarily Unavailable'
+                    : ocrError.includes('connect') || ocrError.includes('connection')
+                    ? 'Connection Error'
+                    : ocrError.includes('valid JPG') || ocrError.includes('format')
+                    ? 'Invalid Image Format'
+                    : 'Document Scanning Issue'}
                 </p>
                 <p className="text-xs text-red-700 mt-0.5 font-medium">{ocrError}</p>
               </div>

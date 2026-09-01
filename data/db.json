@@ -198,6 +198,14 @@
   ],
   "auditLogs": [
     {
+      "id": "log_1788228201369_b9wvl",
+      "userId": "usr_1788161295784_er0tt",
+      "userName": "Officer Alice",
+      "action": "OCR Scan Performed",
+      "details": "Scanned Personal Data Form with OCR (0 smart auto-correction(s) applied):  (LRN: N/A)",
+      "timestamp": "2026-09-01T02:03:21.369Z"
+    },
+    {
       "id": "log_1788226455201_uocp8",
       "userId": "usr_1788161295784_er0tt",
       "userName": "Officer Alice",
