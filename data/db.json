@@ -59,6 +59,18 @@
       "hasPin": true,
       "createdAt": "2026-08-31T07:28:40.498Z",
       "lastLoginAt": "2026-08-31T07:28:40.499Z"
+    },
+    {
+      "id": "usr_1788229241237_yude3",
+      "fullName": "Test Verifier",
+      "username": "test_verifier",
+      "passwordHash": "$2b$10$.2mANXOCLT7wOs5yjnpHZuEVzdqKmdQVaVmrJ54mMnnRV3gR.2yUm",
+      "pinHash": "$2b$10$jvDZaUTCx6RtxqrudpGRwePuUHJUqdwtewn5S5VfcjCjBzhSMUyd2",
+      "role": "ADMIN",
+      "status": "Active",
+      "hasPin": true,
+      "createdAt": "2026-09-01T02:20:41.237Z",
+      "lastLoginAt": "2026-09-01T02:20:41.238Z"
     }
   ],
   "recruitmentLists": [
@@ -131,6 +143,16 @@
       "archived": false,
       "createdAt": "2026-08-31T07:28:40.502Z",
       "updatedAt": "2026-08-31T07:28:40.502Z"
+    },
+    {
+      "id": "rcl_1788229241237_366p3",
+      "userId": "usr_1788229241237_yude3",
+      "name": "SY 2026-2027 Recruitment",
+      "schoolName": "Sisters of Mary School – Talisay, Cebu",
+      "branch": "Talisay, Cebu",
+      "archived": false,
+      "createdAt": "2026-09-01T02:20:41.237Z",
+      "updatedAt": "2026-09-01T02:20:41.237Z"
     }
   ],
   "students": [
@@ -197,6 +219,14 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": "log_1788229241238_vqc5l",
+      "userId": "usr_1788229241237_yude3",
+      "userName": "Test Verifier",
+      "action": "Account Created",
+      "details": "Created new account: Test Verifier (@test_verifier) - Role: ADMIN",
+      "timestamp": "2026-09-01T02:20:41.238Z"
+    },
     {
       "id": "log_1788228201369_b9wvl",
       "userId": "usr_1788161295784_er0tt",
@@ -390,7 +420,7 @@
         "createdAt": "2026-01-01T00:00:00.000Z"
       }
     ],
-    "updatedAt": "2026-08-31T07:28:40.498Z",
+    "updatedAt": "2026-09-01T02:20:41.237Z",
     "administratorUserId": "usr_1788161295784_er0tt"
   }
 }

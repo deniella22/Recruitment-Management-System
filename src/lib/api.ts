@@ -300,6 +300,32 @@ export async function deleteStudent(id: string): Promise<void> {
   if (!res.ok) throw new Error(json.error || 'Failed to delete student record');
 }
 
+export async function fetchOcrStatus(): Promise<{
+  configured: boolean;
+  service: string;
+  message: string;
+}> {
+  try {
+    const res = await fetch('/api/ocr-status', {
+      headers: { ...getAuthHeaders() },
+    });
+    if (!res.ok) {
+      return {
+        configured: false,
+        service: 'gemini',
+        message: 'OCR is not configured. Please contact the system administrator.',
+      };
+    }
+    return await res.json();
+  } catch {
+    return {
+      configured: false,
+      service: 'gemini',
+      message: 'Unable to connect to OCR service.',
+    };
+  }
+}
+
 export async function performOCRScan(imageBase64: string, mimeType?: string): Promise<OCRScanResult> {
   const res = await fetch('/api/ocr-scan', {
     method: 'POST',

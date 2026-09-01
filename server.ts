@@ -1,3 +1,4 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -7,6 +8,56 @@ import { dbService, initDatabaseAsync, getDatabaseStatus, isDatabaseHealthy } fr
 import { generateStudentRecordsExcel } from './server/excelExport.js';
 import { applySmartOcrCorrection } from './server/ocrCorrection.js';
 import { User, StudentRecord, AdmissionStatus, SystemSettings } from './src/types.js';
+
+// Explicitly load .env.local first (local developer overrides), then fallback to .env
+const projectRootDir = process.cwd();
+const envLocalFilePath = path.resolve(projectRootDir, '.env.local');
+const envDefaultFilePath = path.resolve(projectRootDir, '.env');
+
+let envLocalLoaded = false;
+let envDefaultLoaded = false;
+
+if (fs.existsSync(envLocalFilePath)) {
+  dotenv.config({ path: envLocalFilePath });
+  envLocalLoaded = true;
+}
+if (fs.existsSync(envDefaultFilePath)) {
+  dotenv.config({ path: envDefaultFilePath });
+  envDefaultLoaded = true;
+}
+
+// Safe helper function to resolve Gemini API key without exposing secret values
+export function getGeminiApiKey(): string | undefined {
+  const rawKey =
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.VITE_GEMINI_API_KEY;
+
+  if (!rawKey) return undefined;
+  const trimmed = rawKey.trim();
+  if (!trimmed || trimmed === 'MY_GEMINI_API_KEY' || trimmed === '""' || trimmed === "''") {
+    return undefined;
+  }
+  return trimmed;
+}
+
+// SAFE DIAGNOSTICS: Print environment status without leaking secrets
+const resolvedKeyAtStartup = getGeminiApiKey();
+console.log('====================================================');
+console.log('[Backend Startup] Environment & OCR Diagnostics:');
+console.log(`  - NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+console.log(`  - .env.local file: ${fs.existsSync(envLocalFilePath) ? 'Present (loaded)' : 'Not found'}`);
+console.log(`  - .env file: ${fs.existsSync(envDefaultFilePath) ? 'Present (loaded)' : 'Not found'}`);
+console.log(`  - GEMINI_API_KEY exists: ${Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY')}`);
+console.log(`  - GOOGLE_API_KEY exists: ${Boolean(process.env.GOOGLE_API_KEY)}`);
+console.log(`  - VITE_GEMINI_API_KEY exists: ${Boolean(process.env.VITE_GEMINI_API_KEY)}`);
+console.log(`  - Effective Gemini API Key configured: ${Boolean(resolvedKeyAtStartup)}`);
+if (resolvedKeyAtStartup) {
+  console.log(`  - Key format check: Valid string detected (length: ${resolvedKeyAtStartup.length})`);
+} else {
+  console.log('  - Key format check: Missing or not configured');
+}
+console.log('====================================================');
 
 async function startServer() {
   await initDatabaseAsync();
@@ -808,6 +859,20 @@ async function startServer() {
     return res.status(500).json({ error: 'Failed to delete student record.' });
   });
 
+  // 10a. OCR Service Status & Diagnostic Check
+  app.get('/api/ocr-status', (req, res) => {
+    const apiKey = getGeminiApiKey();
+    const isConfigured = Boolean(apiKey && apiKey.length > 0);
+    console.log(`[OCR Status Route] GEMINI_API_KEY exists: ${isConfigured}`);
+    return res.json({
+      configured: isConfigured,
+      service: 'gemini',
+      message: isConfigured
+        ? 'OCR scanning service is ready and configured.'
+        : 'OCR is not configured. Please contact the system administrator.',
+    });
+  });
+
   // 10b. OCR Document Scanning (Gemini Multimodal Document Processing)
   app.post('/api/ocr-scan', async (req, res) => {
     const currentUser = getCurrentUser(req);
@@ -821,9 +886,10 @@ async function startServer() {
     }
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = getGeminiApiKey();
+      console.log(`[OCR Route] Scan initiated. GEMINI_API_KEY exists: ${Boolean(apiKey)}`);
       if (!apiKey) {
-        console.error('[OCR] GEMINI_API_KEY environment variable is not configured on server.');
+        console.error('[OCR Route] GEMINI_API_KEY environment variable is not configured on server.');
         return res.status(500).json({
           error: 'OCR is not configured. Please contact the system administrator.',
         });
@@ -1138,6 +1204,13 @@ ACCURACY & INTEGRITY RULES:
       let statusCode = 500;
 
       if (
+        errMsg.includes('API_KEY_INVALID') ||
+        errMsg.includes('API key not valid') ||
+        errMsg.includes('INVALID_ARGUMENT') && errMsg.includes('API key')
+      ) {
+        userFriendlyError = 'The configured Gemini API key was rejected by Google (API key invalid or unauthorized). Please verify your GEMINI_API_KEY in .env or .env.local.';
+        statusCode = 401;
+      } else if (
         errMsg.includes('API_KEY') ||
         errMsg.includes('apiKey') ||
         errMsg.includes('API key') ||

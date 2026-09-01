@@ -33,7 +33,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { StudentRecord, AdmissionStatus, OCRScanResult, SiblingRecord } from '../types';
-import { performOCRScan, createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
+import { performOCRScan, fetchOcrStatus, createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
 
 interface Props {
   onClose: () => void;
@@ -193,6 +193,28 @@ export const ScanFormView: React.FC<Props> = ({
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
   }, [stage]);
+
+  // Check OCR backend configuration status when the scanner view mounts
+  useEffect(() => {
+    let isSubscribed = true;
+    fetchOcrStatus()
+      .then((status) => {
+        if (!isSubscribed) return;
+        if (!status.configured) {
+          setOcrError('OCR is not configured. Please contact the system administrator.');
+        } else {
+          // If configured, clear any previous configuration error
+          setOcrError((prev) => (prev && prev.includes('configured') ? null : prev));
+        }
+      })
+      .catch((err) => {
+        console.warn('[ScanFormView] Failed to query OCR status on mount:', err);
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, []);
 
   // Clean up camera stream on unmount
   useEffect(() => {
@@ -787,6 +809,14 @@ export const ScanFormView: React.FC<Props> = ({
                     : 'Document Scanning Issue'}
                 </p>
                 <p className="text-xs text-red-700 mt-0.5 font-medium">{ocrError}</p>
+                {ocrError.includes('configured') && (
+                  <div className="mt-2 text-[11px] text-red-800 bg-red-100/70 p-2 rounded-lg border border-red-200">
+                    <p className="font-semibold text-red-900">How to configure OCR:</p>
+                    <p className="mt-0.5">
+                      Ensure <code className="font-mono bg-white px-1 py-0.5 rounded border border-red-300">GEMINI_API_KEY=YOUR_API_KEY</code> is added to your server's <code className="font-mono bg-white px-1 py-0.5 rounded border border-red-300">.env</code> or <code className="font-mono bg-white px-1 py-0.5 rounded border border-red-300">.env.local</code> file and restart the server.
+                    </p>
+                  </div>
+                )}
               </div>
               <button
                 type="button"
