@@ -674,12 +674,12 @@ export const ScanFormView: React.FC<Props> = ({
 
           <div className="space-y-2">
             <h2 className="text-xl font-black tracking-tight flex items-center justify-center gap-2">
-              <span>SCANNING OFFICIAL RECRUITMENT FORM</span>
-              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>Reading document...</span>
+              <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
             </h2>
             <p className="text-xs text-blue-200">
-              {scanProgressStage === 1 && 'Detecting Sections A through J and orientation...'}
-              {scanProgressStage === 2 && 'Gemini 3.6 Flash extracting applicant details, LRN, and family data...'}
+              {scanProgressStage === 1 && 'Reading document and detecting orientation...'}
+              {scanProgressStage === 2 && 'Extracting applicant details, LRN, and family data...'}
               {scanProgressStage === 3 && 'Applying smart corrections and preparing validation mapping...'}
             </p>
           </div>
@@ -714,7 +714,7 @@ export const ScanFormView: React.FC<Props> = ({
               <div>
                 <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/10 rounded-full text-[10px] font-bold text-blue-200">
                   <Sparkles className="w-3 h-3 text-cyan-300" />
-                  <span>GEMINI 3.6 FLASH DOCUMENT RECOGNITION</span>
+                  <span>GEMINI DOCUMENT RECOGNITION</span>
                 </div>
                 <h2 className="text-base sm:text-lg font-black tracking-tight mt-0.5">
                   Scan Official Recruitment Personal Information Form
@@ -729,6 +729,27 @@ export const ScanFormView: React.FC<Props> = ({
               <X className="w-5 h-5" />
             </button>
           </div>
+
+          {/* OCR Error Message Banner */}
+          {ocrError && (
+            <div className="p-3 sm:p-4 bg-red-50 border-b border-red-200 text-red-900 text-xs flex items-start gap-3 shrink-0">
+              <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-black text-sm text-red-950">
+                  Unable to read the document. Please upload a clearer image and try again.
+                </p>
+                <p className="text-xs text-red-700 mt-0.5 font-medium">{ocrError}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOcrError(null)}
+                className="p-1 hover:bg-red-200 rounded text-red-700 transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* Camera Error Message */}
           {cameraError && (
@@ -1023,6 +1044,72 @@ export const ScanFormView: React.FC<Props> = ({
 
           {/* Right Column: Editable Sections A through J Form (8 cols) */}
           <div className="col-span-1 lg:col-span-8 flex flex-col overflow-hidden bg-white">
+            {/* OCR Scan Result Showcase Banner */}
+            <div className="bg-gradient-to-br from-blue-50/90 via-slate-50 to-indigo-50/70 border-b border-blue-200/80 p-3 sm:p-4 shrink-0 shadow-2xs">
+              <div className="flex items-center justify-between gap-3 mb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-emerald-600 text-white rounded-full text-[11px] font-black tracking-wide uppercase shadow-2xs">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Scan Complete</span>
+                  </span>
+                  <h3 className="font-black text-sm text-blue-950 uppercase tracking-tight">
+                    OCR Scan Result
+                  </h3>
+                </div>
+                <span className="text-[11px] font-semibold text-blue-800 hidden sm:inline-flex items-center gap-1 bg-blue-100/60 px-2.5 py-0.5 rounded-full">
+                  <Sparkles className="w-3 h-3 text-blue-600" />
+                  <span>Auto-filled into recruitment form</span>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+                <div className="bg-white p-2 rounded-xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase block">Full Name</span>
+                  <span className="font-extrabold text-gray-900 truncate block" title={`${lastName}, ${firstName} ${middleName}`}>
+                    {lastName || firstName ? `${lastName || '—'}, ${firstName || '—'} ${middleName || ''}`.trim() : '—'}
+                  </span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase block">Date of Birth / Age</span>
+                  <span className="font-extrabold text-gray-900 truncate block">
+                    {birthdate || '—'} {age ? `(${age} yrs)` : ''}
+                  </span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase block">Gender</span>
+                  <span className="font-extrabold text-gray-900 truncate block">{gender || '—'}</span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase block">12-Digit LRN</span>
+                  <span className="font-extrabold text-blue-700 font-mono tracking-tight truncate block">{lrn || '—'}</span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase block">Elementary School</span>
+                  <span className="font-extrabold text-gray-900 truncate block" title={elementarySchool}>
+                    {elementarySchool || '—'}
+                  </span>
+                </div>
+                <div className="bg-white p-2 rounded-xl border border-blue-100 shadow-2xs">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase block">Contact Number</span>
+                  <span className="font-extrabold text-gray-900 truncate block">
+                    {cellphoneNumber || '—'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-2 pt-2 border-t border-blue-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-600">
+                <div className="flex items-center gap-1.5 text-blue-900 font-medium">
+                  <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>All student recruitment form fields have been automatically populated below. Review and edit any field before saving.</span>
+                </div>
+                {scanResult?.corrections && scanResult.corrections.length > 0 && (
+                  <span className="text-amber-800 font-bold bg-amber-100/80 px-2 py-0.5 rounded-lg border border-amber-200">
+                    {scanResult.corrections.length} smart auto-corrections applied
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* Section Tab Bar */}
             <div className="bg-slate-100 border-b border-slate-200 p-2 overflow-x-auto flex items-center gap-1.5 shrink-0">
               {[

@@ -198,6 +198,14 @@
   ],
   "auditLogs": [
     {
+      "id": "log_1788226455201_uocp8",
+      "userId": "usr_1788161295784_er0tt",
+      "userName": "Officer Alice",
+      "action": "OCR Scan Performed",
+      "details": "Scanned Personal Data Form with OCR (0 smart auto-correction(s) applied): DORADO (LRN: N/A)",
+      "timestamp": "2026-09-01T01:34:15.201Z"
+    },
+    {
       "id": "log_1788161320514_q0afp",
       "userId": "usr_1788161320255_mdbmk",
       "userName": "Alice Walker",
@@ -375,6 +383,6 @@
       }
     ],
     "updatedAt": "2026-08-31T07:28:40.498Z",
-    "administratorUserId": "usr_1788161319793_ov5vr"
+    "administratorUserId": "usr_1788161295784_er0tt"
   }
 }

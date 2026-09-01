@@ -845,6 +845,7 @@ async function startServer() {
         cleanMimeType = parts[0].replace('data:', '') || cleanMimeType;
         cleanBase64 = parts[1];
       }
+      cleanBase64 = cleanBase64.replace(/\s+/g, '');
 
       const schema = {
         type: Type.OBJECT,
@@ -963,8 +964,13 @@ async function startServer() {
       };
 
       let responseText = '';
-      // Primary model: gemini-3.6-flash as specified by project requirements, with modern fallback aliases
-      const candidateModels = ['gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-flash-latest'];
+      // Primary model: gemini-3.6-flash, with robust fallback models for peak reliability
+      const candidateModels = [
+        'gemini-3.6-flash',
+        'gemini-flash-latest',
+        'gemini-3.1-flash-lite',
+        'gemini-3.7-flash',
+      ];
       let lastErr: any = null;
 
       for (const modelName of candidateModels) {
@@ -1046,7 +1052,7 @@ ACCURACY & INTEGRITY RULES:
             },
           });
 
-          responseText = response.text || '{}';
+          responseText = response.text || '';
           if (responseText && responseText.trim()) {
             break; // Succeeded!
           }
@@ -1054,7 +1060,7 @@ ACCURACY & INTEGRITY RULES:
           lastErr = modelErr;
           console.warn(`OCR attempt with model ${modelName} returned error:`, modelErr?.message || modelErr);
           // Small pause before trying fallback model if 503 or 429
-          await new Promise((r) => setTimeout(r, 200));
+          await new Promise((r) => setTimeout(r, 250));
         }
       }
 
@@ -1062,12 +1068,16 @@ ACCURACY & INTEGRITY RULES:
         throw lastErr;
       }
 
-      const resultText = responseText || '{}';
+      let cleanResultText = (responseText || '{}').trim();
+      if (cleanResultText.startsWith('```')) {
+        cleanResultText = cleanResultText.replace(/^```(?:json)?\n?/, '').replace(/```$/, '').trim();
+      }
+
       let parsed: any = {};
       try {
-        parsed = JSON.parse(resultText);
+        parsed = JSON.parse(cleanResultText);
       } catch (parseErr) {
-        console.error('Failed to parse Gemini OCR JSON:', parseErr, resultText);
+        console.error('Failed to parse Gemini OCR JSON:', parseErr, cleanResultText);
         parsed = { extractedData: {} };
       }
 
