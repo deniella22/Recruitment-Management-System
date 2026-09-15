@@ -1,4 +1,4 @@
-import { StudentRecord, AdmissionStatus, OCRCorrectionRecord, ConfidenceLevel, SiblingRecord } from '../src/types.js';
+import { StudentRecord, AdmissionStatus, OCRCorrectionRecord, ConfidenceLevel, SiblingRecord, resolveProvince } from '../src/types.js';
 
 // Common Filipino and International Occupations & General Terms
 const OCCUPATION_DICTIONARY: Record<string, string> = {
@@ -412,7 +412,10 @@ export function sanitizeSchoolField(raw: string): { corrected: string; wasChange
 }
 
 export function normalizeAdmissionStatus(raw: string): { corrected: AdmissionStatus; wasChanged: boolean; reason: string } {
-  const lower = (raw || '').trim().toLowerCase();
+  if (!raw || !raw.trim()) {
+    return { corrected: 'Pending', wasChanged: false, reason: 'Defaulted to Pending' };
+  }
+  const lower = raw.trim().toLowerCase();
 
   if (
     lower.includes('a - pass') ||
@@ -443,10 +446,35 @@ export function normalizeAdmissionStatus(raw: string): { corrected: AdmissionSta
     };
   }
 
+  if (
+    lower.includes('conditional') ||
+    lower.includes('condition')
+  ) {
+    return {
+      corrected: 'Conditional',
+      wasChanged: raw !== 'Conditional',
+      reason: 'Mapped admission evaluation to standard "Conditional" status',
+    };
+  }
+
+  if (
+    lower.includes('pending') ||
+    lower.includes('b - pending') ||
+    lower.includes('b-pending') ||
+    lower.includes('under evaluation') ||
+    lower === 'b'
+  ) {
+    return {
+      corrected: 'Pending',
+      wasChanged: raw !== 'Pending',
+      reason: 'Mapped admission evaluation to standard "Pending" status',
+    };
+  }
+
   return {
-    corrected: 'Conditional',
-    wasChanged: raw !== 'Conditional',
-    reason: 'Mapped admission evaluation to standard "Conditional" status',
+    corrected: 'Pending',
+    wasChanged: true,
+    reason: 'Unrecognized admission status, defaulted to "Pending"',
   };
 }
 
@@ -841,7 +869,7 @@ export function applySmartOcrCorrection(rawExtracted: any): {
     const statRes = normalizeAdmissionStatus(String(statusInput));
     correctedData.admissionStatus = statRes.corrected;
     correctedData.remarks = statRes.corrected;
-    if (statRes.wasChanged) {
+    if (statRes.wasChanged && statRes.corrected) {
       corrections.push({
         field: 'admissionStatus',
         fieldLabel: 'Admission Status',
@@ -853,13 +881,22 @@ export function applySmartOcrCorrection(rawExtracted: any): {
       });
     }
   } else {
-    correctedData.admissionStatus = 'Passed';
-    correctedData.remarks = 'Passed';
+    // Default to Pending
+    correctedData.admissionStatus = 'Pending';
+    correctedData.remarks = 'Pending';
   }
 
   // K. Testing Center
-  if (rawExtracted.testingCenterProvince) {
-    correctedData.testingCenterProvince = String(rawExtracted.testingCenterProvince).trim();
+  if (rawExtracted.testingCenterProvince || rawExtracted.testingCenterProvinceOther) {
+    const provRes = resolveProvince(
+      rawExtracted.testingCenterProvince,
+      rawExtracted.testingCenterProvinceOther
+    );
+    correctedData.testingCenterProvince = provRes.dropdownValue;
+    correctedData.testingCenterProvinceOther = provRes.specifiedOther;
+  } else {
+    correctedData.testingCenterProvince = '';
+    correctedData.testingCenterProvinceOther = '';
   }
   if (rawExtracted.testingCenterLocation) {
     correctedData.testingCenterLocation = String(rawExtracted.testingCenterLocation).trim();

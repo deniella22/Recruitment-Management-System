@@ -58,6 +58,9 @@ export async function generateStudentRecordsExcel(students: StudentRecord[]): Pr
     { header: 'Parish Priest', key: 'parishPriest', width: 22 },
     { header: 'Exam Score', key: 'examScore', width: 12 },
     { header: 'Health Status', key: 'healthStatus', width: 22 },
+    { header: 'Admission Status', key: 'admissionStatus', width: 18 },
+    { header: 'Testing Center Province', key: 'testingCenterProvince', width: 22 },
+    { header: 'Testing Center Location', key: 'testingCenterLocation', width: 28 },
     { header: 'Additional Notes', key: 'additionalNotes', width: 28 },
     { header: 'Student Signature Confirmed', key: 'studentSignature', width: 22 },
   ];
@@ -164,6 +167,22 @@ export async function generateStudentRecordsExcel(students: StudentRecord[]): Pr
       parishPriest: s.parishPriest || '',
       examScore: typeof s.examScore === 'number' ? s.examScore : Number(s.examScore) || 0,
       healthStatus: s.healthStatus || 'Normal / Fit for schooling',
+      admissionStatus:
+        s.admissionStatus ||
+        (s.remarks === 'A - PASS'
+          ? 'Passed'
+          : s.remarks === 'Passed'
+          ? 'Passed'
+          : s.remarks === 'Conditional'
+          ? 'Conditional'
+          : s.remarks === 'Failed'
+          ? 'Failed'
+          : 'Pending'),
+      testingCenterProvince:
+        s.testingCenterProvince === 'Others'
+          ? s.testingCenterProvinceOther || 'Others'
+          : s.testingCenterProvince || '',
+      testingCenterLocation: s.testingCenterLocation || '',
       additionalNotes: s.additionalNotes || '',
       studentSignature: s.studentSignature || 'Signed / Confirmed',
     });

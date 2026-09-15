@@ -43,15 +43,20 @@ export const ReportsView: React.FC<Props> = ({
       !failedStudents.includes(s)
   );
 
-  const schoolMap: Record<string, { total: number; pass: number; pending: number }> = {};
+  const schoolMap: Record<string, { total: number; pass: number; conditional: number; failed: number }> = {};
   students.forEach((s) => {
     const sch = s.elementarySchool?.trim() || 'Unspecified School';
     if (!schoolMap[sch]) {
-      schoolMap[sch] = { total: 0, pass: 0, pending: 0 };
+      schoolMap[sch] = { total: 0, pass: 0, conditional: 0, failed: 0 };
     }
     schoolMap[sch].total += 1;
-    if (s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed') schoolMap[sch].pass += 1;
-    else schoolMap[sch].pending += 1;
+    if (s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed') {
+      schoolMap[sch].pass += 1;
+    } else if (s.admissionStatus === 'Conditional' || s.remarks === 'Conditional') {
+      schoolMap[sch].conditional += 1;
+    } else if (s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'))) {
+      schoolMap[sch].failed += 1;
+    }
   });
 
   const schoolList = Object.entries(schoolMap).map(([name, counts]) => ({
@@ -349,15 +354,16 @@ export const ReportsView: React.FC<Props> = ({
                 <tr>
                   <th className="py-3 px-4">Elementary School Name</th>
                   <th className="py-3 px-4 text-center">Total Applicants</th>
-                  <th className="py-3 px-4 text-center">PASS (A)</th>
-                  <th className="py-3 px-4 text-center">PENDING (B)</th>
+                  <th className="py-3 px-4 text-center text-emerald-700">Passed</th>
+                  <th className="py-3 px-4 text-center text-amber-700">Conditional</th>
+                  <th className="py-3 px-4 text-center text-red-700">Failed</th>
                   <th className="py-3 px-4 text-right">Pass Rate</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-medium">
                 {schoolList.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-400 font-bold">
+                    <td colSpan={6} className="py-8 text-center text-gray-400 font-bold">
                       No school records available.
                     </td>
                   </tr>
@@ -369,7 +375,8 @@ export const ReportsView: React.FC<Props> = ({
                         <td className="py-3 px-4 font-bold text-gray-900">{sch.name}</td>
                         <td className="py-3 px-4 text-center font-bold">{sch.total}</td>
                         <td className="py-3 px-4 text-center text-emerald-700 font-bold">{sch.pass}</td>
-                        <td className="py-3 px-4 text-center text-amber-700 font-bold">{sch.pending}</td>
+                        <td className="py-3 px-4 text-center text-amber-700 font-bold">{sch.conditional}</td>
+                        <td className="py-3 px-4 text-center text-red-700 font-bold">{sch.failed}</td>
                         <td className="py-3 px-4 text-right font-black text-[#1E3A8A]">
                           {passRate}%
                         </td>
@@ -388,6 +395,7 @@ export const ReportsView: React.FC<Props> = ({
                   <th className="py-3 px-4">LRN</th>
                   <th className="py-3 px-4">Student Name</th>
                   <th className="py-3 px-4">Elementary School</th>
+                  <th className="py-3 px-4">Province</th>
                   <th className="py-3 px-4">Exam Score</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Action</th>
@@ -396,48 +404,56 @@ export const ReportsView: React.FC<Props> = ({
               <tbody className="divide-y divide-gray-100 font-medium">
                 {displayedStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-gray-400 font-bold">
+                    <td colSpan={7} className="py-10 text-center text-gray-400 font-bold">
                       No student records available for this report filter.
                     </td>
                   </tr>
                 ) : (
-                  displayedStudents.map((s) => (
-                    <tr key={s.id} className="hover:bg-blue-50/30">
-                      <td className="py-3 px-4 font-mono font-bold text-gray-800">{s.lrn}</td>
-                      <td className="py-3 px-4 font-bold text-gray-900">
-                        {s.surname}, {s.firstName} {s.middleName || ''}
-                      </td>
-                      <td className="py-3 px-4 text-gray-600 font-medium">{s.elementarySchool || 'N/A'}</td>
-                      <td className="py-3 px-4 font-bold">{s.examScore}</td>
-                      <td className="py-3 px-4">
-                        {s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed' ? (
-                          <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-full font-bold text-[11px] border border-emerald-200">
-                            Passed
-                          </span>
-                        ) : s.admissionStatus === 'Conditional' || s.remarks === 'Conditional' ? (
-                          <span className="px-2.5 py-1 bg-amber-50 text-amber-800 rounded-full font-bold text-[11px] border border-amber-200">
-                            Conditional
-                          </span>
-                        ) : s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail')) ? (
-                          <span className="px-2.5 py-1 bg-red-50 text-red-800 rounded-full font-bold text-[11px] border border-red-200">
-                            Failed
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full font-bold text-[11px] border border-slate-300">
-                            Pending
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => onViewStudentProfile(s)}
-                          className="px-2.5 py-1 bg-blue-50 hover:bg-[#1E3A8A] hover:text-white text-[#1E3A8A] font-bold rounded-lg transition-all cursor-pointer border border-blue-200/60"
-                        >
-                          View Profile
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  displayedStudents.map((s) => {
+                    const displayProvince =
+                      s.testingCenterProvince === 'Others'
+                        ? s.testingCenterProvinceOther || 'Others'
+                        : s.testingCenterProvince || s.province || '-';
+
+                    return (
+                      <tr key={s.id} className="hover:bg-blue-50/30">
+                        <td className="py-3 px-4 font-mono font-bold text-gray-800">{s.lrn}</td>
+                        <td className="py-3 px-4 font-bold text-gray-900">
+                          {s.surname}, {s.firstName} {s.middleName || ''}
+                        </td>
+                        <td className="py-3 px-4 text-gray-600 font-medium">{s.elementarySchool || 'N/A'}</td>
+                        <td className="py-3 px-4 text-gray-600 font-medium">{displayProvince}</td>
+                        <td className="py-3 px-4 font-bold">{s.examScore}</td>
+                        <td className="py-3 px-4">
+                          {s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed' ? (
+                            <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-full font-bold text-[11px] border border-emerald-200">
+                              Passed
+                            </span>
+                          ) : s.admissionStatus === 'Conditional' || s.remarks === 'Conditional' ? (
+                            <span className="px-2.5 py-1 bg-amber-50 text-amber-800 rounded-full font-bold text-[11px] border border-amber-200">
+                              Conditional
+                            </span>
+                          ) : s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail')) ? (
+                            <span className="px-2.5 py-1 bg-red-50 text-red-800 rounded-full font-bold text-[11px] border border-red-200">
+                              Failed
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full font-bold text-[11px] border border-slate-300">
+                              Pending
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => onViewStudentProfile(s)}
+                            className="px-2.5 py-1 bg-blue-50 hover:bg-[#1E3A8A] hover:text-white text-[#1E3A8A] font-bold rounded-lg transition-all cursor-pointer border border-blue-200/60"
+                          >
+                            View Profile
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

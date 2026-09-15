@@ -128,7 +128,7 @@ export const StudentListView: React.FC<Props> = ({
             <button
               onClick={() => setStatusFilter('Conditional')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                statusFilter === 'Conditional' || statusFilter === 'B - PENDING'
+                statusFilter === 'Conditional'
                   ? 'bg-amber-700 text-white shadow-xs'
                   : 'text-amber-700 hover:bg-amber-50'
               }`}
@@ -146,6 +146,17 @@ export const StudentListView: React.FC<Props> = ({
             >
               <AlertCircle className="w-3.5 h-3.5" />
               <span>Failed</span>
+            </button>
+            <button
+              onClick={() => setStatusFilter('Pending')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                statusFilter === 'Pending' || statusFilter === 'B - PENDING'
+                  ? 'bg-blue-700 text-white shadow-xs'
+                  : 'text-blue-700 hover:bg-blue-50'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Pending</span>
             </button>
           </div>
 

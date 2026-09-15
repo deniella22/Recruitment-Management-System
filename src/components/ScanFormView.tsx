@@ -33,7 +33,7 @@ import {
   MapPin,
   Image as ImageIcon,
 } from 'lucide-react';
-import { StudentRecord, AdmissionStatus, OCRScanResult, SiblingRecord } from '../types';
+import { StudentRecord, AdmissionStatus, OCRScanResult, SiblingRecord, PROVINCE_OPTIONS, resolveProvince } from '../types';
 import { performOCRScan, fetchOcrStatus, createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
 
 interface Props {
@@ -145,6 +145,7 @@ export const ScanFormView: React.FC<Props> = ({
 
   // --- SECTION K: Testing Center ---
   const [testingCenterProvince, setTestingCenterProvince] = useState<string>('');
+  const [testingCenterProvinceOther, setTestingCenterProvinceOther] = useState<string>('');
   const [testingCenterLocation, setTestingCenterLocation] = useState<string>('');
 
   // Review UI State
@@ -510,26 +511,30 @@ export const ScanFormView: React.FC<Props> = ({
       // Section I
       setHealthStatus(data.healthStatus || 'Normal / Fit for schooling');
       setExamScore(data.examScore !== undefined && data.examScore !== null ? data.examScore : 0);
-      setRemarks(data.remarks === 'A - PASS' ? 'A - PASS' : 'B - PENDING');
       setAdditionalNotes(data.additionalNotes || '');
       setStudentSignature(data.studentSignature || 'Signed');
 
-      // Section J
-      const rawAdmissionStatus =
-        data.admissionStatus ||
-        (data.remarks === 'A - PASS'
-          ? 'Passed'
-          : data.remarks === 'Passed'
-          ? 'Passed'
-          : data.remarks === 'Conditional'
-          ? 'Conditional'
-          : data.remarks === 'Failed'
-          ? 'Failed'
-          : 'Pending');
-      setAdmissionStatus(rawAdmissionStatus);
+      // Section J: Admission Status (Normalize to Pending, Passed, Conditional, or Failed)
+      let detectedStatus = 'Pending';
+      const rawCandidate = String(data.admissionStatus || data.remarks || '').trim().toLowerCase();
+      if (rawCandidate === 'passed' || rawCandidate === 'a - pass' || rawCandidate === 'pass' || rawCandidate === 'qualified') {
+        detectedStatus = 'Passed';
+      } else if (rawCandidate === 'conditional' || rawCandidate.includes('condition')) {
+        detectedStatus = 'Conditional';
+      } else if (rawCandidate === 'failed' || rawCandidate.includes('fail') || rawCandidate.includes('not qualify')) {
+        detectedStatus = 'Failed';
+      } else if (rawCandidate === 'pending' || rawCandidate === 'b - pending' || rawCandidate.includes('evaluat')) {
+        detectedStatus = 'Pending';
+      }
+      setAdmissionStatus(detectedStatus);
 
-      // Section K
-      setTestingCenterProvince(data.testingCenterProvince || '');
+      // Section K: Province Resolution & Testing Center Location
+      const resolvedProv = resolveProvince(
+        data.testingCenterProvince,
+        (data as any).testingCenterProvinceOther
+      );
+      setTestingCenterProvince(resolvedProv.dropdownValue);
+      setTestingCenterProvinceOther(resolvedProv.specifiedOther);
       setTestingCenterLocation(data.testingCenterLocation || '');
 
       setStage('review');
@@ -654,6 +659,18 @@ export const ScanFormView: React.FC<Props> = ({
       return;
     }
 
+    if (!admissionStatus) {
+      setSaveError('Please select an Admission Status (Pending, Passed, Conditional, or Failed) under Section J.');
+      setActiveReviewTab('J_K');
+      return;
+    }
+
+    if (testingCenterProvince === 'Others' && !testingCenterProvinceOther.trim()) {
+      setSaveError('Please specify the province name since "Others" was selected under Section K.');
+      setActiveReviewTab('J_K');
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -730,25 +747,16 @@ export const ScanFormView: React.FC<Props> = ({
         // Section I
         healthStatus: healthStatus.trim() || 'Normal / Fit for schooling',
         examScore: parsedScore,
-        remarks: remarks,
+        remarks: (admissionStatus === 'Passed' ? 'A - PASS' : admissionStatus === 'Conditional' ? 'Conditional' : admissionStatus === 'Failed' ? 'Failed' : 'B - PENDING') as any,
         additionalNotes: additionalNotes.trim(),
         studentSignature: studentSignature || 'Signed',
 
         // Section J: Admission Status
-        admissionStatus:
-          admissionStatus ||
-          (remarks === 'A - PASS'
-            ? 'Passed'
-            : remarks === 'Passed'
-            ? 'Passed'
-            : remarks === 'Conditional'
-            ? 'Conditional'
-            : remarks === 'Failed'
-            ? 'Failed'
-            : 'Pending'),
+        admissionStatus: admissionStatus,
 
         // Section K: Testing Center
-        testingCenterProvince: testingCenterProvince.trim(),
+        testingCenterProvince: testingCenterProvince === 'Others' ? 'Others' : testingCenterProvince.trim(),
+        testingCenterProvinceOther: testingCenterProvince === 'Others' ? testingCenterProvinceOther.trim() : undefined,
         testingCenterLocation: testingCenterLocation.trim(),
       };
 
@@ -1906,24 +1914,6 @@ export const ScanFormView: React.FC<Props> = ({
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                        Admission Remarks <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        value={remarks}
-                        onChange={(e) => setRemarks(e.target.value as AdmissionStatus)}
-                        className={`w-full px-3 py-2 border rounded-xl text-xs font-black focus:ring-2 focus:outline-none ${
-                          remarks === 'A - PASS'
-                            ? 'border-emerald-500 bg-emerald-50 text-emerald-900 focus:ring-emerald-600'
-                            : 'border-amber-500 bg-amber-50 text-amber-900 focus:ring-amber-600'
-                        }`}
-                      >
-                        <option value="A - PASS">A - PASS (Qualified for Admission)</option>
-                        <option value="B - PENDING">B - PENDING (Under Evaluation)</option>
-                      </select>
-                    </div>
-
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Additional Notes / Remarks</label>
                       <textarea
@@ -1956,25 +1946,27 @@ export const ScanFormView: React.FC<Props> = ({
                           Admission Status <span className="text-red-500">*</span>
                         </label>
                         <select
+                          id="select-review-admissionStatus"
                           value={admissionStatus}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setAdmissionStatus(val);
-                            if (val === 'Passed') setRemarks('A - PASS');
-                            else setRemarks('B - PENDING');
-                          }}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-black text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                          onChange={(e) => setAdmissionStatus(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
                         >
-                          <option value="Passed">Passed (Qualified for Admission)</option>
-                          <option value="Conditional">Conditional (Under Evaluation / Conditional)</option>
-                          <option value="Failed">Failed (Not Qualified)</option>
-                          <option value="Pending">Pending (Under Evaluation)</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Passed">Passed</option>
+                          <option value="Conditional">Conditional</option>
+                          <option value="Failed">Failed</option>
                         </select>
                       </div>
 
                       <div className="flex flex-col justify-center">
-                        <span className="text-xs font-bold text-gray-500 uppercase mb-1">Status Badge</span>
+                        <span className="text-xs font-bold text-gray-500 uppercase mb-1">Current Status</span>
                         <div>
+                          {admissionStatus === 'Pending' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 border border-blue-300 text-blue-900 rounded-lg text-xs font-black">
+                              <Clock className="w-3.5 h-3.5 text-blue-600" />
+                              <span>PENDING</span>
+                            </span>
+                          )}
                           {admissionStatus === 'Passed' && (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-lg text-xs font-black">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -1993,11 +1985,8 @@ export const ScanFormView: React.FC<Props> = ({
                               <span>FAILED</span>
                             </span>
                           )}
-                          {admissionStatus === 'Pending' && (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 border border-blue-300 text-blue-900 rounded-lg text-xs font-black">
-                              <Clock className="w-3.5 h-3.5 text-blue-600" />
-                              <span>PENDING</span>
-                            </span>
+                          {!admissionStatus && (
+                            <span className="text-xs text-slate-400 italic">No admission status selected yet</span>
                           )}
                         </div>
                       </div>
@@ -2017,20 +2006,55 @@ export const ScanFormView: React.FC<Props> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                          Testing Center Province
+                          Province <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Cavite, Batangas, Laguna, Quezon..."
+                        <select
+                          id="select-review-testingCenterProvince"
                           value={testingCenterProvince}
-                          onChange={(e) => setTestingCenterProvince(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setTestingCenterProvince(val);
+                            if (val !== 'Others') {
+                              setTestingCenterProvinceOther('');
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
-                        />
+                        >
+                          <option value="">Select Province</option>
+                          {PROVINCE_OPTIONS.map((prov) => (
+                            <option key={prov} value={prov}>
+                              {prov}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
-                      <div>
+                      {/* Specify Province - shown only when 'Others' */}
+                      {testingCenterProvince === 'Others' ? (
+                        <div className="animate-fade-in">
+                          <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                            Specify Province <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter province name..."
+                            value={testingCenterProvinceOther}
+                            onChange={(e) => setTestingCenterProvinceOther(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex flex-col justify-center">
+                          <span className="text-xs font-medium text-gray-400 uppercase mb-1">Testing Center Scope</span>
+                          <span className="text-xs text-slate-500">
+                            {testingCenterProvince ? `Testing center in ${testingCenterProvince}` : 'Select province'}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="sm:col-span-2">
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                          Testing Center Location / Venue
+                          Testing Center Location
                         </label>
                         <input
                           type="text"

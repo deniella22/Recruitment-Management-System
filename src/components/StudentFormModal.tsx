@@ -28,7 +28,7 @@ import {
   MapPin,
   Image as ImageIcon,
 } from 'lucide-react';
-import { StudentRecord, AdmissionStatus, SiblingRecord } from '../types';
+import { StudentRecord, AdmissionStatus, SiblingRecord, PROVINCE_OPTIONS, resolveProvince } from '../types';
 import { createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
 import { ScanFormView } from './ScanFormView';
 
@@ -137,27 +137,31 @@ export const StudentFormModal: React.FC<Props> = ({
     studentToEdit?.healthStatus || 'Normal / Fit for schooling'
   );
   const [examScore, setExamScore] = useState<number | string>(studentToEdit?.examScore ?? 0);
-  const [remarks, setRemarks] = useState<AdmissionStatus>(studentToEdit?.remarks || 'B - PENDING');
   const [additionalNotes, setAdditionalNotes] = useState<string>(studentToEdit?.additionalNotes || '');
   const [studentSignature, setStudentSignature] = useState<string>(studentToEdit?.studentSignature || 'Signed');
 
   // --- SECTION J: Admission Status ---
-  const [admissionStatus, setAdmissionStatus] = useState<'Passed' | 'Conditional' | 'Failed' | 'Pending' | string>(
-    studentToEdit?.admissionStatus ||
-      (studentToEdit?.remarks === 'A - PASS'
-        ? 'Passed'
-        : studentToEdit?.remarks === 'Passed'
-        ? 'Passed'
-        : studentToEdit?.remarks === 'Conditional'
-        ? 'Conditional'
-        : studentToEdit?.remarks === 'Failed'
-        ? 'Failed'
-        : 'Pending')
-  );
+  const getInitialAdmissionStatus = () => {
+    if (!studentToEdit) return 'Pending';
+    if (studentToEdit.admissionStatus) return studentToEdit.admissionStatus;
+    if (studentToEdit.remarks === 'A - PASS' || studentToEdit.remarks === 'Passed') return 'Passed';
+    if (studentToEdit.remarks === 'Conditional') return 'Conditional';
+    if (studentToEdit.remarks === 'Failed') return 'Failed';
+    if (studentToEdit.remarks === 'B - PENDING' || studentToEdit.remarks === 'Pending') return 'Pending';
+    return 'Pending';
+  };
+  const [admissionStatus, setAdmissionStatus] = useState<string>(getInitialAdmissionStatus());
 
   // --- SECTION K: Testing Center ---
+  const initialProvinceResolved = resolveProvince(
+    studentToEdit?.testingCenterProvince || '',
+    studentToEdit?.testingCenterProvinceOther
+  );
   const [testingCenterProvince, setTestingCenterProvince] = useState<string>(
-    studentToEdit?.testingCenterProvince || ''
+    initialProvinceResolved.dropdownValue
+  );
+  const [testingCenterProvinceOther, setTestingCenterProvinceOther] = useState<string>(
+    initialProvinceResolved.specifiedOther
   );
   const [testingCenterLocation, setTestingCenterLocation] = useState<string>(
     studentToEdit?.testingCenterLocation || ''
@@ -338,6 +342,18 @@ export const StudentFormModal: React.FC<Props> = ({
       return;
     }
 
+    if (!admissionStatus) {
+      setError('Please select an Admission Status (Pending, Passed, Conditional, or Failed) under Section J.');
+      setActiveTab('J_K');
+      return;
+    }
+
+    if (testingCenterProvince === 'Others' && !testingCenterProvinceOther.trim()) {
+      setError('Please specify the province name since "Others" was selected under Section K.');
+      setActiveTab('J_K');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -415,25 +431,16 @@ export const StudentFormModal: React.FC<Props> = ({
         // Section I
         healthStatus: healthStatus.trim() || 'Normal / Fit for schooling',
         examScore: parsedScore,
-        remarks: remarks,
+        remarks: (admissionStatus === 'Passed' ? 'A - PASS' : admissionStatus === 'Conditional' ? 'Conditional' : admissionStatus === 'Failed' ? 'Failed' : 'B - PENDING') as any,
         additionalNotes: additionalNotes.trim(),
         studentSignature: studentSignature || 'Signed',
 
         // Section J: Admission Status
-        admissionStatus:
-          admissionStatus ||
-          (remarks === 'A - PASS'
-            ? 'Passed'
-            : remarks === 'Passed'
-            ? 'Passed'
-            : remarks === 'Conditional'
-            ? 'Conditional'
-            : remarks === 'Failed'
-            ? 'Failed'
-            : 'Pending'),
+        admissionStatus: admissionStatus,
 
         // Section K: Testing Center
-        testingCenterProvince: testingCenterProvince.trim(),
+        testingCenterProvince: testingCenterProvince === 'Others' ? 'Others' : testingCenterProvince.trim(),
+        testingCenterProvinceOther: testingCenterProvince === 'Others' ? testingCenterProvinceOther.trim() : undefined,
         testingCenterLocation: testingCenterLocation.trim(),
       };
 
@@ -1568,26 +1575,6 @@ export const StudentFormModal: React.FC<Props> = ({
                     />
                   </div>
 
-                  {/* Remarks / Admission Status */}
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      Admission Status (Remarks) <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      id="select-remarks"
-                      value={remarks}
-                      onChange={(e) => setRemarks(e.target.value as AdmissionStatus)}
-                      className={`w-full px-3 py-2 border rounded-xl text-sm font-black focus:ring-2 focus:outline-none ${
-                        remarks === 'A - PASS'
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-900 focus:ring-emerald-600'
-                          : 'border-amber-500 bg-amber-50 text-amber-900 focus:ring-amber-600'
-                      }`}
-                    >
-                      <option value="A - PASS">A - PASS (Qualified for Admission)</option>
-                      <option value="B - PENDING">B - PENDING (Under Evaluation)</option>
-                    </select>
-                  </div>
-
                   {/* Student Signature status */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
@@ -1641,56 +1628,51 @@ export const StudentFormModal: React.FC<Props> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
-                      Admission Decision Status <span className="text-red-500">*</span>
+                      Admission Status <span className="text-red-500">*</span>
                     </label>
                     <select
                       id="select-admissionStatus"
                       value={admissionStatus}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setAdmissionStatus(val);
-                        if (val === 'Passed') {
-                          setRemarks('A - PASS');
-                        } else {
-                          setRemarks('B - PENDING');
-                        }
-                      }}
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-black text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"
+                      onChange={(e) => setAdmissionStatus(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"
                     >
-                      <option value="Passed">Passed (Qualified for Sisters of Mary School – Biga)</option>
-                      <option value="Conditional">Conditional (Subject to Document / Health Clearance)</option>
-                      <option value="Failed">Failed (Did not meet admission criteria)</option>
-                      <option value="Pending">Pending (Under Ongoing Recruitment Evaluation)</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Passed">Passed</option>
+                      <option value="Conditional">Conditional</option>
+                      <option value="Failed">Failed</option>
                     </select>
                   </div>
 
                   {/* Visual Status Tag */}
                   <div className="flex flex-col justify-center">
-                    <span className="text-xs font-bold text-gray-500 uppercase mb-1.5">Current Status Indicator</span>
+                    <span className="text-xs font-bold text-gray-500 uppercase mb-1.5">Current Status</span>
                     <div className="flex items-center gap-2">
+                      {admissionStatus === 'Pending' && (
+                        <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-100 border border-blue-300 text-blue-900 rounded-xl text-xs font-black">
+                          <Clock className="w-4 h-4 text-blue-600" />
+                          <span>PENDING</span>
+                        </div>
+                      )}
                       {admissionStatus === 'Passed' && (
                         <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-black">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>PASSED / QUALIFIED</span>
+                          <span>PASSED</span>
                         </div>
                       )}
                       {admissionStatus === 'Conditional' && (
                         <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-100 border border-amber-300 text-amber-900 rounded-xl text-xs font-black">
                           <Clock className="w-4 h-4 text-amber-600" />
-                          <span>CONDITIONAL ADMISSION</span>
+                          <span>CONDITIONAL</span>
                         </div>
                       )}
                       {admissionStatus === 'Failed' && (
                         <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-red-100 border border-red-300 text-red-900 rounded-xl text-xs font-black">
                           <AlertCircle className="w-4 h-4 text-red-600" />
-                          <span>FAILED / NOT QUALIFIED</span>
+                          <span>FAILED</span>
                         </div>
                       )}
-                      {admissionStatus === 'Pending' && (
-                        <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-100 border border-blue-300 text-blue-900 rounded-xl text-xs font-black">
-                          <Clock className="w-4 h-4 text-blue-600" />
-                          <span>PENDING EVALUATION</span>
-                        </div>
+                      {!admissionStatus && (
+                        <span className="text-xs text-slate-400 italic">No admission status selected yet</span>
                       )}
                     </div>
                   </div>
@@ -1702,43 +1684,69 @@ export const StudentFormModal: React.FC<Props> = ({
                 <div className="flex items-center justify-between pb-2 border-b border-slate-200">
                   <div className="flex items-center gap-2 text-[#1E3A8A]">
                     <MapPin className="w-5 h-5 text-blue-700" />
-                    <h3 className="font-extrabold text-sm uppercase tracking-wider">K. Testing Center Information</h3>
+                    <h3 className="font-extrabold text-sm uppercase tracking-wider">K. Testing Center</h3>
                   </div>
                   <span className="text-[11px] font-bold text-gray-500 uppercase">Section K of Official Form</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Testing Center Province */}
+                  {/* Province Dropdown */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      Testing Center Province
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
+                      Province <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      id="input-testingCenterProvince"
-                      type="text"
-                      placeholder="e.g. Cavite, Batangas, Laguna, Quezon..."
+                    <select
+                      id="select-testingCenterProvince"
                       value={testingCenterProvince}
-                      onChange={(e) => setTestingCenterProvince(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"
-                    />
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {['Cavite', 'Batangas', 'Laguna', 'Quezon', 'Rizal', 'Oriental Mindoro', 'Occidental Mindoro'].map((prov) => (
-                        <button
-                          key={prov}
-                          type="button"
-                          onClick={() => setTestingCenterProvince(prov)}
-                          className="px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-100 text-[10px] font-bold text-slate-700 rounded-md transition-colors cursor-pointer"
-                        >
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTestingCenterProvince(val);
+                        if (val !== 'Others') {
+                          setTestingCenterProvinceOther('');
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"
+                    >
+                      <option value="">Select Province</option>
+                      {PROVINCE_OPTIONS.map((prov) => (
+                        <option key={prov} value={prov}>
                           {prov}
-                        </button>
+                        </option>
                       ))}
-                    </div>
+                    </select>
                   </div>
 
-                  {/* Testing Center Location / Venue */}
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      Testing Center Location / School / Parish Venue
+                  {/* Specify Province - Shown ONLY when 'Others' is selected */}
+                  {testingCenterProvince === 'Others' ? (
+                    <div className="animate-fade-in">
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
+                        Specify Province <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="input-testingCenterProvinceOther"
+                        type="text"
+                        placeholder="Enter province name..."
+                        value={testingCenterProvinceOther}
+                        onChange={(e) => setTestingCenterProvinceOther(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Empty spacer or guidance when not 'Others' */}
+                      <label className="block text-xs font-medium text-gray-400 uppercase mb-1.5">
+                        Testing Center Scope
+                      </label>
+                      <p className="text-xs text-slate-500 pt-2">
+                        {testingCenterProvince ? `Testing center designated in ${testingCenterProvince}.` : 'Select a province from the dropdown.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Testing Center Location / Venue (Separate Text Input) */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
+                      Testing Center Location
                     </label>
                     <input
                       id="input-testingCenterLocation"

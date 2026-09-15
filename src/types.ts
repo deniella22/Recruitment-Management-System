@@ -12,7 +12,9 @@ export interface User {
   pin?: string;
 }
 
-export type AdmissionStatus = 'Passed' | 'Conditional' | 'Failed';
+export type AdmissionStatus = 'Pending' | 'Passed' | 'Conditional' | 'Failed';
+
+export * from './constants/provinces';
 
 export interface RecruitmentList {
   id: string;
@@ -116,11 +118,12 @@ export interface StudentRecord {
   studentSignature: string;     // Student's Signature over Printed Name
 
   // J. Admission Status ('Passed' | 'Conditional' | 'Failed')
-  admissionStatus: AdmissionStatus; // Primary Admission Status
+  admissionStatus?: AdmissionStatus | string; // Primary Admission Status (no default for new records)
 
   // K. Testing Center
-  testingCenterProvince: string; // Testing Center Province
-  testingCenterLocation: string; // Testing Center Exact Location / Venue
+  testingCenterProvince: string; // Province
+  testingCenterProvinceOther?: string; // Specified province when 'Others' is selected
+  testingCenterLocation: string; // Testing Center Location / Venue
 
   // Legacy field preserved for backward compatibility
   remarks?: string;

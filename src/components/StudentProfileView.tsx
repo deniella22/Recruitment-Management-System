@@ -420,7 +420,7 @@ export const StudentProfileView: React.FC<Props> = ({
       <div className="bg-white rounded-2xl border border-blue-100 shadow-xs p-6 space-y-4">
         <div className="flex items-center gap-2 pb-3 border-b border-blue-50 text-[#1E3A8A]">
           <HeartPulse className="w-5 h-5" />
-          <h3 className="font-extrabold text-sm uppercase tracking-wider">H & I. Parish Information & Health Assessment</h3>
+          <h3 className="font-extrabold text-sm uppercase tracking-wider">H & I. Parish Information, Health Assessment & Entrance Exam</h3>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
@@ -439,12 +439,6 @@ export const StudentProfileView: React.FC<Props> = ({
           <div>
             <p className="text-gray-500 font-semibold uppercase text-[10px]">Entrance Exam Score</p>
             <p className="font-black text-blue-900 text-base mt-0.5">{student.examScore ?? 0}</p>
-          </div>
-          <div>
-            <p className="text-gray-500 font-semibold uppercase text-[10px]">Admission Status (Remarks)</p>
-            <p className={`font-black text-sm mt-0.5 ${student.remarks === 'A - PASS' ? 'text-emerald-700' : 'text-amber-700'}`}>
-              {student.remarks || 'B - PENDING'}
-            </p>
           </div>
           <div>
             <p className="text-gray-500 font-semibold uppercase text-[10px]">Student Signature</p>
@@ -470,27 +464,44 @@ export const StudentProfileView: React.FC<Props> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
           <div>
-            <p className="text-gray-500 font-semibold uppercase text-[10px]">Admission Decision</p>
-            <p className="font-black text-sm text-gray-900 mt-0.5">
-              {student.admissionStatus ||
-                (student.remarks === 'A - PASS'
-                  ? 'Passed'
-                  : student.remarks === 'Passed'
-                  ? 'Passed'
-                  : student.remarks === 'Conditional'
-                  ? 'Conditional'
-                  : student.remarks === 'Failed'
-                  ? 'Failed'
-                  : 'Pending')}
+            <p className="text-gray-500 font-semibold uppercase text-[10px]">J. Admission Status</p>
+            <div className="mt-1">
+              {student.admissionStatus === 'Passed' || student.remarks === 'A - PASS' || student.remarks === 'Passed' ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg font-bold text-xs">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Passed
+                </span>
+              ) : student.admissionStatus === 'Conditional' || student.remarks === 'Conditional' ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg font-bold text-xs">
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  Conditional
+                </span>
+              ) : student.admissionStatus === 'Failed' || (student.remarks && student.remarks.toLowerCase().includes('fail')) ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-800 border border-red-200 rounded-lg font-bold text-xs">
+                  <Clock className="w-3.5 h-3.5 text-red-600" />
+                  Failed
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg font-bold text-xs">
+                  <Clock className="w-3.5 h-3.5 text-slate-500" />
+                  Pending
+                </span>
+              )}
+            </div>
+          </div>
+          <div>
+            <p className="text-gray-500 font-semibold uppercase text-[10px]">K. Testing Center Province</p>
+            <p className="font-bold text-gray-900 text-sm mt-1">
+              {student.testingCenterProvince === 'Others'
+                ? student.testingCenterProvinceOther
+                  ? `${student.testingCenterProvinceOther} (Others)`
+                  : 'Others'
+                : student.testingCenterProvince || 'N/A'}
             </p>
           </div>
           <div>
-            <p className="text-gray-500 font-semibold uppercase text-[10px]">Testing Center Province</p>
-            <p className="font-bold text-gray-900 mt-0.5">{student.testingCenterProvince || 'N/A'}</p>
-          </div>
-          <div>
-            <p className="text-gray-500 font-semibold uppercase text-[10px]">Testing Center Location / School Venue</p>
-            <p className="font-bold text-gray-900 mt-0.5">{student.testingCenterLocation || 'N/A'}</p>
+            <p className="text-gray-500 font-semibold uppercase text-[10px]">K. Testing Center Location</p>
+            <p className="font-bold text-gray-900 text-sm mt-1">{student.testingCenterLocation || 'N/A'}</p>
           </div>
         </div>
       </div>

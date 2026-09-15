@@ -209,7 +209,9 @@ export async function exportStudentsToExcel(
           : s.remarks === 'Failed'
           ? 'Failed'
           : 'Pending'),
-      s.testingCenterProvince || '',
+      s.testingCenterProvince === 'Others'
+        ? s.testingCenterProvinceOther || 'Others'
+        : s.testingCenterProvince || '',
       s.testingCenterLocation || '',
       s.additionalNotes || '',
     ];

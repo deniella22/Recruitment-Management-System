@@ -1383,10 +1383,13 @@ export const dbService = {
           return s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed';
         }
         if (params.status === 'Conditional') {
-          return s.admissionStatus === 'Conditional' || s.remarks === 'B - PENDING' || s.remarks === 'Conditional';
+          return s.admissionStatus === 'Conditional' || s.remarks === 'Conditional';
         }
         if (params.status === 'Failed') {
           return s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'));
+        }
+        if (params.status === 'Pending') {
+          return s.admissionStatus === 'Pending' || s.remarks === 'B - PENDING' || s.remarks === 'Pending' || (!s.admissionStatus && !s.remarks);
         }
         return s.admissionStatus === params.status || s.remarks === params.status;
       });

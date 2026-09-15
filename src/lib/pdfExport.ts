@@ -134,8 +134,11 @@ export async function exportStudentsToPdf(
         : s.remarks === 'Failed'
         ? 'Failed'
         : 'Pending');
-    const testingCenter = s.testingCenterProvince
-      ? `${s.testingCenterProvince}${s.testingCenterLocation ? ` (${s.testingCenterLocation})` : ''}`
+    const provText = s.testingCenterProvince === 'Others'
+      ? s.testingCenterProvinceOther || 'Others'
+      : s.testingCenterProvince;
+    const testingCenter = provText
+      ? `${provText}${s.testingCenterLocation ? ` (${s.testingCenterLocation})` : ''}`
       : '-';
 
     return [
@@ -417,7 +420,12 @@ export async function exportStudentProfilePdf(
     body: [
       ['Parish Place / Church', student.parishPlace || '-'],
       ['Parish Priest', student.parishPriest || '-'],
-      ['Testing Center Province', student.testingCenterProvince || '-'],
+      [
+        'Testing Center Province',
+        (student.testingCenterProvince === 'Others'
+          ? student.testingCenterProvinceOther || 'Others'
+          : student.testingCenterProvince) || '-',
+      ],
       ['Testing Center Location', student.testingCenterLocation || '-'],
       ['Additional Notes / Remarks', student.additionalNotes || 'None recorded'],
     ],
