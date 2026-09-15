@@ -19,8 +19,8 @@ export const Header: React.FC<Props> = ({
   selectedRecruitmentList,
   onBackToLists,
 }) => {
-  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo.png';
-  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
+  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo-biga.png';
+  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Biga';
 
   const getPageTitle = (tab: string) => {
     switch (tab) {

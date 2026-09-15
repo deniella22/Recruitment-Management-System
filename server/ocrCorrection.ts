@@ -411,7 +411,7 @@ export function sanitizeSchoolField(raw: string): { corrected: string; wasChange
   };
 }
 
-export function normalizeAdmissionRemarks(raw: string): { corrected: AdmissionStatus; wasChanged: boolean; reason: string } {
+export function normalizeAdmissionStatus(raw: string): { corrected: AdmissionStatus; wasChanged: boolean; reason: string } {
   const lower = (raw || '').trim().toLowerCase();
 
   if (
@@ -424,18 +424,33 @@ export function normalizeAdmissionRemarks(raw: string): { corrected: AdmissionSt
     lower === 'a'
   ) {
     return {
-      corrected: 'A - PASS',
-      wasChanged: raw !== 'A - PASS',
-      reason: 'Mapped admission evaluation to standard "A - PASS" status',
+      corrected: 'Passed',
+      wasChanged: raw !== 'Passed',
+      reason: 'Mapped admission evaluation to standard "Passed" status',
+    };
+  }
+
+  if (
+    lower.includes('fail') ||
+    lower.includes('failed') ||
+    lower.includes('not admitted') ||
+    lower.includes('disqualified')
+  ) {
+    return {
+      corrected: 'Failed',
+      wasChanged: raw !== 'Failed',
+      reason: 'Mapped admission evaluation to standard "Failed" status',
     };
   }
 
   return {
-    corrected: 'B - PENDING',
-    wasChanged: raw !== 'B - PENDING',
-    reason: 'Mapped admission evaluation to standard "B - PENDING" status',
+    corrected: 'Conditional',
+    wasChanged: raw !== 'Conditional',
+    reason: 'Mapped admission evaluation to standard "Conditional" status',
   };
 }
+
+export const normalizeAdmissionRemarks = normalizeAdmissionStatus;
 
 export function normalizeHealthStatus(raw: string): { corrected: string; wasChanged: boolean; reason: string } {
   if (!raw || !raw.trim()) {
@@ -820,20 +835,34 @@ export function applySmartOcrCorrection(rawExtracted: any): {
     correctedData.examScore = score;
   }
 
-  if (rawExtracted.remarks) {
-    const remRes = normalizeAdmissionRemarks(rawExtracted.remarks);
-    correctedData.remarks = remRes.corrected;
-    if (remRes.wasChanged) {
+  // J. Admission Status
+  const statusInput = rawExtracted.admissionStatus || rawExtracted.remarks;
+  if (statusInput) {
+    const statRes = normalizeAdmissionStatus(String(statusInput));
+    correctedData.admissionStatus = statRes.corrected;
+    correctedData.remarks = statRes.corrected;
+    if (statRes.wasChanged) {
       corrections.push({
-        field: 'remarks',
-        fieldLabel: 'Admission Remarks / Status',
-        originalValue: rawExtracted.remarks,
-        correctedValue: remRes.corrected,
+        field: 'admissionStatus',
+        fieldLabel: 'Admission Status',
+        originalValue: String(statusInput),
+        correctedValue: statRes.corrected,
         confidence: 'HIGH',
-        reason: remRes.reason,
+        reason: statRes.reason,
         applied: true,
       });
     }
+  } else {
+    correctedData.admissionStatus = 'Passed';
+    correctedData.remarks = 'Passed';
+  }
+
+  // K. Testing Center
+  if (rawExtracted.testingCenterProvince) {
+    correctedData.testingCenterProvince = String(rawExtracted.testingCenterProvince).trim();
+  }
+  if (rawExtracted.testingCenterLocation) {
+    correctedData.testingCenterLocation = String(rawExtracted.testingCenterLocation).trim();
   }
 
   if (rawExtracted.healthStatus) {

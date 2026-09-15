@@ -12,14 +12,14 @@ export interface User {
   pin?: string;
 }
 
-export type AdmissionStatus = 'A - PASS' | 'B - PENDING';
+export type AdmissionStatus = 'Passed' | 'Conditional' | 'Failed';
 
 export interface RecruitmentList {
   id: string;
   userId?: string;              // Account owner ID
   name: string;                // e.g. "Recruitment 2026–2027"
   schoolName: string;          // "Sisters of Mary School"
-  branch: string;              // "Talisay, Cebu"
+  branch: string;              // "Biga"
   archived?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -28,7 +28,9 @@ export interface RecruitmentList {
 export interface RecruitmentListWithStats extends RecruitmentList {
   totalApplicants: number;
   passedApplicants: number;
-  pendingApplicants: number;
+  conditionalApplicants: number;
+  failedApplicants: number;
+  pendingApplicants: number;    // preserved for backward compatibility
   lastUpdated: string;
 }
 
@@ -107,14 +109,21 @@ export interface StudentRecord {
   parishPlace: string;          // Place/Parish
   parishPriest: string;         // Parish Priest Name
 
-  // I. Remarks
-  remarks: AdmissionStatus;     // Admission status: 'A - PASS' | 'B - PENDING'
-  additionalNotes: string;      // Remarks / Additional Notes
-  examScore?: number;           // Exam score
-  healthStatus?: string;        // Health & Medical conditions
-
-  // J. Student Signature
+  // I. Health Assessment & Entrance Exam
+  healthStatus?: string;        // Health & Medical conditions / assessment
+  examScore?: number;           // Entrance Exam score
+  additionalNotes: string;      // Additional Notes
   studentSignature: string;     // Student's Signature over Printed Name
+
+  // J. Admission Status ('Passed' | 'Conditional' | 'Failed')
+  admissionStatus: AdmissionStatus; // Primary Admission Status
+
+  // K. Testing Center
+  testingCenterProvince: string; // Testing Center Province
+  testingCenterLocation: string; // Testing Center Exact Location / Venue
+
+  // Legacy field preserved for backward compatibility
+  remarks?: string;
 
   // System audit fields
   createdAt: string;
@@ -209,7 +218,9 @@ export interface SystemSettings {
 export interface DashboardStats {
   totalStudents: number;
   totalPass: number;
-  totalPending: number;
+  totalConditional: number;
+  totalFailed: number;
+  totalPending?: number;        // backward compatibility alias
   recentStudents: StudentRecord[];
   elementarySchoolsCount: number;
   averageExamScore: number;

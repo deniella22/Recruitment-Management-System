@@ -3,6 +3,7 @@ import {
   Users,
   CheckCircle2,
   Clock,
+  XCircle,
   GraduationCap,
   Award,
   UserPlus,
@@ -66,21 +67,22 @@ export const DashboardView: React.FC<Props> = ({
   }
 
   const totalStudents = stats?.totalStudents ?? 0;
-  const totalPass = stats?.totalPass ?? 0;
-  const totalPending = stats?.totalPending ?? 0;
+  const totalPassed = stats?.totalPassed ?? stats?.totalPass ?? 0;
+  const totalConditional = stats?.totalConditional ?? stats?.totalPending ?? 0;
+  const totalFailed = stats?.totalFailed ?? 0;
   const elementarySchoolsCount = stats?.elementarySchoolsCount ?? 0;
   const averageExamScore = stats?.averageExamScore ?? 0;
   const recentStudents = stats?.recentStudents ?? [];
 
-  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo.png';
-  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
+  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo-biga.png';
+  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Biga';
   const subTitle = systemSettings?.subTitle || 'Internal Student Information Management System';
   const academicYear = systemSettings?.academicYear || 'SY 2026-2027 Recruitment';
   const themeClass = getThemeGradientClass(
     systemSettings?.dashboardBgTheme,
     systemSettings?.dashboardBgGradient
   );
-  const bgImageUrl = systemSettings?.dashboardBgImageUrl || '/school-campus-background.jpg';
+  const bgImageUrl = systemSettings?.dashboardBgImageUrl || '/school-campus-biga.png';
 
   return (
     <div className="space-y-6">
@@ -158,7 +160,7 @@ export const DashboardView: React.FC<Props> = ({
       </div>
 
       {/* Database Statistics Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {/* Total Students */}
         <div
           onClick={() => onNavigateToStudents('ALL')}
@@ -178,40 +180,59 @@ export const DashboardView: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Total Pass */}
+        {/* Total Passed */}
         <div
-          onClick={() => onNavigateToStudents('A - PASS')}
+          onClick={() => onNavigateToStudents('Passed')}
           className="bg-white rounded-2xl p-5 border border-emerald-100 shadow-xs hover:shadow-md transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">TOTAL PASS</p>
+            <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">PASSED</p>
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-all">
               <CheckCircle2 className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <p className="text-3xl font-black text-emerald-700">{totalPass}</p>
+            <p className="text-3xl font-black text-emerald-700">{totalPassed}</p>
             <p className="text-[11px] text-emerald-600 mt-1 font-semibold">
-              Status: A - PASS
+              Status: Passed
             </p>
           </div>
         </div>
 
-        {/* Total Pending */}
+        {/* Total Conditional */}
         <div
-          onClick={() => onNavigateToStudents('B - PENDING')}
+          onClick={() => onNavigateToStudents('Conditional')}
           className="bg-white rounded-2xl p-5 border border-amber-100 shadow-xs hover:shadow-md transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">TOTAL PENDING</p>
+            <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">CONDITIONAL</p>
             <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-600 group-hover:text-white transition-all">
               <Clock className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <p className="text-3xl font-black text-amber-700">{totalPending}</p>
+            <p className="text-3xl font-black text-amber-700">{totalConditional}</p>
             <p className="text-[11px] text-amber-600 mt-1 font-semibold">
-              Status: B - PENDING
+              Status: Conditional
+            </p>
+          </div>
+        </div>
+
+        {/* Total Failed */}
+        <div
+          onClick={() => onNavigateToStudents('Failed')}
+          className="bg-white rounded-2xl p-5 border border-rose-100 shadow-xs hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-rose-800 uppercase tracking-wider">FAILED</p>
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-600 group-hover:text-white transition-all">
+              <XCircle className="w-5 h-5" />
+            </div>
+          </div>
+          <div className="mt-3">
+            <p className="text-3xl font-black text-rose-700">{totalFailed}</p>
+            <p className="text-[11px] text-rose-600 mt-1 font-semibold">
+              Status: Failed
             </p>
           </div>
         </div>
@@ -294,17 +315,31 @@ export const DashboardView: React.FC<Props> = ({
                     <td className="py-3.5 px-4 text-gray-600 font-medium">{s.elementarySchool || 'N/A'}</td>
                     <td className="py-3.5 px-4 font-bold text-gray-900">{s.examScore}</td>
                     <td className="py-3.5 px-4">
-                      {s.remarks === 'A - PASS' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full font-bold text-[11px]">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          A (PASS)
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-bold text-[11px]">
-                          <Clock className="w-3.5 h-3.5 text-amber-600" />
-                          B (PENDING)
-                        </span>
-                      )}
+                      {(() => {
+                        const status = (s.admissionStatus || s.remarks || '').trim();
+                        if (status === 'Passed' || status === 'A - PASS') {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full font-bold text-[11px]">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Passed
+                            </span>
+                          );
+                        }
+                        if (status === 'Conditional' || status === 'B - PENDING') {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-bold text-[11px]">
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                              Conditional
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 text-rose-800 border border-rose-200 rounded-full font-bold text-[11px]">
+                            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                            Failed
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <button

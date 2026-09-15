@@ -30,6 +30,7 @@ import {
   Phone,
   Church,
   Home,
+  MapPin,
   Image as ImageIcon,
 } from 'lucide-react';
 import { StudentRecord, AdmissionStatus, OCRScanResult, SiblingRecord } from '../types';
@@ -69,7 +70,7 @@ export const ScanFormView: React.FC<Props> = ({
   const [scanResult, setScanResult] = useState<OCRScanResult | null>(null);
 
   // Active section tab in Review mode
-  const [activeReviewTab, setActiveReviewTab] = useState<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H_I'>('A');
+  const [activeReviewTab, setActiveReviewTab] = useState<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H_I' | 'J_K'>('A');
 
   // --- SECTION A: Basic Personal Information ---
   const [photoUrl, setPhotoUrl] = useState<string>('');
@@ -138,6 +139,13 @@ export const ScanFormView: React.FC<Props> = ({
   const [remarks, setRemarks] = useState<AdmissionStatus>('B - PENDING');
   const [additionalNotes, setAdditionalNotes] = useState<string>('');
   const [studentSignature, setStudentSignature] = useState<string>('Signed');
+
+  // --- SECTION J: Admission Status ---
+  const [admissionStatus, setAdmissionStatus] = useState<string>('Pending');
+
+  // --- SECTION K: Testing Center ---
+  const [testingCenterProvince, setTestingCenterProvince] = useState<string>('');
+  const [testingCenterLocation, setTestingCenterLocation] = useState<string>('');
 
   // Review UI State
   const [saving, setSaving] = useState<boolean>(false);
@@ -506,6 +514,24 @@ export const ScanFormView: React.FC<Props> = ({
       setAdditionalNotes(data.additionalNotes || '');
       setStudentSignature(data.studentSignature || 'Signed');
 
+      // Section J
+      const rawAdmissionStatus =
+        data.admissionStatus ||
+        (data.remarks === 'A - PASS'
+          ? 'Passed'
+          : data.remarks === 'Passed'
+          ? 'Passed'
+          : data.remarks === 'Conditional'
+          ? 'Conditional'
+          : data.remarks === 'Failed'
+          ? 'Failed'
+          : 'Pending');
+      setAdmissionStatus(rawAdmissionStatus);
+
+      // Section K
+      setTestingCenterProvince(data.testingCenterProvince || '');
+      setTestingCenterLocation(data.testingCenterLocation || '');
+
       setStage('review');
     } catch (err: any) {
       console.error('OCR Processing Error:', err);
@@ -707,6 +733,23 @@ export const ScanFormView: React.FC<Props> = ({
         remarks: remarks,
         additionalNotes: additionalNotes.trim(),
         studentSignature: studentSignature || 'Signed',
+
+        // Section J: Admission Status
+        admissionStatus:
+          admissionStatus ||
+          (remarks === 'A - PASS'
+            ? 'Passed'
+            : remarks === 'Passed'
+            ? 'Passed'
+            : remarks === 'Conditional'
+            ? 'Conditional'
+            : remarks === 'Failed'
+            ? 'Failed'
+            : 'Pending'),
+
+        // Section K: Testing Center
+        testingCenterProvince: testingCenterProvince.trim(),
+        testingCenterLocation: testingCenterLocation.trim(),
       };
 
       const saved = await createStudent(studentPayload);
@@ -1199,6 +1242,7 @@ export const ScanFormView: React.FC<Props> = ({
                 { id: 'F', label: 'F. Religious & Civil', icon: Church },
                 { id: 'G', label: 'G. Siblings', icon: Users },
                 { id: 'H_I', label: 'H & I. Parish & Exam', icon: HeartPulse },
+                { id: 'J_K', label: 'J & K. Status & Center', icon: MapPin },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeReviewTab === tab.id;
@@ -1888,6 +1932,114 @@ export const ScanFormView: React.FC<Props> = ({
                         onChange={(e) => setAdditionalNotes(e.target.value)}
                         className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
                       />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION J & K */}
+              {activeReviewTab === 'J_K' && (
+                <div className="space-y-5 animate-fade-in">
+                  {/* Section J: Admission Status */}
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900 uppercase">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>J. Admission Status</span>
+                      </div>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase">Section J of Official Form</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                          Admission Status <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={admissionStatus}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setAdmissionStatus(val);
+                            if (val === 'Passed') setRemarks('A - PASS');
+                            else setRemarks('B - PENDING');
+                          }}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-black text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                        >
+                          <option value="Passed">Passed (Qualified for Admission)</option>
+                          <option value="Conditional">Conditional (Under Evaluation / Conditional)</option>
+                          <option value="Failed">Failed (Not Qualified)</option>
+                          <option value="Pending">Pending (Under Evaluation)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col justify-center">
+                        <span className="text-xs font-bold text-gray-500 uppercase mb-1">Status Badge</span>
+                        <div>
+                          {admissionStatus === 'Passed' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-lg text-xs font-black">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>PASSED</span>
+                            </span>
+                          )}
+                          {admissionStatus === 'Conditional' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-100 border border-amber-300 text-amber-900 rounded-lg text-xs font-black">
+                              <Clock className="w-3.5 h-3.5 text-amber-600" />
+                              <span>CONDITIONAL</span>
+                            </span>
+                          )}
+                          {admissionStatus === 'Failed' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-100 border border-red-300 text-red-900 rounded-lg text-xs font-black">
+                              <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                              <span>FAILED</span>
+                            </span>
+                          )}
+                          {admissionStatus === 'Pending' && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 border border-blue-300 text-blue-900 rounded-lg text-xs font-black">
+                              <Clock className="w-3.5 h-3.5 text-blue-600" />
+                              <span>PENDING</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section K: Testing Center */}
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900 uppercase">
+                        <MapPin className="w-4 h-4 text-blue-600" />
+                        <span>K. Testing Center</span>
+                      </div>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase">Section K of Official Form</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                          Testing Center Province
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Cavite, Batangas, Laguna, Quezon..."
+                          value={testingCenterProvince}
+                          onChange={(e) => setTestingCenterProvince(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                          Testing Center Location / Venue
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Silang Central Elementary School / Parish Hall"
+                          value={testingCenterLocation}
+                          onChange={(e) => setTestingCenterLocation(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

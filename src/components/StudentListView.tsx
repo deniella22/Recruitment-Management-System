@@ -10,6 +10,7 @@ import {
   Trash2,
   CheckCircle2,
   Clock,
+  AlertCircle,
   Users,
   Camera,
   ChevronDown,
@@ -102,7 +103,7 @@ export const StudentListView: React.FC<Props> = ({
         {/* Filter & Sort Controls */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Status Filter */}
-          <div className="flex items-center gap-1.5 bg-slate-100 border border-gray-200 rounded-xl p-1">
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 border border-gray-200 rounded-xl p-1">
             <button
               onClick={() => setStatusFilter('ALL')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
@@ -114,26 +115,37 @@ export const StudentListView: React.FC<Props> = ({
               All Students
             </button>
             <button
-              onClick={() => setStatusFilter('A - PASS')}
+              onClick={() => setStatusFilter('Passed')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                statusFilter === 'A - PASS'
+                statusFilter === 'Passed' || statusFilter === 'A - PASS'
                   ? 'bg-emerald-700 text-white shadow-xs'
                   : 'text-emerald-700 hover:bg-emerald-50'
               }`}
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>A (PASS)</span>
+              <span>Passed</span>
             </button>
             <button
-              onClick={() => setStatusFilter('B - PENDING')}
+              onClick={() => setStatusFilter('Conditional')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                statusFilter === 'B - PENDING'
+                statusFilter === 'Conditional' || statusFilter === 'B - PENDING'
                   ? 'bg-amber-700 text-white shadow-xs'
                   : 'text-amber-700 hover:bg-amber-50'
               }`}
             >
               <Clock className="w-3.5 h-3.5" />
-              <span>B (PENDING)</span>
+              <span>Conditional</span>
+            </button>
+            <button
+              onClick={() => setStatusFilter('Failed')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                statusFilter === 'Failed'
+                  ? 'bg-red-700 text-white shadow-xs'
+                  : 'text-red-700 hover:bg-red-50'
+              }`}
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>Failed</span>
             </button>
           </div>
 
@@ -393,15 +405,25 @@ export const StudentListView: React.FC<Props> = ({
                       {student.examScore}
                     </td>
                     <td className="py-3.5 px-4">
-                      {student.remarks === 'A - PASS' ? (
+                      {student.admissionStatus === 'Passed' || student.remarks === 'A - PASS' ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full font-bold text-[11px]">
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          A (PASS)
+                          Passed
                         </span>
-                      ) : (
+                      ) : student.admissionStatus === 'Conditional' ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-bold text-[11px]">
                           <Clock className="w-3.5 h-3.5 text-amber-600" />
-                          B (PENDING)
+                          Conditional
+                        </span>
+                      ) : student.admissionStatus === 'Failed' ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-800 border border-red-200 rounded-full font-bold text-[11px]">
+                          <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                          Failed
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-800 border border-slate-300 rounded-full font-bold text-[11px]">
+                          <Clock className="w-3.5 h-3.5 text-slate-500" />
+                          Pending
                         </span>
                       )}
                     </td>

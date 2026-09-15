@@ -10,8 +10,8 @@ interface Props {
 }
 
 export const AdminRegistrationModal: React.FC<Props> = ({ onSuccess, systemSettings }) => {
-  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo.png';
-  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
+  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo-biga.png';
+  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Biga';
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

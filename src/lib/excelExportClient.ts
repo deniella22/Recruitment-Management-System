@@ -75,11 +75,14 @@ export async function exportStudentsToExcel(
     { header: 'Parish Priest', key: 'parishPriest', width: 22 },
     { header: 'Exam Score', key: 'examScore', width: 12 },
     { header: 'Health Status', key: 'healthStatus', width: 22 },
+    { header: 'Admission Status', key: 'admissionStatus', width: 18 },
+    { header: 'Testing Center Province', key: 'testingCenterProvince', width: 22 },
+    { header: 'Testing Center Location', key: 'testingCenterLocation', width: 28 },
     { header: 'Additional Notes', key: 'additionalNotes', width: 28 },
   ];
 
   const totalCols = columns.length;
-  const colLetterEnd = 'AU'; // 47 columns
+  const colLetterEnd = 'AX'; // 50 columns
 
   // School Header Rows (Rows 1-3)
   worksheet.mergeCells(`A1:${colLetterEnd}1`);
@@ -196,6 +199,18 @@ export async function exportStudentsToExcel(
       s.parishPriest || '',
       typeof s.examScore === 'number' ? s.examScore : Number(s.examScore) || 0,
       s.healthStatus || 'Normal / Fit for schooling',
+      s.admissionStatus ||
+        (s.remarks === 'A - PASS'
+          ? 'Passed'
+          : s.remarks === 'Passed'
+          ? 'Passed'
+          : s.remarks === 'Conditional'
+          ? 'Conditional'
+          : s.remarks === 'Failed'
+          ? 'Failed'
+          : 'Pending'),
+      s.testingCenterProvince || '',
+      s.testingCenterLocation || '',
       s.additionalNotes || '',
     ];
 

@@ -90,7 +90,33 @@ export function sanitizeStudentRecord(s: any): StudentRecord {
   const parishPlace = (s.parishPlace || '').trim();
   const parishPriest = (s.parishPriest || '').trim();
 
-  const remarks = (s.remarks === 'A - PASS' ? 'A - PASS' : 'B - PENDING') as any;
+  // J. Admission Status ('Passed' | 'Conditional' | 'Failed')
+  let admissionStatus: 'Passed' | 'Conditional' | 'Failed' = 'Passed';
+  if (s.admissionStatus) {
+    const raw = String(s.admissionStatus).trim().toLowerCase();
+    if (raw === 'conditional' || raw === 'b - pending' || raw === 'pending') {
+      admissionStatus = 'Conditional';
+    } else if (raw.includes('fail')) {
+      admissionStatus = 'Failed';
+    } else {
+      admissionStatus = 'Passed';
+    }
+  } else if (s.remarks) {
+    const rawRem = String(s.remarks).trim().toLowerCase();
+    if (rawRem === 'b - pending' || rawRem === 'pending' || rawRem === 'conditional') {
+      admissionStatus = 'Conditional';
+    } else if (rawRem.includes('fail')) {
+      admissionStatus = 'Failed';
+    } else {
+      admissionStatus = 'Passed';
+    }
+  }
+
+  // K. Testing Center
+  const testingCenterProvince = (s.testingCenterProvince || '').trim();
+  const testingCenterLocation = (s.testingCenterLocation || '').trim();
+
+  const remarks = (s.remarks || admissionStatus).trim();
   const additionalNotes = (s.additionalNotes || '').trim();
   const examScore = s.examScore !== undefined && s.examScore !== null ? Number(s.examScore) : 0;
   const healthStatus = (s.healthStatus || 'Normal / Fit for schooling').trim();
@@ -150,6 +176,9 @@ export function sanitizeStudentRecord(s: any): StudentRecord {
     numSiblings: siblings.length || (s.numSiblings ? Number(s.numSiblings) : 0),
     parishPlace,
     parishPriest,
+    admissionStatus,
+    testingCenterProvince,
+    testingCenterLocation,
     remarks,
     additionalNotes,
     examScore,
@@ -178,9 +207,9 @@ const DB_TMP_FILE = path.join(DATA_DIR, 'db.tmp.json');
 
 export const DEFAULT_LOGO_PRESETS: BrandingPreset[] = [
   {
-    id: 'default-blue-logo',
-    name: 'Official Blue Circular Emblem',
-    url: '/school-logo.png',
+    id: 'default-biga-logo',
+    name: 'Official Biga School Emblem',
+    url: '/school-logo-biga.png',
     isDefault: true,
     createdAt: '2026-01-01T00:00:00.000Z',
   },
@@ -195,9 +224,9 @@ export const DEFAULT_LOGO_PRESETS: BrandingPreset[] = [
 
 export const DEFAULT_DASHBOARD_BG_PRESETS: BrandingPreset[] = [
   {
-    id: 'default-campus-grounds',
-    name: 'School Campus Grounds',
-    url: '/school-campus-background.jpg',
+    id: 'default-biga-campus',
+    name: 'Biga Campus Grounds',
+    url: '/school-campus-biga.png',
     isDefault: true,
     createdAt: '2026-01-01T00:00:00.000Z',
   },
@@ -221,7 +250,7 @@ export const DEFAULT_SPLASH_BG_PRESETS: BrandingPreset[] = [
   {
     id: 'default-campus-splash',
     name: 'School Campus Grounds',
-    url: '/school-campus-background.jpg',
+    url: '/school-campus-biga.png',
     isDefault: true,
     createdAt: '2026-01-01T00:00:00.000Z',
   },
@@ -273,15 +302,15 @@ export const DEFAULT_THEME_PRESETS: ThemePreset[] = [
 const DEFAULT_SETTINGS: SystemSettings = {
   id: 'system_default_settings',
   setupCompleted: false,
-  schoolName: 'Sisters of Mary School – Talisay, Cebu',
+  schoolName: 'Sisters of Mary School – Biga',
   subTitle: 'Internal Student Recruitment & Information Management System',
   systemName: 'Student Recruitment Management System',
-  schoolLocation: 'Talisay, Cebu, Philippines',
-  schoolLogoUrl: '/school-logo.png',
+  schoolLocation: 'Biga, Silang, Cavite, Philippines',
+  schoolLogoUrl: '/school-logo-biga.png',
   maxExamScore: 100,
   dashboardBgTheme: 'custom',
   dashboardBgGradient: 'from-[#1E3A8A] via-[#1D4ED8] to-[#172554]',
-  dashboardBgImageUrl: '/school-campus-background.jpg',
+  dashboardBgImageUrl: '/school-campus-biga.png',
   splashBgImageUrl: '/school-sunset-background.jpg',
   academicYear: 'SY 2026-2027 Recruitment',
   logoPresets: DEFAULT_LOGO_PRESETS,
@@ -376,12 +405,14 @@ function validateAndSanitizeDb(raw: any): DbSchema {
     .filter((r) => r && r.id && r.name)
     .map((r) => {
       const cleanUserId = r.userId && idRemap.has(r.userId) ? idRemap.get(r.userId)! : r.userId;
+      const b = (r.branch || '').trim();
+      const resolvedBranch = !b || b === 'Talisay, Cebu' ? 'Biga' : b;
       return {
         id: r.id.trim(),
         userId: cleanUserId,
         name: r.name.trim(),
         schoolName: (r.schoolName || 'Sisters of Mary School').trim(),
-        branch: (r.branch || 'Talisay, Cebu').trim(),
+        branch: resolvedBranch,
         archived: Boolean(r.archived),
         createdAt: r.createdAt || new Date().toISOString(),
         updatedAt: r.updatedAt || new Date().toISOString(),
@@ -491,6 +522,19 @@ function validateAndSanitizeDb(raw: any): DbSchema {
     }
   }
 
+  const resolvedSchoolName = rawSettings.schoolName && !rawSettings.schoolName.includes('Talisay')
+    ? rawSettings.schoolName
+    : 'Sisters of Mary School – Biga';
+  const resolvedSchoolLocation = rawSettings.schoolLocation && !rawSettings.schoolLocation.includes('Talisay')
+    ? rawSettings.schoolLocation
+    : 'Biga, Silang, Cavite, Philippines';
+  const resolvedLogoUrl = rawSettings.schoolLogoUrl && !rawSettings.schoolLogoUrl.includes('school-logo.png')
+    ? rawSettings.schoolLogoUrl
+    : '/school-logo-biga.png';
+  const resolvedDashboardBg = rawSettings.dashboardBgImageUrl && !rawSettings.dashboardBgImageUrl.includes('school-campus-background.jpg')
+    ? rawSettings.dashboardBgImageUrl
+    : '/school-campus-biga.png';
+
   return {
     users: cleanUsers,
     recruitmentLists: cleanRecruitmentLists,
@@ -499,6 +543,10 @@ function validateAndSanitizeDb(raw: any): DbSchema {
     settings: {
       ...DEFAULT_SETTINGS,
       ...rawSettings,
+      schoolName: resolvedSchoolName,
+      schoolLocation: resolvedSchoolLocation,
+      schoolLogoUrl: resolvedLogoUrl,
+      dashboardBgImageUrl: resolvedDashboardBg,
       logoPresets: mergedLogos,
       dashboardBgPresets: mergedDashboardBgs,
       splashBgPresets: mergedSplashBgs,
@@ -962,8 +1010,8 @@ export const dbService = {
       id: 'rcl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       userId: newUser.id,
       name: 'SY 2026-2027 Recruitment',
-      schoolName: (db.settings?.schoolName || 'Sisters of Mary School').trim(),
-      branch: 'Talisay, Cebu',
+      schoolName: (db.settings?.schoolName || 'Sisters of Mary School – Biga').trim(),
+      branch: 'Biga',
       archived: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -1123,8 +1171,8 @@ export const dbService = {
         id: 'rcl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         userId,
         name: 'SY 2026-2027 Recruitment',
-        schoolName: (db.settings?.schoolName || 'Sisters of Mary School').trim(),
-        branch: 'Talisay, Cebu',
+        schoolName: (db.settings?.schoolName || 'Sisters of Mary School – Biga').trim(),
+        branch: 'Biga',
         archived: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -1139,8 +1187,10 @@ export const dbService = {
     return lists.map((list) => {
       const listStudents = userStudents.filter((s) => s.recruitmentListId === list.id);
       const totalApplicants = listStudents.length;
-      const passedApplicants = listStudents.filter((s) => s.remarks === 'A - PASS').length;
-      const pendingApplicants = listStudents.filter((s) => s.remarks === 'B - PENDING').length;
+      const passedApplicants = listStudents.filter((s) => s.admissionStatus === 'Passed' || s.remarks === 'A - PASS').length;
+      const conditionalApplicants = listStudents.filter((s) => s.admissionStatus === 'Conditional' || s.remarks === 'B - PENDING').length;
+      const failedApplicants = listStudents.filter((s) => s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'))).length;
+      const pendingApplicants = conditionalApplicants;
 
       let latestTime = new Date(list.updatedAt || list.createdAt).getTime();
       for (const s of listStudents) {
@@ -1152,6 +1202,8 @@ export const dbService = {
         ...list,
         totalApplicants,
         passedApplicants,
+        conditionalApplicants,
+        failedApplicants,
         pendingApplicants,
         lastUpdated: new Date(latestTime).toISOString(),
       };
@@ -1176,8 +1228,8 @@ export const dbService = {
     const cleanName = (data.name || '').trim();
     if (!cleanName) throw new Error('Recruitment list name is required');
 
-    const cleanSchool = (data.schoolName || 'Sisters of Mary School').trim();
-    const cleanBranch = (data.branch || 'Talisay, Cebu').trim();
+    const cleanSchool = (data.schoolName || 'Sisters of Mary School – Biga').trim();
+    const cleanBranch = (data.branch || 'Biga').trim();
 
     const duplicate = db.recruitmentLists.find(
       (r) =>
@@ -1326,7 +1378,18 @@ export const dbService = {
 
     // Status filter
     if (params.status && params.status !== 'ALL') {
-      records = records.filter((s) => s.remarks === params.status);
+      records = records.filter((s) => {
+        if (params.status === 'Passed') {
+          return s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed';
+        }
+        if (params.status === 'Conditional') {
+          return s.admissionStatus === 'Conditional' || s.remarks === 'B - PENDING' || s.remarks === 'Conditional';
+        }
+        if (params.status === 'Failed') {
+          return s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'));
+        }
+        return s.admissionStatus === params.status || s.remarks === params.status;
+      });
     }
 
     // Sorting
@@ -1353,8 +1416,16 @@ export const dbService = {
         case 'elementarySchool':
           comp = (a.elementarySchool || '').localeCompare(b.elementarySchool || '');
           break;
+        case 'admissionStatus':
+        case 'status':
         case 'remarks':
-          comp = (a.remarks || '').localeCompare(b.remarks || '');
+          comp = (a.admissionStatus || a.remarks || '').localeCompare(b.admissionStatus || b.remarks || '');
+          break;
+        case 'testingCenterProvince':
+          comp = (a.testingCenterProvince || '').localeCompare(b.testingCenterProvince || '');
+          break;
+        case 'testingCenterLocation':
+          comp = (a.testingCenterLocation || '').localeCompare(b.testingCenterLocation || '');
           break;
         case 'createdAt':
           comp = (a.createdAt || '').localeCompare(b.createdAt || '');

@@ -29,12 +29,19 @@ export const ReportsView: React.FC<Props> = ({
   onViewStudentProfile,
   systemSettings,
 }) => {
-  const [selectedReportTab, setSelectedReportTab] = useState<'all' | 'pass' | 'pending' | 'schools'>('all');
+  const [selectedReportTab, setSelectedReportTab] = useState<'all' | 'pass' | 'conditional' | 'failed' | 'pending' | 'schools'>('all');
   const [searchFilter, setSearchFilter] = useState('');
 
   const totalStudents = students.length;
-  const passStudents = students.filter((s) => s.remarks === 'A - PASS');
-  const pendingStudents = students.filter((s) => s.remarks === 'B - PENDING');
+  const passStudents = students.filter((s) => s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed');
+  const conditionalStudents = students.filter((s) => s.admissionStatus === 'Conditional' || s.remarks === 'Conditional');
+  const failedStudents = students.filter((s) => s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail')));
+  const pendingStudents = students.filter(
+    (s) =>
+      !passStudents.includes(s) &&
+      !conditionalStudents.includes(s) &&
+      !failedStudents.includes(s)
+  );
 
   const schoolMap: Record<string, { total: number; pass: number; pending: number }> = {};
   students.forEach((s) => {
@@ -43,7 +50,7 @@ export const ReportsView: React.FC<Props> = ({
       schoolMap[sch] = { total: 0, pass: 0, pending: 0 };
     }
     schoolMap[sch].total += 1;
-    if (s.remarks === 'A - PASS') schoolMap[sch].pass += 1;
+    if (s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed') schoolMap[sch].pass += 1;
     else schoolMap[sch].pending += 1;
   });
 
@@ -56,10 +63,16 @@ export const ReportsView: React.FC<Props> = ({
   let currentFilterLabel = 'All Applicants';
   if (selectedReportTab === 'pass') {
     displayedStudents = passStudents;
-    currentFilterLabel = 'PASS (A) Qualified Candidates';
+    currentFilterLabel = 'Passed (Qualified Candidates)';
+  } else if (selectedReportTab === 'conditional') {
+    displayedStudents = conditionalStudents;
+    currentFilterLabel = 'Conditional Candidates';
+  } else if (selectedReportTab === 'failed') {
+    displayedStudents = failedStudents;
+    currentFilterLabel = 'Failed Candidates';
   } else if (selectedReportTab === 'pending') {
     displayedStudents = pendingStudents;
-    currentFilterLabel = 'PENDING (B) Evaluation Candidates';
+    currentFilterLabel = 'Pending Evaluation Candidates';
   }
 
   if (searchFilter) {
@@ -130,76 +143,108 @@ export const ReportsView: React.FC<Props> = ({
       </div>
 
       {/* Summary Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div
           onClick={() => setSelectedReportTab('all')}
-          className={`p-5 rounded-2xl border transition-all cursor-pointer ${
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             selectedReportTab === 'all'
               ? 'bg-[#1E3A8A] text-white border-[#1E3A8A] shadow-md'
               : 'bg-white border-blue-100 hover:border-blue-200'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider opacity-90">All Recruited</span>
-            <Users className="w-5 h-5 opacity-90" />
+            <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-90">All</span>
+            <Users className="w-4 h-4 opacity-90" />
           </div>
-          <p className="text-3xl font-black mt-2">{totalStudents}</p>
-          <p className="text-[11px] opacity-80 mt-1 font-semibold">Total Encoded Applicants</p>
+          <p className="text-2xl font-black mt-2">{totalStudents}</p>
+          <p className="text-[10px] opacity-80 mt-1 font-semibold">Total Applicants</p>
         </div>
 
         <div
           onClick={() => setSelectedReportTab('pass')}
-          className={`p-5 rounded-2xl border transition-all cursor-pointer ${
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             selectedReportTab === 'pass'
               ? 'bg-emerald-800 text-white border-emerald-800 shadow-md'
               : 'bg-white border-emerald-100 hover:border-emerald-200'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-700">A (PASS)</span>
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-700">Passed</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="text-3xl font-black text-emerald-800 mt-2">{passStudents.length}</p>
-          <p className="text-[11px] text-emerald-600 font-semibold mt-1">Qualified Candidates</p>
+          <p className="text-2xl font-black text-emerald-800 mt-2">{passStudents.length}</p>
+          <p className="text-[10px] text-emerald-600 font-semibold mt-1">Qualified</p>
         </div>
 
         <div
-          onClick={() => setSelectedReportTab('pending')}
-          className={`p-5 rounded-2xl border transition-all cursor-pointer ${
-            selectedReportTab === 'pending'
+          onClick={() => setSelectedReportTab('conditional')}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+            selectedReportTab === 'conditional'
               ? 'bg-amber-800 text-white border-amber-800 shadow-md'
               : 'bg-white border-amber-100 hover:border-amber-200'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-amber-700">B (PENDING)</span>
-            <Clock className="w-5 h-5 text-amber-600" />
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-700">Conditional</span>
+            <Clock className="w-4 h-4 text-amber-600" />
           </div>
-          <p className="text-3xl font-black text-amber-800 mt-2">{pendingStudents.length}</p>
-          <p className="text-[11px] text-amber-600 font-semibold mt-1">Awaiting Evaluation</p>
+          <p className="text-2xl font-black text-amber-800 mt-2">{conditionalStudents.length}</p>
+          <p className="text-[10px] text-amber-600 font-semibold mt-1">Interview / Re-eval</p>
+        </div>
+
+        <div
+          onClick={() => setSelectedReportTab('failed')}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+            selectedReportTab === 'failed'
+              ? 'bg-red-800 text-white border-red-800 shadow-md'
+              : 'bg-white border-red-100 hover:border-red-200'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-red-700">Failed</span>
+            <Clock className="w-4 h-4 text-red-600" />
+          </div>
+          <p className="text-2xl font-black text-red-800 mt-2">{failedStudents.length}</p>
+          <p className="text-[10px] text-red-600 font-semibold mt-1">Disqualified</p>
+        </div>
+
+        <div
+          onClick={() => setSelectedReportTab('pending')}
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+            selectedReportTab === 'pending'
+              ? 'bg-slate-700 text-white border-slate-700 shadow-md'
+              : 'bg-white border-slate-200 hover:border-slate-300'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">Pending</span>
+            <Clock className="w-4 h-4 text-slate-500" />
+          </div>
+          <p className="text-2xl font-black text-slate-800 mt-2">{pendingStudents.length}</p>
+          <p className="text-[10px] text-slate-500 font-semibold mt-1">Awaiting Review</p>
         </div>
 
         <div
           onClick={() => setSelectedReportTab('schools')}
-          className={`p-5 rounded-2xl border transition-all cursor-pointer ${
+          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             selectedReportTab === 'schools'
               ? 'bg-blue-800 text-white border-blue-800 shadow-md'
               : 'bg-white border-blue-100 hover:border-blue-200'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-blue-800">Origin Schools</span>
-            <GraduationCap className="w-5 h-5 text-blue-700" />
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-blue-800">Schools</span>
+            <GraduationCap className="w-4 h-4 text-blue-700" />
           </div>
-          <p className="text-3xl font-black text-blue-900 mt-2">{schoolList.length}</p>
-          <p className="text-[11px] text-blue-700 font-semibold mt-1">Feeder Elementary Schools</p>
+          <p className="text-2xl font-black text-blue-900 mt-2">{schoolList.length}</p>
+          <p className="text-[10px] text-blue-700 font-semibold mt-1">Feeder Schools</p>
         </div>
       </div>
 
       {/* Main Report Table Container */}
       <div className="bg-white rounded-2xl border border-blue-100 shadow-xs overflow-hidden p-5">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => setSelectedReportTab('all')}
               className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
@@ -208,7 +253,7 @@ export const ReportsView: React.FC<Props> = ({
                   : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
               }`}
             >
-              All Applicants ({totalStudents})
+              All ({totalStudents})
             </button>
             <button
               onClick={() => setSelectedReportTab('pass')}
@@ -218,17 +263,37 @@ export const ReportsView: React.FC<Props> = ({
                   : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
               }`}
             >
-              PASS List ({passStudents.length})
+              Passed ({passStudents.length})
+            </button>
+            <button
+              onClick={() => setSelectedReportTab('conditional')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                selectedReportTab === 'conditional'
+                  ? 'bg-amber-700 text-white'
+                  : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
+              }`}
+            >
+              Conditional ({conditionalStudents.length})
+            </button>
+            <button
+              onClick={() => setSelectedReportTab('failed')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                selectedReportTab === 'failed'
+                  ? 'bg-red-700 text-white'
+                  : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
+              }`}
+            >
+              Failed ({failedStudents.length})
             </button>
             <button
               onClick={() => setSelectedReportTab('pending')}
               className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
                 selectedReportTab === 'pending'
-                  ? 'bg-amber-700 text-white'
+                  ? 'bg-slate-700 text-white'
                   : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
               }`}
             >
-              PENDING List ({pendingStudents.length})
+              Pending ({pendingStudents.length})
             </button>
             <button
               onClick={() => setSelectedReportTab('schools')}
@@ -238,7 +303,7 @@ export const ReportsView: React.FC<Props> = ({
                   : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
               }`}
             >
-              Schools Grouping
+              Schools ({schoolList.length})
             </button>
           </div>
 
@@ -345,13 +410,21 @@ export const ReportsView: React.FC<Props> = ({
                       <td className="py-3 px-4 text-gray-600 font-medium">{s.elementarySchool || 'N/A'}</td>
                       <td className="py-3 px-4 font-bold">{s.examScore}</td>
                       <td className="py-3 px-4">
-                        {s.remarks === 'A - PASS' ? (
+                        {s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed' ? (
                           <span className="px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-full font-bold text-[11px] border border-emerald-200">
-                            A (PASS)
+                            Passed
+                          </span>
+                        ) : s.admissionStatus === 'Conditional' || s.remarks === 'Conditional' ? (
+                          <span className="px-2.5 py-1 bg-amber-50 text-amber-800 rounded-full font-bold text-[11px] border border-amber-200">
+                            Conditional
+                          </span>
+                        ) : s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail')) ? (
+                          <span className="px-2.5 py-1 bg-red-50 text-red-800 rounded-full font-bold text-[11px] border border-red-200">
+                            Failed
                           </span>
                         ) : (
-                          <span className="px-2.5 py-1 bg-amber-50 text-amber-800 rounded-full font-bold text-[11px] border border-amber-200">
-                            B (PENDING)
+                          <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full font-bold text-[11px] border border-slate-300">
+                            Pending
                           </span>
                         )}
                       </td>

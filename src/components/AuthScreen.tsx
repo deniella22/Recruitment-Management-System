@@ -281,8 +281,8 @@ export const AuthScreen: React.FC<Props> = ({
     setMode('login');
   };
 
-  const logoSrc = settings.schoolLogoUrl || '/school-logo.png';
-  const schoolName = settings.schoolName || 'Sisters of Mary School – Talisay, Cebu';
+  const logoSrc = settings.schoolLogoUrl || '/school-logo-biga.png';
+  const schoolName = settings.schoolName || 'Sisters of Mary School – Biga';
   const subTitle = settings.subTitle || 'Internal Student Recruitment & Information Management System';
 
   return (

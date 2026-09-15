@@ -430,8 +430,8 @@ async function startServer() {
         {
           userId: currentUser.id,
           name: name.trim(),
-          schoolName: (schoolName || 'Sisters of Mary School').trim(),
-          branch: (branch || 'Talisay, Cebu').trim(),
+          schoolName: (schoolName || 'Sisters of Mary School – Biga').trim(),
+          branch: (branch || 'Biga').trim(),
         },
         currentUser.fullName
       );
@@ -530,8 +530,17 @@ async function startServer() {
     const recruitmentListId = req.query.recruitmentListId as string | undefined;
     const students = dbService.getStudents(currentUser?.id, recruitmentListId);
     const totalStudents = students.length;
-    const totalPass = students.filter((s) => s.remarks === 'A - PASS').length;
-    const totalPending = students.filter((s) => s.remarks === 'B - PENDING').length;
+    const totalPassed = students.filter(
+      (s) => s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed'
+    ).length;
+    const totalConditional = students.filter(
+      (s) => s.admissionStatus === 'Conditional' || s.remarks === 'B - PENDING' || s.remarks === 'Conditional'
+    ).length;
+    const totalFailed = students.filter(
+      (s) => s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'))
+    ).length;
+    const totalPass = totalPassed;
+    const totalPending = totalConditional;
 
     const schoolsSet = new Set(students.map((s) => s.elementarySchool?.trim()).filter(Boolean));
     const totalExamScores = students.reduce((sum, s) => sum + (Number(s.examScore) || 0), 0);
@@ -543,6 +552,9 @@ async function startServer() {
 
     return res.json({
       totalStudents,
+      totalPassed,
+      totalConditional,
+      totalFailed,
       totalPass,
       totalPending,
       elementarySchoolsCount: schoolsSet.size,
@@ -589,7 +601,12 @@ async function startServer() {
     }
 
     if (status && typeof status === 'string' && status !== 'ALL') {
-      students = students.filter((s) => s.remarks === status);
+      students = students.filter((s) => {
+        if (status === 'Passed') return s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed';
+        if (status === 'Conditional') return s.admissionStatus === 'Conditional' || s.remarks === 'B - PENDING' || s.remarks === 'Conditional';
+        if (status === 'Failed') return s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'));
+        return s.admissionStatus === status || s.remarks === status;
+      });
     }
 
     if (sortBy && typeof sortBy === 'string') {
@@ -691,7 +708,20 @@ async function startServer() {
       return res.status(400).json({ error: `Exam score cannot exceed the maximum configured score of ${settings.maxExamScore}.` });
     }
 
-    const remarks = body.remarks === 'A - PASS' ? 'A - PASS' : 'B - PENDING';
+    let admissionStatus: AdmissionStatus = 'Passed';
+    const rawStatus = body.admissionStatus || body.remarks;
+    if (rawStatus) {
+      const sLower = String(rawStatus).trim().toLowerCase();
+      if (sLower === 'conditional' || sLower === 'b - pending' || sLower === 'pending') {
+        admissionStatus = 'Conditional';
+      } else if (sLower.includes('fail')) {
+        admissionStatus = 'Failed';
+      } else {
+        admissionStatus = 'Passed';
+      }
+    }
+    const testingCenterProvince = (body.testingCenterProvince || '').trim();
+    const testingCenterLocation = (body.testingCenterLocation || '').trim();
 
     // Duplicate check before saving
     const dupCheck = dbService.checkDuplicate(
@@ -734,7 +764,10 @@ async function startServer() {
           birthdate,
           birthday: birthdate,
           examScore: scoreNum,
-          remarks: remarks as AdmissionStatus,
+          admissionStatus,
+          testingCenterProvince,
+          testingCenterLocation,
+          remarks: admissionStatus,
           createdBy: currentUser.fullName,
           updatedBy: currentUser.fullName,
         },
@@ -745,7 +778,7 @@ async function startServer() {
         userId: currentUser.id,
         userName: currentUser.fullName,
         action: 'Student Added',
-        details: `Encoded new student: ${newStudent.lastName}, ${newStudent.firstName} (LRN: ${newStudent.lrn}) - Status: ${newStudent.remarks}`,
+        details: `Encoded new student: ${newStudent.lastName}, ${newStudent.firstName} (LRN: ${newStudent.lrn}) - Status: ${newStudent.admissionStatus || newStudent.remarks}`,
       });
 
       return res.status(201).json(newStudent);
@@ -775,7 +808,7 @@ async function startServer() {
     }
 
     const body = req.body || {};
-    const { lrn, birthdate, birthday, examScore, remarks } = body;
+    const { lrn, birthdate, birthday, examScore, remarks, admissionStatus } = body;
 
     if (lrn !== undefined && (!lrn || !String(lrn).trim())) {
       return res.status(400).json({ error: "Please enter the student's LRN." });
@@ -797,17 +830,32 @@ async function startServer() {
       }
     }
 
-    if (remarks !== undefined && remarks !== 'A - PASS' && remarks !== 'B - PENDING') {
-      return res.status(400).json({ error: 'Admission status must be "A - PASS" or "B - PENDING".' });
+    let finalAdmissionStatus: AdmissionStatus | undefined = undefined;
+    const statusVal = admissionStatus !== undefined ? admissionStatus : remarks;
+    if (statusVal !== undefined) {
+      const raw = String(statusVal).trim().toLowerCase();
+      if (raw === 'passed' || raw === 'a - pass' || raw === 'pass') {
+        finalAdmissionStatus = 'Passed';
+      } else if (raw === 'conditional' || raw === 'b - pending' || raw === 'pending') {
+        finalAdmissionStatus = 'Conditional';
+      } else if (raw.includes('fail')) {
+        finalAdmissionStatus = 'Failed';
+      } else {
+        return res.status(400).json({ error: 'Admission status must be "Passed", "Conditional", or "Failed".' });
+      }
     }
 
     try {
-      const isStatusChange = remarks && remarks !== existing.remarks;
+      const currentStat = existing.admissionStatus || existing.remarks;
+      const isStatusChange = finalAdmissionStatus && finalAdmissionStatus !== currentStat;
 
       const updated = await dbService.updateStudent(
         studentId,
         {
           ...body,
+          ...(finalAdmissionStatus && { admissionStatus: finalAdmissionStatus, remarks: finalAdmissionStatus }),
+          ...(body.testingCenterProvince !== undefined && { testingCenterProvince: String(body.testingCenterProvince).trim() }),
+          ...(body.testingCenterLocation !== undefined && { testingCenterLocation: String(body.testingCenterLocation).trim() }),
           ...(bDate && { birthdate: bDate, birthday: bDate }),
           ...(body.lastName && { lastName: body.lastName.trim(), surname: body.lastName.trim() }),
           ...(body.surname && { lastName: body.surname.trim(), surname: body.surname.trim() }),
@@ -821,7 +869,7 @@ async function startServer() {
         userName: currentUser.fullName,
         action: isStatusChange ? 'Status Changed' : 'Student Edited',
         details: isStatusChange
-          ? `Changed admission status of ${updated.lastName || updated.surname}, ${updated.firstName} from ${existing.remarks} to ${updated.remarks}`
+          ? `Changed admission status of ${updated.lastName || updated.surname}, ${updated.firstName} from ${currentStat} to ${updated.admissionStatus || updated.remarks}`
           : `Updated details for student ${updated.lastName || updated.surname}, ${updated.firstName} (LRN: ${updated.lrn})`,
       });
 
@@ -1011,10 +1059,18 @@ async function startServer() {
               parishPlace: { type: Type.STRING, description: 'Parish name and place / location' },
               parishPriest: { type: Type.STRING, description: "Parish Priest's name" },
 
-              // Section I: Health Assessment & Exam
+              // Section I: Health Assessment & Entrance Exam
               examScore: { type: Type.NUMBER, description: 'Entrance Exam Score' },
               healthStatus: { type: Type.STRING, description: 'Health & Medical Conditions / Assessment' },
-              remarks: { type: Type.STRING, description: "Admission Remarks / Status ('A - PASS' or 'B - PENDING')" },
+
+              // Section J: Admission Status
+              admissionStatus: { type: Type.STRING, description: "Admission Status: 'Passed', 'Conditional', or 'Failed'" },
+              remarks: { type: Type.STRING, description: "Admission Remarks / Status ('Passed', 'Conditional', or 'Failed')" },
+
+              // Section K: Testing Center
+              testingCenterProvince: { type: Type.STRING, description: 'Province where testing center is located (e.g. Sorsogon, Cavite)' },
+              testingCenterLocation: { type: Type.STRING, description: 'Specific location or venue of testing center (e.g. St. Joseph Parish – Juban)' },
+
               additionalNotes: { type: Type.STRING, description: 'Additional Notes or Observations from Interviewer / Recruiter' },
               studentSignature: { type: Type.STRING, description: 'Student Signature confirmed (e.g. Signed)' },
             },
@@ -1032,6 +1088,9 @@ async function startServer() {
               fatherName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
               motherName: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
               examScore: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              admissionStatus: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              testingCenterProvince: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
+              testingCenterLocation: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
               remarks: { type: Type.STRING, description: 'HIGH, MEDIUM, LOW, or NOT_DETECTED' },
             },
           },
@@ -1119,10 +1178,16 @@ G. SIBLINGS INFORMATION:
 H. PARISH INFORMATION:
    - Parish / Place & Parish Priest
 
-I. HEALTH & EXAMINATION:
+I. HEALTH ASSESSMENT & ENTRANCE EXAM:
    - Health / Medical conditions (Normal, Asthma, Allergies, etc.)
    - Entrance Exam Score
-   - Remarks: strictly "A - PASS" or "B - PENDING"
+
+J. ADMISSION STATUS:
+   - Admission Status: Passed, Conditional, or Failed
+
+K. TESTING CENTER:
+   - Testing Center Province (e.g. Sorsogon, Cavite, Albay, Batangas, etc.)
+   - Testing Center Location / Venue (e.g. St. Joseph Parish – Juban, SMS Biga Campus, etc.)
 
 ACCURACY & INTEGRITY RULES:
 - NEVER guess unreadable handwriting or invent sample names/data.

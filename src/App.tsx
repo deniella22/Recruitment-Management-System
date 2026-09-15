@@ -45,16 +45,16 @@ const getInitialSettings = (): SystemSettings => {
     // Ignore cache error
   }
   return {
-    schoolName: 'Sisters of Mary School – Talisay, Cebu',
+    schoolName: 'Sisters of Mary School – Biga',
     subTitle: 'Internal Student Recruitment & Information Management System',
     systemName: 'STUDENT RECRUITMENT MANAGEMENT SYSTEM',
-    schoolLocation: 'TALISAY, CEBU, PHILIPPINES',
-    schoolLogoUrl: '/school-logo.png',
+    schoolLocation: 'SILANG, CAVITE, PHILIPPINES',
+    schoolLogoUrl: '/school-logo-biga.png',
     maxExamScore: 100,
     dashboardBgTheme: 'custom',
     dashboardBgGradient: 'from-[#1E3A8A] via-[#1D4ED8] to-[#172554]',
-    dashboardBgImageUrl: '/school-campus-background.jpg',
-    splashBgImageUrl: '/school-sunset-background.jpg',
+    dashboardBgImageUrl: '/school-campus-biga.png',
+    splashBgImageUrl: '/school-campus-biga.png',
     academicYear: 'SY 2026-2027 Recruitment',
   };
 };
@@ -432,7 +432,7 @@ export default function App() {
             id: '',
             name: 'System Settings',
             schoolName: systemSettings.schoolName,
-            branch: 'Talisay, Cebu',
+            branch: 'Biga',
             createdAt: '',
             lastUpdated: '',
             totalApplicants: 0,

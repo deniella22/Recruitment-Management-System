@@ -87,8 +87,10 @@ export async function exportStudentsToPdf(
   doc.text(`Generated on: ${dateStr}`, textX, 23);
 
   // Statistics Summary Strip (Below Header)
-  const passCount = students.filter((s) => s.remarks === 'A - PASS').length;
-  const pendingCount = students.filter((s) => s.remarks === 'B - PENDING').length;
+  const passCount = students.filter((s) => s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed').length;
+  const condCount = students.filter((s) => s.admissionStatus === 'Conditional' || s.remarks === 'Conditional').length;
+  const failCount = students.filter((s) => s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'))).length;
+  const pendingCount = Math.max(0, students.length - passCount - condCount - failCount);
   const passRate = students.length > 0 ? Math.round((passCount / students.length) * 100) : 0;
 
   doc.setFillColor(248, 250, 252); // Slate-50
@@ -102,13 +104,16 @@ export async function exportStudentsToPdf(
   doc.text(`Total Applicants: ${students.length}`, 14, 35);
   
   doc.setTextColor(21, 128, 61); // Green
-  doc.text(`Passed (A): ${passCount}`, 65, 35);
+  doc.text(`Passed: ${passCount}`, 60, 35);
   
   doc.setTextColor(180, 83, 9); // Amber
-  doc.text(`Pending (B): ${pendingCount}`, 110, 35);
+  doc.text(`Conditional: ${condCount}`, 95, 35);
+
+  doc.setTextColor(185, 28, 28); // Red
+  doc.text(`Failed: ${failCount}`, 135, 35);
 
   doc.setTextColor(30, 58, 138); // Blue
-  doc.text(`Passing Rate: ${passRate}%`, 160, 35);
+  doc.text(`Passing Rate: ${passRate}%`, 175, 35);
 
   // Prepare Table Rows
   const tableData = students.map((s, idx) => {
@@ -118,6 +123,21 @@ export async function exportStudentsToPdf(
       if (parts.length === 3) formattedBirthday = `${parts[1]}/${parts[2]}/${parts[0]}`;
     }
     const fullName = `${s.surname}, ${s.firstName} ${s.middleName || ''}`.trim();
+    const admStatus =
+      s.admissionStatus ||
+      (s.remarks === 'A - PASS'
+        ? 'Passed'
+        : s.remarks === 'Passed'
+        ? 'Passed'
+        : s.remarks === 'Conditional'
+        ? 'Conditional'
+        : s.remarks === 'Failed'
+        ? 'Failed'
+        : 'Pending');
+    const testingCenter = s.testingCenterProvince
+      ? `${s.testingCenterProvince}${s.testingCenterLocation ? ` (${s.testingCenterLocation})` : ''}`
+      : '-';
+
     return [
       String(idx + 1),
       String(s.lrn || '-'),
@@ -125,8 +145,8 @@ export async function exportStudentsToPdf(
       formattedBirthday,
       String(s.elementarySchool || 'N/A'),
       String(s.examScore ?? 0),
-      s.remarks === 'A - PASS' ? 'A (PASS)' : 'B (PENDING)',
-      s.address || '-',
+      admStatus,
+      testingCenter,
       s.guardianName || s.motherName || s.fatherName || '-',
     ];
   });
@@ -142,7 +162,7 @@ export async function exportStudentsToPdf(
       'Elementary School',
       'Exam',
       'Status',
-      'Address',
+      'Testing Center',
       'Parent / Guardian',
     ]],
     body: tableData,
@@ -165,26 +185,32 @@ export async function exportStudentsToPdf(
       fillColor: [248, 250, 252],
     },
     columnStyles: {
-      0: { cellWidth: 10, halign: 'center' },
-      1: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
-      2: { cellWidth: 45, halign: 'left', fontStyle: 'bold' },
-      3: { cellWidth: 22, halign: 'center' },
-      4: { cellWidth: 50, halign: 'left' },
-      5: { cellWidth: 15, halign: 'center', fontStyle: 'bold' },
-      6: { cellWidth: 24, halign: 'center', fontStyle: 'bold' },
-      7: { cellWidth: 45, halign: 'left' },
-      8: { cellWidth: 35, halign: 'left' },
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 25, halign: 'center', fontStyle: 'bold' },
+      2: { cellWidth: 42, halign: 'left', fontStyle: 'bold' },
+      3: { cellWidth: 20, halign: 'center' },
+      4: { cellWidth: 44, halign: 'left' },
+      5: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+      6: { cellWidth: 22, halign: 'center', fontStyle: 'bold' },
+      7: { cellWidth: 42, halign: 'left' },
+      8: { cellWidth: 32, halign: 'left' },
     },
     didParseCell: (data) => {
-      // Color remark column cells
+      // Color remark/status column cells
       if (data.section === 'body' && data.column.index === 6) {
-        const text = String(data.cell.raw);
-        if (text.includes('PASS')) {
+        const text = String(data.cell.raw).toLowerCase();
+        if (text.includes('pass')) {
           data.cell.styles.textColor = [22, 101, 52];
           data.cell.styles.fillColor = [220, 252, 231];
-        } else {
+        } else if (text.includes('conditional')) {
           data.cell.styles.textColor = [154, 52, 18];
           data.cell.styles.fillColor = [254, 243, 199];
+        } else if (text.includes('fail')) {
+          data.cell.styles.textColor = [153, 27, 27];
+          data.cell.styles.fillColor = [254, 226, 226];
+        } else {
+          data.cell.styles.textColor = [30, 58, 138];
+          data.cell.styles.fillColor = [239, 246, 255];
         }
       }
     },
@@ -302,6 +328,18 @@ export async function exportStudentProfilePdf(
   curY += 26;
 
   // Demographics Section
+  const resolvedAdmStatus =
+    student.admissionStatus ||
+    (student.remarks === 'A - PASS'
+      ? 'Passed'
+      : student.remarks === 'Passed'
+      ? 'Passed'
+      : student.remarks === 'Conditional'
+      ? 'Conditional'
+      : student.remarks === 'Failed'
+      ? 'Failed'
+      : 'Pending');
+
   autoTable(doc, {
     startY: curY,
     head: [['I. APPLICANT PERSONAL & ADMISSION INFORMATION', '']],
@@ -312,7 +350,7 @@ export async function exportStudentProfilePdf(
       ['Residential Address', student.address || '-'],
       ['Origin Elementary School', student.elementarySchool || '-'],
       ['Entrance Examination Score', `${student.examScore ?? 0} pts (out of ${systemSettings?.maxExamScore || 100})`],
-      ['Admission Status & Remarks', student.remarks || 'B - PENDING'],
+      ['Admission Status', resolvedAdmStatus],
       ['General Health Status', student.healthStatus || 'Good / Normal'],
     ],
     theme: 'plain',
@@ -335,7 +373,7 @@ export async function exportStudentProfilePdf(
     margin: { left: 14, right: 14 },
   });
 
-  curY = (doc as any).lastAutoTable.finalY + 6;
+  curY = (doc as any).lastAutoTable.finalY + 5;
 
   // Family Background Section
   autoTable(doc, {
@@ -370,12 +408,45 @@ export async function exportStudentProfilePdf(
     margin: { left: 14, right: 14 },
   });
 
-  curY = (doc as any).lastAutoTable.finalY + 10;
+  curY = (doc as any).lastAutoTable.finalY + 5;
+
+  // Parish & Testing Center Section
+  autoTable(doc, {
+    startY: curY,
+    head: [['III. PARISH & TESTING CENTER INFORMATION', '']],
+    body: [
+      ['Parish Place / Church', student.parishPlace || '-'],
+      ['Parish Priest', student.parishPriest || '-'],
+      ['Testing Center Province', student.testingCenterProvince || '-'],
+      ['Testing Center Location', student.testingCenterLocation || '-'],
+      ['Additional Notes / Remarks', student.additionalNotes || 'None recorded'],
+    ],
+    theme: 'plain',
+    headStyles: {
+      fillColor: [30, 58, 138],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 9,
+    },
+    columnStyles: {
+      0: { cellWidth: 65, fontStyle: 'bold', textColor: [51, 65, 85] },
+      1: { cellWidth: 117, textColor: [15, 23, 42] },
+    },
+    styles: {
+      fontSize: 8.5,
+      cellPadding: 2.2,
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2,
+    },
+    margin: { left: 14, right: 14 },
+  });
+
+  curY = (doc as any).lastAutoTable.finalY + 8;
 
   // Official Signature / Verification Box
   doc.setDrawColor(203, 213, 225);
   doc.setFillColor(248, 250, 252);
-  doc.roundedRect(14, curY, pageWidth - 28, 38, 3, 3, 'FD');
+  doc.roundedRect(14, curY, pageWidth - 28, 36, 3, 3, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
@@ -386,7 +457,7 @@ export async function exportStudentProfilePdf(
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
   doc.text(
-    'This certifies that the candidate above has been properly evaluated in accordance with the admission standards and recruitment policies of Sisters of Mary School-Girlstown, Inc.',
+    `This certifies that the candidate above has been properly evaluated in accordance with the admission standards and recruitment policies of ${schoolName}.`,
     20,
     curY + 11,
     { maxWidth: pageWidth - 40 }

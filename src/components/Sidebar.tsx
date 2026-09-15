@@ -36,8 +36,8 @@ export const Sidebar: React.FC<Props> = ({
   onBackToLists,
 }) => {
   const isSuperAdmin = userRole === 'Super Administrator';
-  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo.png';
-  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Talisay, Cebu';
+  const logoSrc = systemSettings?.schoolLogoUrl || '/school-logo-biga.png';
+  const schoolName = systemSettings?.schoolName || 'Sisters of Mary School – Biga';
   const listName = selectedRecruitmentList?.name || systemSettings?.academicYear || 'Recruitment Workspace';
 
   const navItems = [
@@ -143,8 +143,8 @@ export const Sidebar: React.FC<Props> = ({
 
       {/* Footer System Info */}
       <div className="p-4 border-t border-blue-800/80 text-[11px] text-blue-200/80 bg-blue-950/80">
-        <p className="font-bold text-white">Talisay Admission Office</p>
-        <p className="text-[10px] text-cyan-300/80 mt-0.5">Sisters of Mary School – Cebu</p>
+        <p className="font-bold text-white">Biga Admission Office</p>
+        <p className="text-[10px] text-cyan-300/80 mt-0.5">Sisters of Mary School – Biga</p>
       </div>
     </aside>
   );

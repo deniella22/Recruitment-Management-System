@@ -60,8 +60,8 @@ export const RecruitmentListsView: React.FC<Props> = ({
 
   // Form states
   const [listName, setListName] = useState<string>('');
-  const [schoolName, setSchoolName] = useState<string>('Sisters of Mary School');
-  const [branch, setBranch] = useState<string>('Talisay, Cebu');
+  const [schoolName, setSchoolName] = useState<string>('Sisters of Mary School – Biga');
+  const [branch, setBranch] = useState<string>('Biga');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -94,8 +94,8 @@ export const RecruitmentListsView: React.FC<Props> = ({
   const handleOpenAddModal = (defaultName = '') => {
     const currentYear = new Date().getFullYear();
     setListName(defaultName || `RECRUITMENT ${currentYear}`);
-    setSchoolName(systemSettings.schoolName || 'Sisters of Mary School');
-    setBranch(systemSettings.schoolLocation ? 'Talisay, Cebu' : 'Talisay, Cebu');
+    setSchoolName(systemSettings.schoolName || 'Sisters of Mary School – Biga');
+    setBranch(systemSettings.schoolLocation ? 'Biga' : 'Biga');
     setFormError(null);
     setIsAddModalOpen(true);
   };
@@ -112,8 +112,8 @@ export const RecruitmentListsView: React.FC<Props> = ({
       setFormError(null);
       const created = await createRecruitmentList({
         name: listName.trim(),
-        schoolName: schoolName.trim() || 'Sisters of Mary School',
-        branch: branch.trim() || 'Talisay, Cebu',
+        schoolName: schoolName.trim() || 'Sisters of Mary School – Biga',
+        branch: branch.trim() || 'Biga',
       });
       showNotification(`Recruitment list "${created.name}" created successfully!`);
       setIsAddModalOpen(false);

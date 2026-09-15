@@ -25,6 +25,7 @@ import {
   Home,
   FileText,
   AlertTriangle,
+  MapPin,
   Image as ImageIcon,
 } from 'lucide-react';
 import { StudentRecord, AdmissionStatus, SiblingRecord } from '../types';
@@ -56,7 +57,7 @@ export const StudentFormModal: React.FC<Props> = ({
   );
 
   // Active section tab for easy navigation
-  const [activeTab, setActiveTab] = useState<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H_I'>('A');
+  const [activeTab, setActiveTab] = useState<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H_I' | 'J_K'>('A');
 
   // --- SECTION A: Basic Personal Information ---
   const [photoUrl, setPhotoUrl] = useState<string>(studentToEdit?.photoUrl || '');
@@ -139,6 +140,28 @@ export const StudentFormModal: React.FC<Props> = ({
   const [remarks, setRemarks] = useState<AdmissionStatus>(studentToEdit?.remarks || 'B - PENDING');
   const [additionalNotes, setAdditionalNotes] = useState<string>(studentToEdit?.additionalNotes || '');
   const [studentSignature, setStudentSignature] = useState<string>(studentToEdit?.studentSignature || 'Signed');
+
+  // --- SECTION J: Admission Status ---
+  const [admissionStatus, setAdmissionStatus] = useState<'Passed' | 'Conditional' | 'Failed' | 'Pending' | string>(
+    studentToEdit?.admissionStatus ||
+      (studentToEdit?.remarks === 'A - PASS'
+        ? 'Passed'
+        : studentToEdit?.remarks === 'Passed'
+        ? 'Passed'
+        : studentToEdit?.remarks === 'Conditional'
+        ? 'Conditional'
+        : studentToEdit?.remarks === 'Failed'
+        ? 'Failed'
+        : 'Pending')
+  );
+
+  // --- SECTION K: Testing Center ---
+  const [testingCenterProvince, setTestingCenterProvince] = useState<string>(
+    studentToEdit?.testingCenterProvince || ''
+  );
+  const [testingCenterLocation, setTestingCenterLocation] = useState<string>(
+    studentToEdit?.testingCenterLocation || ''
+  );
 
   // UI / Submission state
   const [loading, setLoading] = useState(false);
@@ -395,6 +418,23 @@ export const StudentFormModal: React.FC<Props> = ({
         remarks: remarks,
         additionalNotes: additionalNotes.trim(),
         studentSignature: studentSignature || 'Signed',
+
+        // Section J: Admission Status
+        admissionStatus:
+          admissionStatus ||
+          (remarks === 'A - PASS'
+            ? 'Passed'
+            : remarks === 'Passed'
+            ? 'Passed'
+            : remarks === 'Conditional'
+            ? 'Conditional'
+            : remarks === 'Failed'
+            ? 'Failed'
+            : 'Pending'),
+
+        // Section K: Testing Center
+        testingCenterProvince: testingCenterProvince.trim(),
+        testingCenterLocation: testingCenterLocation.trim(),
       };
 
       let saved: StudentRecord;
@@ -613,6 +653,7 @@ export const StudentFormModal: React.FC<Props> = ({
             { id: 'F', label: 'F. Religious & Civil', icon: Church },
             { id: 'G', label: 'G. Siblings', icon: Users },
             { id: 'H_I', label: 'H & I. Parish & Exam', icon: HeartPulse },
+            { id: 'J_K', label: 'J & K. Status & Center', icon: MapPin },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -1576,6 +1617,140 @@ export const StudentFormModal: React.FC<Props> = ({
                       placeholder="Notes on socioeconomic status, family background, or interviewer comments..."
                       className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                     />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SECTION J & K: ADMISSION STATUS & TESTING CENTER */}
+          {/* ========================================================================= */}
+          {activeTab === 'J_K' && (
+            <div id="section-j-k-status-center" className="space-y-6 animate-fade-in">
+              {/* Section J: Admission Status */}
+              <div className="space-y-3 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                  <div className="flex items-center gap-2 text-[#1E3A8A]">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <h3 className="font-extrabold text-sm uppercase tracking-wider">J. Admission Status</h3>
+                  </div>
+                  <span className="text-[11px] font-bold text-gray-500 uppercase">Section J of Official Form</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
+                      Admission Decision Status <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      id="select-admissionStatus"
+                      value={admissionStatus}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAdmissionStatus(val);
+                        if (val === 'Passed') {
+                          setRemarks('A - PASS');
+                        } else {
+                          setRemarks('B - PENDING');
+                        }
+                      }}
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-black text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"
+                    >
+                      <option value="Passed">Passed (Qualified for Sisters of Mary School – Biga)</option>
+                      <option value="Conditional">Conditional (Subject to Document / Health Clearance)</option>
+                      <option value="Failed">Failed (Did not meet admission criteria)</option>
+                      <option value="Pending">Pending (Under Ongoing Recruitment Evaluation)</option>
+                    </select>
+                  </div>
+
+                  {/* Visual Status Tag */}
+                  <div className="flex flex-col justify-center">
+                    <span className="text-xs font-bold text-gray-500 uppercase mb-1.5">Current Status Indicator</span>
+                    <div className="flex items-center gap-2">
+                      {admissionStatus === 'Passed' && (
+                        <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-black">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>PASSED / QUALIFIED</span>
+                        </div>
+                      )}
+                      {admissionStatus === 'Conditional' && (
+                        <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-100 border border-amber-300 text-amber-900 rounded-xl text-xs font-black">
+                          <Clock className="w-4 h-4 text-amber-600" />
+                          <span>CONDITIONAL ADMISSION</span>
+                        </div>
+                      )}
+                      {admissionStatus === 'Failed' && (
+                        <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-red-100 border border-red-300 text-red-900 rounded-xl text-xs font-black">
+                          <AlertCircle className="w-4 h-4 text-red-600" />
+                          <span>FAILED / NOT QUALIFIED</span>
+                        </div>
+                      )}
+                      {admissionStatus === 'Pending' && (
+                        <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-100 border border-blue-300 text-blue-900 rounded-xl text-xs font-black">
+                          <Clock className="w-4 h-4 text-blue-600" />
+                          <span>PENDING EVALUATION</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section K: Testing Center Information */}
+              <div className="space-y-4 bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                  <div className="flex items-center gap-2 text-[#1E3A8A]">
+                    <MapPin className="w-5 h-5 text-blue-700" />
+                    <h3 className="font-extrabold text-sm uppercase tracking-wider">K. Testing Center Information</h3>
+                  </div>
+                  <span className="text-[11px] font-bold text-gray-500 uppercase">Section K of Official Form</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Testing Center Province */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                      Testing Center Province
+                    </label>
+                    <input
+                      id="input-testingCenterProvince"
+                      type="text"
+                      placeholder="e.g. Cavite, Batangas, Laguna, Quezon..."
+                      value={testingCenterProvince}
+                      onChange={(e) => setTestingCenterProvince(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"
+                    />
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {['Cavite', 'Batangas', 'Laguna', 'Quezon', 'Rizal', 'Oriental Mindoro', 'Occidental Mindoro'].map((prov) => (
+                        <button
+                          key={prov}
+                          type="button"
+                          onClick={() => setTestingCenterProvince(prov)}
+                          className="px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-100 text-[10px] font-bold text-slate-700 rounded-md transition-colors cursor-pointer"
+                        >
+                          {prov}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Testing Center Location / Venue */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                      Testing Center Location / School / Parish Venue
+                    </label>
+                    <input
+                      id="input-testingCenterLocation"
+                      type="text"
+                      placeholder="e.g. Silang Central Elementary School / St. Mary Parish Hall"
+                      value={testingCenterLocation}
+                      onChange={(e) => setTestingCenterLocation(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"
+                    />
+                    <p className="text-[11px] text-gray-500 mt-1.5">
+                      Specific examination venue, municipal gym, or host school where the entrance exam was administered.
+                    </p>
                   </div>
                 </div>
               </div>

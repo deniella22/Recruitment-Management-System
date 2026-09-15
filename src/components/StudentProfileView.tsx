@@ -132,15 +132,25 @@ export const StudentProfileView: React.FC<Props> = ({
         </div>
 
         <div className="self-stretch sm:self-auto flex sm:flex-col items-center justify-between sm:justify-center gap-2">
-          {student.remarks === 'A - PASS' ? (
+          {student.admissionStatus === 'Passed' || student.remarks === 'A - PASS' ? (
             <div className="px-5 py-2.5 bg-emerald-500/20 text-emerald-200 border border-emerald-400/40 rounded-2xl backdrop-blur-md flex items-center gap-2 font-black text-sm shadow-inner">
               <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-              <span>STATUS: A (PASS)</span>
+              <span>STATUS: PASSED</span>
             </div>
-          ) : (
+          ) : student.admissionStatus === 'Conditional' ? (
             <div className="px-5 py-2.5 bg-amber-500/20 text-amber-200 border border-amber-400/40 rounded-2xl backdrop-blur-md flex items-center gap-2 font-black text-sm shadow-inner">
               <Clock className="w-5 h-5 text-amber-300" />
-              <span>STATUS: B (PENDING)</span>
+              <span>STATUS: CONDITIONAL</span>
+            </div>
+          ) : student.admissionStatus === 'Failed' ? (
+            <div className="px-5 py-2.5 bg-red-500/20 text-red-200 border border-red-400/40 rounded-2xl backdrop-blur-md flex items-center gap-2 font-black text-sm shadow-inner">
+              <Clock className="w-5 h-5 text-red-300" />
+              <span>STATUS: FAILED</span>
+            </div>
+          ) : (
+            <div className="px-5 py-2.5 bg-blue-500/20 text-blue-200 border border-blue-400/40 rounded-2xl backdrop-blur-md flex items-center gap-2 font-black text-sm shadow-inner">
+              <Clock className="w-5 h-5 text-blue-300" />
+              <span>STATUS: PENDING</span>
             </div>
           )}
           <div className="text-[11px] text-blue-200 font-bold bg-white/10 px-3 py-1 rounded-xl">
@@ -448,6 +458,40 @@ export const StudentProfileView: React.FC<Props> = ({
               </p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* SECTION J & K: ADMISSION STATUS & TESTING CENTER */}
+      <div className="bg-white rounded-2xl border border-blue-100 shadow-xs p-6 space-y-4">
+        <div className="flex items-center gap-2 pb-3 border-b border-blue-50 text-[#1E3A8A]">
+          <MapPin className="w-5 h-5" />
+          <h3 className="font-extrabold text-sm uppercase tracking-wider">J & K. Admission Status & Testing Center</h3>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+          <div>
+            <p className="text-gray-500 font-semibold uppercase text-[10px]">Admission Decision</p>
+            <p className="font-black text-sm text-gray-900 mt-0.5">
+              {student.admissionStatus ||
+                (student.remarks === 'A - PASS'
+                  ? 'Passed'
+                  : student.remarks === 'Passed'
+                  ? 'Passed'
+                  : student.remarks === 'Conditional'
+                  ? 'Conditional'
+                  : student.remarks === 'Failed'
+                  ? 'Failed'
+                  : 'Pending')}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-500 font-semibold uppercase text-[10px]">Testing Center Province</p>
+            <p className="font-bold text-gray-900 mt-0.5">{student.testingCenterProvince || 'N/A'}</p>
+          </div>
+          <div>
+            <p className="text-gray-500 font-semibold uppercase text-[10px]">Testing Center Location / School Venue</p>
+            <p className="font-bold text-gray-900 mt-0.5">{student.testingCenterLocation || 'N/A'}</p>
+          </div>
         </div>
       </div>
 
