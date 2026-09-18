@@ -10,6 +10,7 @@ export interface User {
   lastLoginAt?: string;
   hasPin?: boolean;
   pin?: string;
+  aliases?: string[];
 }
 
 export type AdmissionStatus = 'Pending' | 'Passed' | 'Conditional' | 'Failed';
@@ -79,11 +80,14 @@ export interface StudentRecord {
   // D. Family Information
   fatherName: string;           // Father's Name
   fatherOccupation: string;     // Father's Occupation / Trabaho / Hanapbuhay
+  fatherAge?: number | string;  // Father's Age
   motherName: string;           // Mother's Name
   motherOccupation: string;     // Mother's Occupation / Trabaho / Hanapbuhay
+  motherAge?: number | string;  // Mother's Age
   guardianName: string;         // Guardian's Name
   guardianRelation: string;     // Relation to the Guardian
   guardianOccupation?: string;  // Guardian's Occupation
+  guardianAge?: number | string; // Guardian's Age
 
   // E. Contact Information
   cellphoneNumber: string;      // Cellphone Number
@@ -92,7 +96,10 @@ export interface StudentRecord {
   messengerOwner: string;       // Messenger Owner
 
   // F. PSA / Family Record Information
-  birthCertificatePsa: string;  // Birth Certificate (PSA) - Yes / No / Submitted
+  documentsSubmitted?: string[];      // Selected submitted documents (Birth Certificate, Good Moral, Certificate of Enrollment, Grade 6 Report Card)
+  birthCertificateType?: 'PSA' | 'NSO' | 'Municipal' | string; // Type of birth certificate
+  birthCertificatePsa: string;        // Birth Certificate (PSA) - Yes / No / Submitted (backward compatibility)
+  religion?: 'Catholic' | 'Non-Catholic' | string; // Religion (Catholic / Non-Catholic)
   psaFatherNameAge: string;     // Name of Father (Age)
   fatherReligion: string;       // Father's Religion
   psaMotherNameAge: string;     // Name of Mother (Age)

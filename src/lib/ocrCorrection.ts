@@ -748,7 +748,7 @@ export function applySmartOcrCorrection(rawExtracted: Partial<StudentRecord>): {
     if (schRes.wasChanged) {
       corrections.push({
         field: 'elementarySchool',
-        fieldLabel: 'Elementary School Graduated',
+        fieldLabel: 'Elementary School',
         originalValue: rawExtracted.elementarySchool,
         correctedValue: schRes.corrected,
         confidence: schRes.confidence,

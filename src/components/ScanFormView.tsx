@@ -32,9 +32,13 @@ import {
   Home,
   MapPin,
   Image as ImageIcon,
+  ChevronRight,
+  ChevronLeft,
 } from 'lucide-react';
 import { StudentRecord, AdmissionStatus, OCRScanResult, SiblingRecord, PROVINCE_OPTIONS, resolveProvince } from '../types';
 import { performOCRScan, fetchOcrStatus, createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
+import { calculateAgeFromBirthdate } from '../lib/dateUtils';
+import { DateOfBirthInput } from './DateOfBirthInput';
 
 interface Props {
   onClose: () => void;
@@ -70,7 +74,7 @@ export const ScanFormView: React.FC<Props> = ({
   const [scanResult, setScanResult] = useState<OCRScanResult | null>(null);
 
   // Active section tab in Review mode
-  const [activeReviewTab, setActiveReviewTab] = useState<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H_I' | 'J_K'>('A');
+  const [activeReviewTab, setActiveReviewTab] = useState<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'H_I' | 'J_K'>('A');
 
   // --- SECTION A: Basic Personal Information ---
   const [photoUrl, setPhotoUrl] = useState<string>('');
@@ -100,11 +104,14 @@ export const ScanFormView: React.FC<Props> = ({
   // --- SECTION D: Family Background ---
   const [fatherName, setFatherName] = useState<string>('');
   const [fatherOccupation, setFatherOccupation] = useState<string>('');
+  const [fatherAge, setFatherAge] = useState<number | string>('');
   const [motherName, setMotherName] = useState<string>('');
   const [motherOccupation, setMotherOccupation] = useState<string>('');
+  const [motherAge, setMotherAge] = useState<number | string>('');
   const [guardianName, setGuardianName] = useState<string>('');
   const [guardianRelation, setGuardianRelation] = useState<string>('');
   const [guardianOccupation, setGuardianOccupation] = useState<string>('');
+  const [guardianAge, setGuardianAge] = useState<number | string>('');
 
   // --- SECTION E: Contact Information ---
   const [cellphoneNumber, setCellphoneNumber] = useState<string>('');
@@ -113,16 +120,23 @@ export const ScanFormView: React.FC<Props> = ({
   const [messengerOwner, setMessengerOwner] = useState<string>('');
 
   // --- SECTION F: Religious & Civil Information ---
-  const [birthCertificatePsa, setBirthCertificatePsa] = useState<'Yes' | 'No' | string>('Yes');
+  const [hasBirthCert, setHasBirthCert] = useState<boolean>(true);
+  const [birthCertType, setBirthCertType] = useState<'PSA' | 'NSO' | 'Municipal'>('PSA');
+  const [hasGoodMoral, setHasGoodMoral] = useState<boolean>(false);
+  const [hasCertEnrollment, setHasCertEnrollment] = useState<boolean>(false);
+  const [hasReportCard, setHasReportCard] = useState<boolean>(false);
+
+  const [religion, setReligion] = useState<'Catholic' | 'Non-Catholic'>('Catholic');
+  const [isBaptized, setIsBaptized] = useState<boolean>(true);
+  const [isConfirmed, setIsConfirmed] = useState<boolean>(false);
+  const [denomination, setDenomination] = useState<string>('');
+
   const [psaFatherNameAge, setPsaFatherNameAge] = useState<string>('');
-  const [fatherReligion, setFatherReligion] = useState<string>('Roman Catholic');
+  const [fatherReligion, setFatherReligion] = useState<'Catholic' | 'Non-Catholic'>('Catholic');
   const [psaMotherNameAge, setPsaMotherNameAge] = useState<string>('');
-  const [motherReligion, setMotherReligion] = useState<string>('Roman Catholic');
+  const [motherReligion, setMotherReligion] = useState<'Catholic' | 'Non-Catholic'>('Catholic');
   const [birthOrder, setBirthOrder] = useState<number | string>(1);
   const [numberOfChildren, setNumberOfChildren] = useState<number | string>(1);
-  const [baptizedCatholic, setBaptizedCatholic] = useState<'Yes' | 'No' | string>('Yes');
-  const [denomination, setDenomination] = useState<string>('');
-  const [confirmedCatholic, setConfirmedCatholic] = useState<'Yes' | 'No' | string>('Yes');
 
   // --- SECTION G: Siblings Information ---
   const [siblings, setSiblings] = useState<SiblingRecord[]>([
@@ -167,6 +181,58 @@ export const ScanFormView: React.FC<Props> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nativeCameraInputRef = useRef<HTMLInputElement>(null);
+  const reviewFormScrollRef = useRef<HTMLFormElement>(null);
+  const scanTabsNavRef = useRef<HTMLDivElement>(null);
+
+  // Review tabs order and navigation
+  const reviewTabOrder: Array<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'H_I' | 'J_K'> = [
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F',
+    'H_I',
+    'J_K',
+  ];
+  const currentReviewTabIndex = reviewTabOrder.indexOf(activeReviewTab);
+  const isLastReviewTab = currentReviewTabIndex === reviewTabOrder.length - 1;
+
+  const handleNextReviewTab = () => {
+    if (currentReviewTabIndex < reviewTabOrder.length - 1) {
+      setActiveReviewTab(reviewTabOrder[currentReviewTabIndex + 1]);
+      if (reviewFormScrollRef.current) {
+        reviewFormScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  };
+
+  const handlePrevReviewTab = () => {
+    if (currentReviewTabIndex > 0) {
+      setActiveReviewTab(reviewTabOrder[currentReviewTabIndex - 1]);
+      if (reviewFormScrollRef.current) {
+        reviewFormScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  };
+
+  // Automatically scroll the review section navigation bar so active section is visible
+  useEffect(() => {
+    if (scanTabsNavRef.current) {
+      const activeBtn = scanTabsNavRef.current.querySelector<HTMLElement>(`[data-tab-id="${activeReviewTab}"]`);
+      if (activeBtn) {
+        const container = scanTabsNavRef.current;
+        const btnLeft = activeBtn.offsetLeft;
+        const btnWidth = activeBtn.offsetWidth;
+        const containerWidth = container.clientWidth;
+        const targetScrollLeft = btnLeft - (containerWidth / 2) + (btnWidth / 2);
+        container.scrollTo({
+          left: Math.max(0, targetScrollLeft),
+          behavior: 'smooth',
+        });
+      }
+    }
+  }, [activeReviewTab]);
 
   // Callback ref to attach stream immediately when <video> mounts into DOM
   const setVideoRef = useCallback((node: HTMLVideoElement | null) => {
@@ -234,6 +300,16 @@ export const ScanFormView: React.FC<Props> = ({
       stopCamera();
     };
   }, []);
+
+  // Auto-calculate age whenever birthdate changes based on complete Date of Birth (month, day, year)
+  useEffect(() => {
+    if (birthdate) {
+      const calculatedAge = calculateAgeFromBirthdate(birthdate);
+      if (calculatedAge !== null) {
+        setAge(calculatedAge);
+      }
+    }
+  }, [birthdate]);
 
   // Synchronize stream to video if camera active state updates
   useEffect(() => {
@@ -431,18 +507,11 @@ export const ScanFormView: React.FC<Props> = ({
 
       const bDate = data.birthdate || data.birthday || '';
       setBirthdate(bDate);
-      if (data.age) {
+      const calculatedAge = calculateAgeFromBirthdate(bDate);
+      if (calculatedAge !== null) {
+        setAge(calculatedAge);
+      } else if (data.age) {
         setAge(data.age);
-      } else if (bDate && bDate.includes('-')) {
-        const birth = new Date(bDate);
-        if (!isNaN(birth.getTime())) {
-          const today = new Date();
-          let calculatedAge = today.getFullYear() - birth.getFullYear();
-          if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) {
-            calculatedAge--;
-          }
-          setAge(calculatedAge > 0 ? calculatedAge : 12);
-        }
       }
 
       setGender(data.gender || 'Female');
@@ -466,11 +535,14 @@ export const ScanFormView: React.FC<Props> = ({
       // Section D
       setFatherName(data.fatherName || '');
       setFatherOccupation(data.fatherOccupation || '');
+      setFatherAge(data.fatherAge !== undefined && data.fatherAge !== null ? data.fatherAge : '');
       setMotherName(data.motherName || '');
       setMotherOccupation(data.motherOccupation || '');
+      setMotherAge(data.motherAge !== undefined && data.motherAge !== null ? data.motherAge : '');
       setGuardianName(data.guardianName || '');
       setGuardianRelation(data.guardianRelation || '');
       setGuardianOccupation(data.guardianOccupation || '');
+      setGuardianAge(data.guardianAge !== undefined && data.guardianAge !== null ? data.guardianAge : '');
 
       // Section E
       setCellphoneNumber(data.cellphoneNumber || '');
@@ -479,16 +551,36 @@ export const ScanFormView: React.FC<Props> = ({
       setMessengerOwner(data.messengerOwner || '');
 
       // Section F
-      setBirthCertificatePsa(data.birthCertificatePsa || 'Yes');
+      const docs: string[] = Array.isArray(data.documentsSubmitted) ? data.documentsSubmitted : [];
+      const hasBC = docs.some((d: string) => d.toLowerCase().includes('birth certificate')) ||
+        (data.birthCertificatePsa && data.birthCertificatePsa !== 'No');
+      setHasBirthCert(Boolean(hasBC));
+      setBirthCertType(
+        (data.birthCertificateType as any) ||
+        (data.birthCertificatePsa === 'NSO' ? 'NSO' :
+         data.birthCertificatePsa === 'Municipal' ? 'Municipal' :
+         docs.some((d: string) => d.includes('NSO')) ? 'NSO' :
+         docs.some((d: string) => d.includes('Municipal')) ? 'Municipal' : 'PSA')
+      );
+      setHasGoodMoral(docs.some((d: string) => d.toLowerCase().includes('good moral')));
+      setHasCertEnrollment(docs.some((d: string) => d.toLowerCase().includes('enrollment')));
+      setHasReportCard(docs.some((d: string) => d.toLowerCase().includes('report card')));
+
+      const rel = data.religion
+        ? (data.religion === 'Non-Catholic' ? 'Non-Catholic' : 'Catholic')
+        : (data.baptizedCatholic === 'No' && data.denomination)
+          ? 'Non-Catholic'
+          : 'Catholic';
+      setReligion(rel);
+      setIsBaptized(data.baptizedCatholic === 'Yes' || (data as any).isBaptized === true);
+      setIsConfirmed(data.confirmedCatholic === 'Yes' || (data as any).isConfirmed === true);
+      setDenomination(data.denomination || '');
       setPsaFatherNameAge(data.psaFatherNameAge || '');
-      setFatherReligion(data.fatherReligion || 'Roman Catholic');
+      setFatherReligion(data.fatherReligion === 'Non-Catholic' ? 'Non-Catholic' : 'Catholic');
       setPsaMotherNameAge(data.psaMotherNameAge || '');
-      setMotherReligion(data.motherReligion || 'Roman Catholic');
+      setMotherReligion(data.motherReligion === 'Non-Catholic' ? 'Non-Catholic' : 'Catholic');
       setBirthOrder(data.birthOrder || 1);
       setNumberOfChildren(data.numberOfChildren || (data.numSiblings ? Number(data.numSiblings) + 1 : 1));
-      setBaptizedCatholic(data.baptizedCatholic || 'Yes');
-      setDenomination(data.denomination || '');
-      setConfirmedCatholic(data.confirmedCatholic || 'Yes');
 
       // Section G
       if (Array.isArray(data.siblings) && data.siblings.length > 0) {
@@ -712,11 +804,14 @@ export const ScanFormView: React.FC<Props> = ({
         // Section D
         fatherName: fatherName.trim(),
         fatherOccupation: fatherOccupation.trim(),
+        fatherAge: fatherAge !== '' ? (typeof fatherAge === 'number' ? fatherAge : parseInt(String(fatherAge), 10) || '') : '',
         motherName: motherName.trim(),
         motherOccupation: motherOccupation.trim(),
+        motherAge: motherAge !== '' ? (typeof motherAge === 'number' ? motherAge : parseInt(String(motherAge), 10) || '') : '',
         guardianName: guardianName.trim(),
         guardianRelation: guardianRelation.trim(),
         guardianOccupation: guardianOccupation.trim(),
+        guardianAge: guardianAge !== '' ? (typeof guardianAge === 'number' ? guardianAge : parseInt(String(guardianAge), 10) || '') : '',
 
         // Section E
         cellphoneNumber: cellphoneNumber.trim(),
@@ -725,16 +820,26 @@ export const ScanFormView: React.FC<Props> = ({
         messengerOwner: messengerOwner.trim(),
 
         // Section F
-        birthCertificatePsa: birthCertificatePsa || 'Yes',
+        documentsSubmitted: (() => {
+          const docs: string[] = [];
+          if (hasBirthCert) docs.push(`Birth Certificate (${birthCertType})`);
+          if (hasGoodMoral) docs.push('Good Moral');
+          if (hasCertEnrollment) docs.push('Certificate of Enrollment');
+          if (hasReportCard) docs.push('Grade 6 Report Card');
+          return docs;
+        })(),
+        birthCertificateType: hasBirthCert ? birthCertType : '',
+        birthCertificatePsa: hasBirthCert ? (birthCertType === 'PSA' ? 'Yes' : birthCertType) : 'No',
+        religion: religion,
         psaFatherNameAge: psaFatherNameAge.trim(),
-        fatherReligion: fatherReligion.trim() || 'Roman Catholic',
+        fatherReligion: fatherReligion,
         psaMotherNameAge: psaMotherNameAge.trim(),
-        motherReligion: motherReligion.trim() || 'Roman Catholic',
+        motherReligion: motherReligion,
         birthOrder: typeof birthOrder === 'number' ? birthOrder : parseInt(String(birthOrder), 10) || 1,
         numberOfChildren: typeof numberOfChildren === 'number' ? numberOfChildren : parseInt(String(numberOfChildren), 10) || 1,
-        baptizedCatholic: baptizedCatholic || 'Yes',
-        denomination: denomination.trim(),
-        confirmedCatholic: confirmedCatholic || 'Yes',
+        baptizedCatholic: religion === 'Catholic' ? (isBaptized ? 'Yes' : 'No') : 'No',
+        denomination: religion === 'Non-Catholic' ? denomination.trim() : '',
+        confirmedCatholic: religion === 'Catholic' ? (isConfirmed ? 'Yes' : 'No') : 'No',
 
         // Section G
         siblings: siblings.filter((s) => s.name?.trim()),
@@ -1240,7 +1345,10 @@ export const ScanFormView: React.FC<Props> = ({
             </div>
 
             {/* Section Tab Bar */}
-            <div className="bg-slate-100 border-b border-slate-200 p-2 overflow-x-auto flex items-center gap-1.5 shrink-0">
+            <div
+              ref={scanTabsNavRef}
+              className="bg-slate-100 border-b border-slate-200 p-2 overflow-x-auto flex items-center gap-1.5 shrink-0 scroll-smooth"
+            >
               {[
                 { id: 'A', label: 'A. Basic Info', icon: User },
                 { id: 'B', label: 'B. Residence', icon: Home },
@@ -1248,7 +1356,6 @@ export const ScanFormView: React.FC<Props> = ({
                 { id: 'D', label: 'D. Family', icon: Users },
                 { id: 'E', label: 'E. Contact', icon: Phone },
                 { id: 'F', label: 'F. Religious & Civil', icon: Church },
-                { id: 'G', label: 'G. Siblings', icon: Users },
                 { id: 'H_I', label: 'H & I. Parish & Exam', icon: HeartPulse },
                 { id: 'J_K', label: 'J & K. Status & Center', icon: MapPin },
               ].map((tab) => {
@@ -1257,6 +1364,8 @@ export const ScanFormView: React.FC<Props> = ({
                 return (
                   <button
                     key={tab.id}
+                    id={`scan-section-tab-btn-${tab.id}`}
+                    data-tab-id={tab.id}
                     type="button"
                     onClick={() => setActiveReviewTab(tab.id as any)}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
@@ -1273,7 +1382,7 @@ export const ScanFormView: React.FC<Props> = ({
             </div>
 
             {/* Review Form Content */}
-            <form onSubmit={handleSaveReviewedRecord} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+            <form ref={reviewFormScrollRef} onSubmit={handleSaveReviewedRecord} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
               {/* SECTION A */}
               {activeReviewTab === 'A' && (
                 <div className="space-y-4 animate-fade-in">
@@ -1323,12 +1432,20 @@ export const ScanFormView: React.FC<Props> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Date of Birth (Birthdate)</label>
-                      <input
-                        type="date"
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Date of Birth (MM/DD/YYYY)</label>
+                      <DateOfBirthInput
+                        id="input-review-birthdate"
                         value={birthdate}
-                        onChange={(e) => setBirthdate(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                        placeholder="mm/dd/yyyy"
+                        onChange={(newDate) => {
+                          setBirthdate(newDate);
+                          const calculatedAge = calculateAgeFromBirthdate(newDate);
+                          if (calculatedAge !== null) {
+                            setAge(calculatedAge);
+                          } else if (!newDate) {
+                            setAge('');
+                          }
+                        }}
                       />
                     </div>
 
@@ -1434,7 +1551,7 @@ export const ScanFormView: React.FC<Props> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Elementary School Graduated</label>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Elementary School</label>
                       <input
                         type="text"
                         value={elementarySchool}
@@ -1471,31 +1588,6 @@ export const ScanFormView: React.FC<Props> = ({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Report Card (SY)</label>
-                      <input
-                        type="text"
-                        value={reportCardSy}
-                        onChange={(e) => setReportCardSy(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Grading Period</label>
-                      <select
-                        value={grading}
-                        onChange={(e) => setGrading(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      >
-                        <option value="Final">Final</option>
-                        <option value="1st">1st Quarter</option>
-                        <option value="2nd">2nd Quarter</option>
-                        <option value="3rd">3rd Quarter</option>
-                        <option value="4th">4th Quarter</option>
-                      </select>
-                    </div>
-
-                    <div>
                       <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Current Grade</label>
                       <input
                         type="text"
@@ -1505,10 +1597,11 @@ export const ScanFormView: React.FC<Props> = ({
                       />
                     </div>
 
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Old Graduate / Remarks</label>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">If Elementary Graduate – Year Graduated</label>
                       <input
                         type="text"
+                        placeholder="e.g. Graduated 2023, transferee, etc."
                         value={oldGraduateRemarks}
                         onChange={(e) => setOldGraduateRemarks(e.target.value)}
                         className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
@@ -1524,7 +1617,7 @@ export const ScanFormView: React.FC<Props> = ({
                   <div className="flex items-center justify-between pb-2 border-b border-blue-100">
                     <div className="flex items-center gap-2 text-[#1E3A8A]">
                       <Users className="w-5 h-5" />
-                      <h3 className="font-extrabold text-sm uppercase tracking-wider">D. Family Background</h3>
+                      <h3 className="font-extrabold text-sm uppercase tracking-wider">D. Family</h3>
                     </div>
                     <span className="text-[11px] font-bold text-gray-500 uppercase">Section D</span>
                   </div>
@@ -1550,6 +1643,18 @@ export const ScanFormView: React.FC<Props> = ({
                           className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                         />
                       </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Age</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="120"
+                          placeholder="e.g. 45"
+                          value={fatherAge}
+                          onChange={(e) => setFatherAge(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                        />
+                      </div>
                     </div>
 
                     <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
@@ -1572,13 +1677,25 @@ export const ScanFormView: React.FC<Props> = ({
                           className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                         />
                       </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Age</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="120"
+                          placeholder="e.g. 42"
+                          value={motherAge}
+                          onChange={(e) => setMotherAge(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                        />
+                      </div>
                     </div>
 
                     <div className="sm:col-span-2 p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                       <h4 className="font-black text-xs text-slate-800 uppercase">Guardian's Info (Tagapag-alaga)</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Full Name</label>
+                          <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Guardian's Full Name</label>
                           <input
                             type="text"
                             value={guardianName}
@@ -1596,7 +1713,7 @@ export const ScanFormView: React.FC<Props> = ({
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Occupation</label>
+                          <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Guardian's Occupation</label>
                           <input
                             type="text"
                             value={guardianOccupation}
@@ -1604,6 +1721,133 @@ export const ScanFormView: React.FC<Props> = ({
                             className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
                           />
                         </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">Age</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="120"
+                            placeholder="e.g. 52"
+                            value={guardianAge}
+                            onChange={(e) => setGuardianAge(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Birth Order & Total Children in Family (Above Siblings) */}
+                    <div className="sm:col-span-2 p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <h4 className="font-black text-xs text-slate-800 uppercase">Birth Order & Children Count</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">
+                            Birth Order (Pang-ilan sa Magkakapatid)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={birthOrder}
+                            onChange={(e) => setBirthOrder(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-600 uppercase mb-0.5">
+                            Total Number of Children in the Family
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={numberOfChildren}
+                            onChange={(e) => setNumberOfChildren(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Integrated Siblings Section */}
+                    <div className="sm:col-span-2 p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900 uppercase">
+                          <Users className="w-4 h-4 text-blue-700" />
+                          <span>Siblings' Information (Mga Kapatid)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-500 font-bold uppercase">
+                            Total: {siblings.filter((s) => s.name?.trim()).length} sibling{siblings.filter((s) => s.name?.trim()).length === 1 ? '' : 's'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleAddSibling}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white rounded-lg text-xs font-bold shadow-xs transition-all cursor-pointer"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Add Row</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
+                        <table className="w-full text-left text-xs">
+                          <thead className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-200">
+                            <tr>
+                              <th className="p-2 w-10 text-center">No.</th>
+                              <th className="p-2">Name of Sibling</th>
+                              <th className="p-2 w-20">Age</th>
+                              <th className="p-2">Remarks / Schooling</th>
+                              <th className="p-2 w-12 text-center">Del</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {siblings.map((sib, index) => (
+                              <tr key={index}>
+                                <td className="p-2 text-center font-bold text-slate-500">{index + 1}</td>
+                                <td className="p-1.5">
+                                  <input
+                                    type="text"
+                                    placeholder="Sibling name"
+                                    value={sib.name}
+                                    onChange={(e) => handleSiblingChange(index, 'name', e.target.value)}
+                                    className="w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                                  />
+                                </td>
+                                <td className="p-1.5">
+                                  <input
+                                    type="text"
+                                    placeholder="Age"
+                                    value={sib.age}
+                                    onChange={(e) => handleSiblingChange(index, 'age', e.target.value)}
+                                    className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-center focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                                  />
+                                </td>
+                                <td className="p-1.5">
+                                  <input
+                                    type="text"
+                                    placeholder="Grade / Work"
+                                    value={sib.remarks}
+                                    onChange={(e) => handleSiblingChange(index, 'remarks', e.target.value)}
+                                    className="w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                                  />
+                                </td>
+                                <td className="p-1.5 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveSibling(index)}
+                                    disabled={siblings.length <= 1}
+                                    className="p-1 text-slate-400 hover:text-red-600 disabled:opacity-30 cursor-pointer"
+                                    title="Delete row"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   </div>
@@ -1677,183 +1921,162 @@ export const ScanFormView: React.FC<Props> = ({
                       <Church className="w-5 h-5" />
                       <h3 className="font-extrabold text-sm uppercase tracking-wider">F. Religious & Civil Information</h3>
                     </div>
-                    <span className="text-[11px] font-bold text-gray-500 uppercase">Section F</span>
+                    <span className="text-[11px] font-bold text-gray-500 uppercase">Student Information</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">PSA Birth Certificate?</label>
-                      <select
-                        value={birthCertificatePsa}
-                        onChange={(e) => setBirthCertificatePsa(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      >
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">PSA Father's Name & Age</label>
-                      <input
-                        type="text"
-                        value={psaFatherNameAge}
-                        onChange={(e) => setPsaFatherNameAge(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Father's Religion</label>
-                      <input
-                        type="text"
-                        value={fatherReligion}
-                        onChange={(e) => setFatherReligion(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">PSA Mother's Name & Age</label>
-                      <input
-                        type="text"
-                        value={psaMotherNameAge}
-                        onChange={(e) => setPsaMotherNameAge(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Mother's Religion</label>
-                      <input
-                        type="text"
-                        value={motherReligion}
-                        onChange={(e) => setMotherReligion(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Birth Order (Pang-ilan)</label>
-                      <input
-                        type="number"
-                        value={birthOrder}
-                        onChange={(e) => setBirthOrder(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Number of Children</label>
-                      <input
-                        type="number"
-                        value={numberOfChildren}
-                        onChange={(e) => setNumberOfChildren(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Baptized Catholic?</label>
-                      <select
-                        value={baptizedCatholic}
-                        onChange={(e) => setBaptizedCatholic(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      >
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Confirmed Catholic?</label>
-                      <select
-                        value={confirmedCatholic}
-                        onChange={(e) => setConfirmedCatholic(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      >
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* SECTION G */}
-              {activeReviewTab === 'G' && (
-                <div className="space-y-4 animate-fade-in">
-                  <div className="flex items-center justify-between pb-2 border-b border-blue-100">
-                    <div className="flex items-center gap-2 text-[#1E3A8A]">
-                      <Users className="w-5 h-5" />
-                      <h3 className="font-extrabold text-sm uppercase tracking-wider">G. Siblings Information</h3>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleAddSibling}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white rounded-lg text-xs font-bold shadow-xs transition-all cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" />
-                      <span>Add Row</span>
-                    </button>
-                  </div>
-
-                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-200">
-                        <tr>
-                          <th className="p-2 w-10 text-center">No.</th>
-                          <th className="p-2">Name of Sibling</th>
-                          <th className="p-2 w-20">Age</th>
-                          <th className="p-2">Remarks / Schooling</th>
-                          <th className="p-2 w-12 text-center">Del</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {siblings.map((sib, index) => (
-                          <tr key={index}>
-                            <td className="p-2 text-center font-bold text-slate-500">{index + 1}</td>
-                            <td className="p-1.5">
-                              <input
-                                type="text"
-                                placeholder="Sibling name"
-                                value={sib.name}
-                                onChange={(e) => handleSiblingChange(index, 'name', e.target.value)}
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-600 focus:outline-none"
-                              />
-                            </td>
-                            <td className="p-1.5">
-                              <input
-                                type="text"
-                                placeholder="Age"
-                                value={sib.age}
-                                onChange={(e) => handleSiblingChange(index, 'age', e.target.value)}
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs text-center focus:ring-1 focus:ring-blue-600 focus:outline-none"
-                              />
-                            </td>
-                            <td className="p-1.5">
-                              <input
-                                type="text"
-                                placeholder="Grade / Work"
-                                value={sib.remarks}
-                                onChange={(e) => handleSiblingChange(index, 'remarks', e.target.value)}
-                                className="w-full px-2 py-1 border border-slate-300 rounded text-xs focus:ring-1 focus:ring-blue-600 focus:outline-none"
-                              />
-                            </td>
-                            <td className="p-1.5 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveSibling(index)}
-                                disabled={siblings.length <= 1}
-                                className="p-1 text-slate-400 hover:text-red-600 disabled:opacity-30"
+                  <div className="space-y-4">
+                    {/* 1. Documents Submitted */}
+                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-2">
+                        Documents Submitted
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-xs">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={hasBirthCert}
+                              onChange={(e) => setHasBirthCert(e.target.checked)}
+                              className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                            <span className="text-xs font-bold text-gray-800">Birth Certificate</span>
+                          </label>
+                          {hasBirthCert && (
+                            <div className="flex items-center gap-1.5 pl-6 sm:pl-0">
+                              <span className="text-[11px] font-semibold text-gray-500">Source:</span>
+                              <select
+                                value={birthCertType}
+                                onChange={(e) => setBirthCertType(e.target.value as 'PSA' | 'NSO' | 'Municipal')}
+                                className="px-2 py-0.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                                <option value="PSA">PSA</option>
+                                <option value="NSO">NSO</option>
+                                <option value="Municipal">Municipal</option>
+                              </select>
+                            </div>
+                          )}
+                        </div>
+
+                        <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-xs cursor-pointer select-none hover:bg-slate-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={hasGoodMoral}
+                            onChange={(e) => setHasGoodMoral(e.target.checked)}
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                          />
+                          <span className="text-xs font-bold text-gray-800">Good Moral</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-xs cursor-pointer select-none hover:bg-slate-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={hasCertEnrollment}
+                            onChange={(e) => setHasCertEnrollment(e.target.checked)}
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                          />
+                          <span className="text-xs font-bold text-gray-800">Certificate of Enrollment</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-xs cursor-pointer select-none hover:bg-slate-50 transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={hasReportCard}
+                            onChange={(e) => setHasReportCard(e.target.checked)}
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                          />
+                          <span className="text-xs font-bold text-gray-800">Grade 6 Report Card</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* 2. Parent Religion Section */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                          Religion of the Father
+                        </label>
+                        <select
+                          value={fatherReligion}
+                          onChange={(e) => setFatherReligion(e.target.value as 'Catholic' | 'Non-Catholic')}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                        >
+                          <option value="Catholic">Catholic</option>
+                          <option value="Non-Catholic">Non-Catholic</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                          Religion of the Mother
+                        </label>
+                        <select
+                          value={motherReligion}
+                          onChange={(e) => setMotherReligion(e.target.value as 'Catholic' | 'Non-Catholic')}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                        >
+                          <option value="Catholic">Catholic</option>
+                          <option value="Non-Catholic">Non-Catholic</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* 3. Religion of the Student & Sacraments / Denomination */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 items-start">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                          Religion of the Student
+                        </label>
+                        <select
+                          value={religion}
+                          onChange={(e) => setReligion(e.target.value as 'Catholic' | 'Non-Catholic')}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                        >
+                          <option value="Catholic">Catholic</option>
+                          <option value="Non-Catholic">Non-Catholic</option>
+                        </select>
+                      </div>
+
+                      {religion === 'Catholic' ? (
+                        <div className="sm:col-span-1 md:col-span-2">
+                          <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                            Sacraments
+                          </label>
+                          <div className="flex items-center gap-6 pt-1">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={isBaptized}
+                                onChange={(e) => setIsBaptized(e.target.checked)}
+                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                              />
+                              <span className="text-xs font-bold text-gray-800">Baptized</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={isConfirmed}
+                                onChange={(e) => setIsConfirmed(e.target.checked)}
+                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                              />
+                              <span className="text-xs font-bold text-gray-800">Confirmed</span>
+                            </label>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="sm:col-span-1 md:col-span-2">
+                          <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                            Denomination
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Born Again, Iglesia Ni Cristo, Baptist, etc."
+                            value={denomination}
+                            onChange={(e) => setDenomination(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1899,21 +2122,6 @@ export const ScanFormView: React.FC<Props> = ({
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                        Entrance Exam Score <span className="text-gray-500 font-normal">(Max: {maxExamScore})</span>
-                      </label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        min={0}
-                        max={maxExamScore}
-                        value={examScore}
-                        onChange={(e) => setExamScore(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-black text-blue-950 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                      />
-                    </div>
-
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-bold text-gray-700 uppercase mb-1">Additional Notes / Remarks</label>
                       <textarea
@@ -1941,6 +2149,23 @@ export const ScanFormView: React.FC<Props> = ({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Entrance Exam Score (Relocated directly above Admission Status) */}
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                          Entrance Exam Score <span className="text-gray-500 font-normal">(Max: {maxExamScore})</span>
+                        </label>
+                        <input
+                          id="input-review-examScore"
+                          type="number"
+                          step="0.1"
+                          min={0}
+                          max={maxExamScore}
+                          value={examScore}
+                          onChange={(e) => setExamScore(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-black text-blue-950 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                        />
+                      </div>
+
                       <div>
                         <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
                           Admission Status <span className="text-red-500">*</span>
@@ -2088,6 +2313,38 @@ export const ScanFormView: React.FC<Props> = ({
                     className="flex-1 sm:flex-none px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
                   >
                     Rescan
+                  </button>
+
+                  <button
+                    type="button"
+                    id="btn-scan-preview-page"
+                    onClick={handlePrevReviewTab}
+                    disabled={currentReviewTabIndex === 0 || saving}
+                    className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                      currentReviewTabIndex === 0
+                        ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                        : 'text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 shadow-xs cursor-pointer active:scale-[0.98]'
+                    }`}
+                    title={currentReviewTabIndex === 0 ? 'You are on the first section' : 'Return to previous section'}
+                  >
+                    <ChevronLeft className={`w-4 h-4 ${currentReviewTabIndex === 0 ? 'text-slate-400' : 'text-slate-600'}`} />
+                    <span>Preview</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="btn-scan-next-page"
+                    onClick={handleNextReviewTab}
+                    disabled={isLastReviewTab || saving}
+                    className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                      isLastReviewTab
+                        ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                        : 'bg-white hover:bg-blue-50 text-[#1E3A8A] border-2 border-[#1E3A8A] shadow-xs hover:shadow-sm cursor-pointer active:scale-[0.98]'
+                    }`}
+                    title={isLastReviewTab ? 'You are on the final section' : 'Proceed to the next section'}
+                  >
+                    <span>Next Page</span>
+                    <ChevronRight className={`w-4 h-4 ${isLastReviewTab ? 'text-slate-400' : 'text-[#1E3A8A]'}`} />
                   </button>
 
                   <button

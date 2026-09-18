@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { StudentRecord, SystemSettings } from '../types';
+import { calculateAgeFromBirthdate } from './dateUtils';
 
 export interface PdfExportOptions {
   title?: string;
@@ -349,7 +350,15 @@ export async function exportStudentProfilePdf(
     body: [
       ['Learner Reference Number (LRN)', student.lrn || '-'],
       ['Complete Name', fullName],
-      ['Date of Birth', student.birthday || '-'],
+      ['Date of Birth', student.birthday || student.birthdate || '-'],
+      ['Age', (() => {
+        const b = student.birthdate || student.birthday;
+        if (b) {
+          const calc = calculateAgeFromBirthdate(b);
+          if (calc !== null) return `${calc} years old`;
+        }
+        return student.age !== undefined && student.age !== null && student.age !== '' ? `${student.age} years old` : '-';
+      })()],
       ['Residential Address', student.address || '-'],
       ['Origin Elementary School', student.elementarySchool || '-'],
       ['Entrance Examination Score', `${student.examScore ?? 0} pts (out of ${systemSettings?.maxExamScore || 100})`],
@@ -385,10 +394,13 @@ export async function exportStudentProfilePdf(
     body: [
       ["Father's Full Name", student.fatherName || '-'],
       ["Father's Occupation", student.fatherOccupation || '-'],
+      ["Father's Age", student.fatherAge ? `${student.fatherAge} years old` : '-'],
       ["Mother's Full Name", student.motherName || '-'],
       ["Mother's Occupation", student.motherOccupation || '-'],
+      ["Mother's Age", student.motherAge ? `${student.motherAge} years old` : '-'],
       ["Legal Guardian's Name", student.guardianName || '-'],
       ["Guardian's Occupation", student.guardianOccupation || '-'],
+      ["Guardian's Age", student.guardianAge ? `${student.guardianAge} years old` : '-'],
       ['Number of Siblings', String(student.numSiblings ?? 0)],
     ],
     theme: 'plain',

@@ -3,6 +3,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import pg from 'pg';
 import { User, StudentRecord, SiblingRecord, AuditLogEntry, SystemSettings, BrandingPreset, ThemePreset, RecruitmentList, RecruitmentListWithStats, PaginatedResult } from '../src/types.js';
+import { calculateAgeFromBirthdate } from '../src/lib/dateUtils.js';
 
 export function sanitizeStudentRecord(s: any): StudentRecord {
   const lastName = (s.lastName || s.surname || '').trim();
@@ -12,20 +13,12 @@ export function sanitizeStudentRecord(s: any): StudentRecord {
   const birthday = birthdate;
   const surname = lastName;
 
-  // Auto-calculate age if not provided
+  // Auto-calculate age based on complete Date of Birth (month, day, year)
   let age = s.age !== undefined && s.age !== null && s.age !== '' ? s.age : '';
-  if (!age && birthdate) {
-    const bDate = new Date(birthdate);
-    if (!isNaN(bDate.getTime())) {
-      const now = new Date();
-      let calculatedAge = now.getFullYear() - bDate.getFullYear();
-      const m = now.getMonth() - bDate.getMonth();
-      if (m < 0 || (m === 0 && now.getDate() < bDate.getDate())) {
-        calculatedAge--;
-      }
-      if (calculatedAge > 0 && calculatedAge < 100) {
-        age = calculatedAge;
-      }
+  if (birthdate) {
+    const calc = calculateAgeFromBirthdate(birthdate);
+    if (calc !== null) {
+      age = calc;
     }
   }
 
@@ -45,29 +38,43 @@ export function sanitizeStudentRecord(s: any): StudentRecord {
 
   const fatherName = (s.fatherName || '').trim();
   const fatherOccupation = (s.fatherOccupation || '').trim();
+  const fatherAge = s.fatherAge !== undefined && s.fatherAge !== null && s.fatherAge !== ''
+    ? (typeof s.fatherAge === 'number' ? s.fatherAge : parseInt(String(s.fatherAge), 10) || '')
+    : '';
   const motherName = (s.motherName || '').trim();
   const motherOccupation = (s.motherOccupation || '').trim();
+  const motherAge = s.motherAge !== undefined && s.motherAge !== null && s.motherAge !== ''
+    ? (typeof s.motherAge === 'number' ? s.motherAge : parseInt(String(s.motherAge), 10) || '')
+    : '';
   const guardianName = (s.guardianName || '').trim();
   const guardianRelation = (s.guardianRelation || s.guardianRelationship || '').trim();
   const guardianOccupation = (s.guardianOccupation || '').trim();
+  const guardianAge = s.guardianAge !== undefined && s.guardianAge !== null && s.guardianAge !== ''
+    ? (typeof s.guardianAge === 'number' ? s.guardianAge : parseInt(String(s.guardianAge), 10) || '')
+    : '';
 
   const cellphoneNumber = (s.cellphoneNumber || s.contactNumber || '').trim();
   const cellphoneOwner = (s.cellphoneOwner || s.contactOwner || 'Parent/Guardian').trim();
   const messengerAccount = (s.messengerAccount || '').trim();
   const messengerOwner = (s.messengerOwner || 'Applicant/Parent').trim();
 
+  const documentsSubmitted = Array.isArray(s.documentsSubmitted)
+    ? s.documentsSubmitted.map((d: any) => String(d).trim()).filter(Boolean)
+    : (s.documentsSubmitted ? [String(s.documentsSubmitted).trim()] : []);
+  const birthCertificateType = (s.birthCertificateType || '').trim();
   const birthCertificatePsa = (s.birthCertificatePsa || (s.hasPsaBirthCert ? 'Yes' : 'Yes')).trim();
   const psaFatherNameAge = (s.psaFatherNameAge || (fatherName ? `${fatherName}` : '')).trim();
-  const fatherReligion = (s.fatherReligion || 'Roman Catholic').trim();
+  const fatherReligion = s.fatherReligion ? (s.fatherReligion === 'Non-Catholic' ? 'Non-Catholic' : 'Catholic') : 'Catholic';
   const psaMotherNameAge = (s.psaMotherNameAge || (motherName ? `${motherName}` : '')).trim();
-  const motherReligion = (s.motherReligion || 'Roman Catholic').trim();
+  const motherReligion = s.motherReligion ? (s.motherReligion === 'Non-Catholic' ? 'Non-Catholic' : 'Catholic') : 'Catholic';
   const birthOrder = s.birthOrder !== undefined && s.birthOrder !== null && s.birthOrder !== '' ? s.birthOrder : 1;
   const numberOfChildren = s.numberOfChildren !== undefined && s.numberOfChildren !== null && s.numberOfChildren !== ''
     ? s.numberOfChildren
     : (s.numSiblings ? Number(s.numSiblings) + 1 : 1);
-  const baptizedCatholic = (s.baptizedCatholic || 'Yes').trim();
+  const religion = (s.religion || (s.baptizedCatholic === 'No' && s.denomination ? 'Non-Catholic' : 'Catholic')).trim();
+  const baptizedCatholic = (s.baptizedCatholic || (religion === 'Non-Catholic' ? 'No' : 'Yes')).trim();
   const denomination = (s.denomination || '').trim();
-  const confirmedCatholic = (s.confirmedCatholic || 'Yes').trim();
+  const confirmedCatholic = (s.confirmedCatholic || (religion === 'Non-Catholic' ? 'No' : 'Yes')).trim();
 
   let siblings: SiblingRecord[] = [];
   if (Array.isArray(s.siblings) && s.siblings.length > 0) {
@@ -114,6 +121,7 @@ export function sanitizeStudentRecord(s: any): StudentRecord {
 
   // K. Testing Center
   const testingCenterProvince = (s.testingCenterProvince || '').trim();
+  const testingCenterProvinceOther = s.testingCenterProvinceOther ? String(s.testingCenterProvinceOther).trim() : undefined;
   const testingCenterLocation = (s.testingCenterLocation || '').trim();
 
   const remarks = (s.remarks || admissionStatus).trim();
@@ -153,16 +161,22 @@ export function sanitizeStudentRecord(s: any): StudentRecord {
     oldGraduateRemarks,
     fatherName,
     fatherOccupation,
+    fatherAge,
     motherName,
     motherOccupation,
+    motherAge,
     guardianName,
     guardianRelation,
     guardianOccupation,
+    guardianAge,
     cellphoneNumber,
     cellphoneOwner,
     messengerAccount,
-    messengerOwner,
+     messengerOwner,
+    documentsSubmitted,
+    birthCertificateType,
     birthCertificatePsa,
+    religion,
     psaFatherNameAge,
     fatherReligion,
     psaMotherNameAge,
@@ -178,6 +192,7 @@ export function sanitizeStudentRecord(s: any): StudentRecord {
     parishPriest,
     admissionStatus,
     testingCenterProvince,
+    testingCenterProvinceOther: testingCenterProvince === 'Others' ? (testingCenterProvinceOther || undefined) : undefined,
     testingCenterLocation,
     remarks,
     additionalNotes,
@@ -388,11 +403,20 @@ function validateAndSanitizeDb(raw: any): DbSchema {
     seenUserIds.add(cleanId);
     if (cleanUsername) seenUsernames.add(cleanUsername);
 
+    const rawAliases = Array.isArray((u as any).aliases) ? (u as any).aliases : [];
+    const aliasSet = new Set<string>(rawAliases.map((a: string) => (a || '').trim().toLowerCase()).filter(Boolean));
+    if (cleanUsername === 'sistersofmarybiga') {
+      aliasSet.add('sisterofmarybiga');
+    } else if (cleanUsername === 'sisterofmarybiga') {
+      aliasSet.add('sistersofmarybiga');
+    }
+
     cleanUsers.push({
       ...u,
       id: cleanId,
       fullName: (u.fullName || '').trim(),
       username: (u.username || '').trim(),
+      aliases: Array.from(aliasSet),
       role: u.role || 'Recruitment Staff',
       status: u.status || 'Active',
       hasPin: !!((u as any).pinHash || (u as any).pin),
@@ -857,6 +881,60 @@ export function normalizeAccountIdentifier(str: string): string {
     .trim();
 }
 
+export function getAccountSearchKeys(str: string): string[] {
+  if (!str) return [];
+  const raw = (str || '').trim().toLowerCase();
+  const norm = normalizeAccountIdentifier(raw);
+  const alpha = raw.replace(/[^a-z0-9]/g, '');
+  const keys = new Set<string>();
+
+  if (raw) keys.add(raw);
+  if (norm) keys.add(norm);
+  if (alpha) keys.add(alpha);
+
+  // Handle common variations (sister / sisters, biga)
+  for (const base of [raw, norm, alpha]) {
+    if (!base) continue;
+    if (base.includes('sistersof')) {
+      keys.add(base.replace(/sistersof/g, 'sisterof'));
+    }
+    if (base.includes('sisterof')) {
+      keys.add(base.replace(/sisterof/g, 'sistersof'));
+    }
+    if (base.includes('sisters')) {
+      keys.add(base.replace(/sisters/g, 'sister'));
+    }
+    if (base.includes('sister')) {
+      keys.add(base.replace(/sister/g, 'sisters'));
+    }
+  }
+
+  return Array.from(keys).filter(Boolean);
+}
+
+export function getUserLookupKeys(u: User & { aliases?: string[] }): string[] {
+  if (!u) return [];
+  const keys = new Set<string>();
+  for (const k of getAccountSearchKeys(u.username || '')) keys.add(k);
+  if (Array.isArray(u.aliases)) {
+    for (const a of u.aliases) {
+      for (const k of getAccountSearchKeys(a)) keys.add(k);
+    }
+  }
+  const uNameLower = (u.username || '').toLowerCase();
+  const uFullLower = (u.fullName || '').toLowerCase();
+  if (
+    (uNameLower.includes('sister') && uNameLower.includes('mary')) ||
+    (uFullLower.includes('sister') && uFullLower.includes('mary'))
+  ) {
+    keys.add('sisterofmarybiga');
+    keys.add('sistersofmarybiga');
+    keys.add('sister of mary biga');
+    keys.add('sisters of mary biga');
+  }
+  return Array.from(keys).filter(Boolean);
+}
+
 export const dbService = {
   getDb(): DbSchema {
     return ensureDbExists();
@@ -868,32 +946,30 @@ export const dbService = {
     return db.users.map(({ passwordHash, ...user }) => user);
   },
 
-  getUserByUsername(username: string): (User & { passwordHash: string; pinHash?: string }) | undefined {
+  getUserByUsername(username: string): (User & { passwordHash: string; pinHash?: string; aliases?: string[] }) | undefined {
     const db = ensureDbExists();
     const raw = (username || '').trim();
     if (!raw) return undefined;
-    const norm = normalizeAccountIdentifier(raw);
-    const rawLower = raw.toLowerCase();
+    const searchKeys = getAccountSearchKeys(raw);
+
     return db.users.find((u) => {
-      const uNorm = normalizeAccountIdentifier(u.username);
-      const uRaw = (u.username || '').toLowerCase();
-      return uNorm === norm || uRaw === rawLower || uNorm === rawLower;
+      const uKeys = getUserLookupKeys(u);
+      return searchKeys.some((k) => uKeys.includes(k));
     });
   },
 
-  getUserByUsernameOrEmail(identifier: string): (User & { passwordHash: string; pinHash?: string }) | undefined {
+  getUserByUsernameOrEmail(identifier: string): (User & { passwordHash: string; pinHash?: string; aliases?: string[] }) | undefined {
     const db = ensureDbExists();
     const raw = (identifier || '').trim();
     if (!raw) return undefined;
 
-    const norm = normalizeAccountIdentifier(raw);
+    const searchKeys = getAccountSearchKeys(raw);
     const rawLower = raw.toLowerCase();
 
-    // 1. Exact or normalized username match
+    // 1. Exact, normalized, alias, or variation match on username/aliases
     let found = db.users.find((u) => {
-      const uNorm = normalizeAccountIdentifier(u.username);
-      const uRaw = (u.username || '').toLowerCase();
-      return uNorm === norm || uRaw === rawLower || uNorm === rawLower || uRaw === norm;
+      const uKeys = getUserLookupKeys(u);
+      return searchKeys.some((k) => uKeys.includes(k));
     });
 
     if (found) return found;
@@ -901,16 +977,16 @@ export const dbService = {
     // 2. Match by user ID
     found = db.users.find((u) => {
       const uId = (u.id || '').trim().toLowerCase();
-      return uId === norm || uId === rawLower;
+      return searchKeys.includes(uId) || uId === rawLower;
     });
 
     if (found) return found;
 
-    // 3. Match by Full Name (case-insensitive)
+    // 3. Match by Full Name (case-insensitive or key-matched)
     found = db.users.find((u) => {
-      const uFullNameNorm = normalizeAccountIdentifier(u.fullName);
+      const uFullNameKeys = getAccountSearchKeys(u.fullName);
       const uFullNameRaw = (u.fullName || '').trim().toLowerCase();
-      return uFullNameNorm === norm || uFullNameRaw === rawLower;
+      return searchKeys.some((k) => uFullNameKeys.includes(k)) || uFullNameRaw === rawLower;
     });
 
     return found;
@@ -921,13 +997,11 @@ export const dbService = {
     const raw = (username || '').trim();
     if (!raw) return { exists: false };
 
-    const norm = normalizeAccountIdentifier(raw);
-    const rawLower = raw.toLowerCase();
+    const searchKeys = getAccountSearchKeys(raw);
 
     const match = db.users.find((u) => {
-      const uNorm = normalizeAccountIdentifier(u.username);
-      const uRaw = (u.username || '').toLowerCase();
-      return (norm && uNorm === norm) || (rawLower && uRaw === rawLower);
+      const uKeys = getUserLookupKeys(u);
+      return searchKeys.some((k) => uKeys.includes(k));
     });
 
     if (match) {
@@ -936,9 +1010,9 @@ export const dbService = {
     }
 
     const nameMatch = db.users.find((u) => {
-      const uFullNameNorm = normalizeAccountIdentifier(u.fullName);
+      const uFullNameKeys = getAccountSearchKeys(u.fullName);
       const uFullNameRaw = (u.fullName || '').trim().toLowerCase();
-      return (norm && uFullNameNorm === norm) || (rawLower && uFullNameRaw === rawLower);
+      return searchKeys.some((k) => uFullNameKeys.includes(k)) || uFullNameRaw === raw.toLowerCase();
     });
 
     if (nameMatch) {

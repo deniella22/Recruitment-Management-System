@@ -1,4 +1,5 @@
 import { StudentRecord, AdmissionStatus, OCRCorrectionRecord, ConfidenceLevel, SiblingRecord, resolveProvince } from '../src/types.js';
+import { calculateAgeFromBirthdate } from '../src/lib/dateUtils.js';
 
 // Common Filipino and International Occupations & General Terms
 const OCCUPATION_DICTIONARY: Record<string, string> = {
@@ -598,19 +599,11 @@ export function applySmartOcrCorrection(rawExtracted: any): {
     }
   }
 
-  // Age calculation
-  if (!correctedData.age && correctedData.birthdate) {
-    const bDate = new Date(correctedData.birthdate);
-    if (!isNaN(bDate.getTime())) {
-      const now = new Date();
-      let calculatedAge = now.getFullYear() - bDate.getFullYear();
-      const m = now.getMonth() - bDate.getMonth();
-      if (m < 0 || (m === 0 && now.getDate() < bDate.getDate())) {
-        calculatedAge--;
-      }
-      if (calculatedAge > 0 && calculatedAge < 100) {
-        correctedData.age = calculatedAge;
-      }
+  // Age calculation based on complete Date of Birth (month, day, year)
+  if (correctedData.birthdate) {
+    const calc = calculateAgeFromBirthdate(correctedData.birthdate);
+    if (calc !== null) {
+      correctedData.age = calc;
     }
   }
 

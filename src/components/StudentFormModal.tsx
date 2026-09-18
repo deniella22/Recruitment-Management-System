@@ -27,10 +27,14 @@ import {
   AlertTriangle,
   MapPin,
   Image as ImageIcon,
+  ChevronRight,
+  ChevronLeft,
 } from 'lucide-react';
 import { StudentRecord, AdmissionStatus, SiblingRecord, PROVINCE_OPTIONS, resolveProvince } from '../types';
 import { createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
+import { calculateAgeFromBirthdate } from '../lib/dateUtils';
 import { ScanFormView } from './ScanFormView';
+import { DateOfBirthInput } from './DateOfBirthInput';
 
 interface Props {
   studentToEdit?: StudentRecord | null;
@@ -57,7 +61,7 @@ export const StudentFormModal: React.FC<Props> = ({
   );
 
   // Active section tab for easy navigation
-  const [activeTab, setActiveTab] = useState<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H_I' | 'J_K'>('A');
+  const [activeTab, setActiveTab] = useState<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'H_I' | 'J_K'>('A');
 
   // --- SECTION A: Basic Personal Information ---
   const [photoUrl, setPhotoUrl] = useState<string>(studentToEdit?.photoUrl || '');
@@ -65,7 +69,14 @@ export const StudentFormModal: React.FC<Props> = ({
   const [firstName, setFirstName] = useState<string>(studentToEdit?.firstName || '');
   const [middleName, setMiddleName] = useState<string>(studentToEdit?.middleName || '');
   const [birthdate, setBirthdate] = useState<string>(studentToEdit?.birthdate || studentToEdit?.birthday || '');
-  const [age, setAge] = useState<number | string>(studentToEdit?.age ?? '');
+  const [age, setAge] = useState<number | string>(() => {
+    const b = studentToEdit?.birthdate || studentToEdit?.birthday || '';
+    if (b) {
+      const calc = calculateAgeFromBirthdate(b);
+      if (calc !== null) return calc;
+    }
+    return studentToEdit?.age ?? '';
+  });
   const [gender, setGender] = useState<'Female' | 'Male' | string>(studentToEdit?.gender || 'Female');
 
   // --- SECTION B: Residence / Address Information ---
@@ -91,11 +102,14 @@ export const StudentFormModal: React.FC<Props> = ({
   // --- SECTION D: Family Background ---
   const [fatherName, setFatherName] = useState<string>(studentToEdit?.fatherName || '');
   const [fatherOccupation, setFatherOccupation] = useState<string>(studentToEdit?.fatherOccupation || '');
+  const [fatherAge, setFatherAge] = useState<number | string>(studentToEdit?.fatherAge ?? '');
   const [motherName, setMotherName] = useState<string>(studentToEdit?.motherName || '');
   const [motherOccupation, setMotherOccupation] = useState<string>(studentToEdit?.motherOccupation || '');
+  const [motherAge, setMotherAge] = useState<number | string>(studentToEdit?.motherAge ?? '');
   const [guardianName, setGuardianName] = useState<string>(studentToEdit?.guardianName || '');
   const [guardianRelation, setGuardianRelation] = useState<string>(studentToEdit?.guardianRelation || '');
   const [guardianOccupation, setGuardianOccupation] = useState<string>(studentToEdit?.guardianOccupation || '');
+  const [guardianAge, setGuardianAge] = useState<number | string>(studentToEdit?.guardianAge ?? '');
 
   // --- SECTION E: Contact Information ---
   const [cellphoneNumber, setCellphoneNumber] = useState<string>(studentToEdit?.cellphoneNumber || '');
@@ -104,22 +118,55 @@ export const StudentFormModal: React.FC<Props> = ({
   const [messengerOwner, setMessengerOwner] = useState<string>(studentToEdit?.messengerOwner || '');
 
   // --- SECTION F: Religious & Civil Information ---
-  const [birthCertificatePsa, setBirthCertificatePsa] = useState<'Yes' | 'No' | string>(
-    studentToEdit?.birthCertificatePsa || 'Yes'
+  // Documents Submitted
+  const initialDocs = studentToEdit?.documentsSubmitted || [];
+  const initialHasBirthCert =
+    initialDocs.some((d) => d.toLowerCase().includes('birth certificate')) ||
+    (studentToEdit?.birthCertificatePsa && studentToEdit.birthCertificatePsa !== 'No');
+  const initialBirthCertType: 'PSA' | 'NSO' | 'Municipal' =
+    (studentToEdit?.birthCertificateType as any) ||
+    (studentToEdit?.birthCertificatePsa === 'NSO' ? 'NSO' :
+     studentToEdit?.birthCertificatePsa === 'Municipal' ? 'Municipal' :
+     initialDocs.some((d) => d.includes('NSO')) ? 'NSO' :
+     initialDocs.some((d) => d.includes('Municipal')) ? 'Municipal' : 'PSA');
+
+  const [hasBirthCert, setHasBirthCert] = useState<boolean>(Boolean(initialHasBirthCert ?? true));
+  const [birthCertType, setBirthCertType] = useState<'PSA' | 'NSO' | 'Municipal'>(initialBirthCertType);
+  const [hasGoodMoral, setHasGoodMoral] = useState<boolean>(
+    initialDocs.some((d) => d.toLowerCase().includes('good moral'))
   );
-  const [psaFatherNameAge, setPsaFatherNameAge] = useState<string>(studentToEdit?.psaFatherNameAge || '');
-  const [fatherReligion, setFatherReligion] = useState<string>(studentToEdit?.fatherReligion || 'Roman Catholic');
-  const [psaMotherNameAge, setPsaMotherNameAge] = useState<string>(studentToEdit?.psaMotherNameAge || '');
-  const [motherReligion, setMotherReligion] = useState<string>(studentToEdit?.motherReligion || 'Roman Catholic');
-  const [birthOrder, setBirthOrder] = useState<number | string>(studentToEdit?.birthOrder ?? 1);
-  const [numberOfChildren, setNumberOfChildren] = useState<number | string>(studentToEdit?.numberOfChildren ?? 1);
-  const [baptizedCatholic, setBaptizedCatholic] = useState<'Yes' | 'No' | string>(
-    studentToEdit?.baptizedCatholic || 'Yes'
+  const [hasCertEnrollment, setHasCertEnrollment] = useState<boolean>(
+    initialDocs.some((d) => d.toLowerCase().includes('enrollment'))
+  );
+  const [hasReportCard, setHasReportCard] = useState<boolean>(
+    initialDocs.some((d) => d.toLowerCase().includes('report card'))
+  );
+
+  // Religion & Sacraments / Denomination
+  const initialReligion = studentToEdit?.religion
+    ? (studentToEdit.religion === 'Non-Catholic' ? 'Non-Catholic' : 'Catholic')
+    : (studentToEdit?.baptizedCatholic === 'No' && studentToEdit?.denomination)
+      ? 'Non-Catholic'
+      : 'Catholic';
+  const [religion, setReligion] = useState<'Catholic' | 'Non-Catholic'>(initialReligion);
+  const [isBaptized, setIsBaptized] = useState<boolean>(
+    studentToEdit ? (studentToEdit.baptizedCatholic === 'Yes' || (studentToEdit as any).isBaptized === true) : true
+  );
+  const [isConfirmed, setIsConfirmed] = useState<boolean>(
+    studentToEdit ? (studentToEdit.confirmedCatholic === 'Yes' || (studentToEdit as any).isConfirmed === true) : false
   );
   const [denomination, setDenomination] = useState<string>(studentToEdit?.denomination || '');
-  const [confirmedCatholic, setConfirmedCatholic] = useState<'Yes' | 'No' | string>(
-    studentToEdit?.confirmedCatholic || 'Yes'
+
+  const [psaFatherNameAge, setPsaFatherNameAge] = useState<string>(studentToEdit?.psaFatherNameAge || '');
+  const [fatherReligion, setFatherReligion] = useState<'Catholic' | 'Non-Catholic'>(
+    studentToEdit?.fatherReligion === 'Non-Catholic' ? 'Non-Catholic' : 'Catholic'
   );
+  const [psaMotherNameAge, setPsaMotherNameAge] = useState<string>(studentToEdit?.psaMotherNameAge || '');
+  const [motherReligion, setMotherReligion] = useState<'Catholic' | 'Non-Catholic'>(
+    studentToEdit?.motherReligion === 'Non-Catholic' ? 'Non-Catholic' : 'Catholic'
+  );
+  const [birthOrder, setBirthOrder] = useState<number | string>(studentToEdit?.birthOrder ?? 1);
+  const [numberOfChildren, setNumberOfChildren] = useState<number | string>(studentToEdit?.numberOfChildren ?? 1);
 
   // --- SECTION G: Siblings Information ---
   const [siblings, setSiblings] = useState<SiblingRecord[]>(
@@ -178,21 +225,69 @@ export const StudentFormModal: React.FC<Props> = ({
   } | null>(null);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const formScrollRef = useRef<HTMLFormElement>(null);
+  const tabsNavRef = useRef<HTMLDivElement>(null);
 
-  // Auto-calculate age whenever birthdate changes
+  // Tab navigation sequence
+  const tabOrder: Array<'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'H_I' | 'J_K'> = [
+    'A',
+    'B',
+    'C',
+    'D',
+    'E',
+    'F',
+    'H_I',
+    'J_K',
+  ];
+  const currentTabIndex = tabOrder.indexOf(activeTab);
+  const isFirstTab = currentTabIndex === 0;
+  const isLastTab = currentTabIndex === tabOrder.length - 1;
+
+  const handleNextPage = () => {
+    if (currentTabIndex < tabOrder.length - 1) {
+      setActiveTab(tabOrder[currentTabIndex + 1]);
+      if (formScrollRef.current) {
+        formScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  };
+
+  const handlePreviewPage = () => {
+    if (currentTabIndex > 0) {
+      setActiveTab(tabOrder[currentTabIndex - 1]);
+      if (formScrollRef.current) {
+        formScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else if (!isEditing && initialMode === 'selection') {
+      setMode('selection');
+    }
+  };
+
+  // Automatically scroll the horizontal section navigation bar so the active section title is visible
   useEffect(() => {
-    if (birthdate && birthdate.includes('-')) {
-      const birth = new Date(birthdate);
-      if (!isNaN(birth.getTime())) {
-        const today = new Date();
-        let calculatedAge = today.getFullYear() - birth.getFullYear();
-        const m = today.getMonth() - birth.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
-          calculatedAge--;
-        }
-        if (calculatedAge >= 0 && calculatedAge < 100) {
-          setAge(calculatedAge);
-        }
+    if (tabsNavRef.current) {
+      const activeBtn = tabsNavRef.current.querySelector<HTMLElement>(`[data-tab-id="${activeTab}"]`);
+      if (activeBtn) {
+        const container = tabsNavRef.current;
+        const btnLeft = activeBtn.offsetLeft;
+        const btnWidth = activeBtn.offsetWidth;
+        const containerWidth = container.clientWidth;
+        // Center the active tab button within the horizontal navigation bar
+        const targetScrollLeft = btnLeft - (containerWidth / 2) + (btnWidth / 2);
+        container.scrollTo({
+          left: Math.max(0, targetScrollLeft),
+          behavior: 'smooth',
+        });
+      }
+    }
+  }, [activeTab]);
+
+  // Auto-calculate age whenever birthdate changes based on complete Date of Birth (month, day, year)
+  useEffect(() => {
+    if (birthdate) {
+      const calculatedAge = calculateAgeFromBirthdate(birthdate);
+      if (calculatedAge !== null) {
+        setAge(calculatedAge);
       }
     }
   }, [birthdate]);
@@ -396,11 +491,14 @@ export const StudentFormModal: React.FC<Props> = ({
         // Section D
         fatherName: fatherName.trim(),
         fatherOccupation: fatherOccupation.trim(),
+        fatherAge: fatherAge !== '' ? (typeof fatherAge === 'number' ? fatherAge : parseInt(String(fatherAge), 10) || '') : '',
         motherName: motherName.trim(),
         motherOccupation: motherOccupation.trim(),
+        motherAge: motherAge !== '' ? (typeof motherAge === 'number' ? motherAge : parseInt(String(motherAge), 10) || '') : '',
         guardianName: guardianName.trim(),
         guardianRelation: guardianRelation.trim(),
         guardianOccupation: guardianOccupation.trim(),
+        guardianAge: guardianAge !== '' ? (typeof guardianAge === 'number' ? guardianAge : parseInt(String(guardianAge), 10) || '') : '',
 
         // Section E
         cellphoneNumber: cellphoneNumber.trim(),
@@ -409,16 +507,26 @@ export const StudentFormModal: React.FC<Props> = ({
         messengerOwner: messengerOwner.trim(),
 
         // Section F
-        birthCertificatePsa: birthCertificatePsa || 'Yes',
+        documentsSubmitted: (() => {
+          const docs: string[] = [];
+          if (hasBirthCert) docs.push(`Birth Certificate (${birthCertType})`);
+          if (hasGoodMoral) docs.push('Good Moral');
+          if (hasCertEnrollment) docs.push('Certificate of Enrollment');
+          if (hasReportCard) docs.push('Grade 6 Report Card');
+          return docs;
+        })(),
+        birthCertificateType: hasBirthCert ? birthCertType : '',
+        birthCertificatePsa: hasBirthCert ? (birthCertType === 'PSA' ? 'Yes' : birthCertType) : 'No',
+        religion: religion,
         psaFatherNameAge: psaFatherNameAge.trim(),
-        fatherReligion: fatherReligion.trim() || 'Roman Catholic',
+        fatherReligion: fatherReligion,
         psaMotherNameAge: psaMotherNameAge.trim(),
-        motherReligion: motherReligion.trim() || 'Roman Catholic',
+        motherReligion: motherReligion,
         birthOrder: typeof birthOrder === 'number' ? birthOrder : parseInt(String(birthOrder), 10) || 1,
         numberOfChildren: typeof numberOfChildren === 'number' ? numberOfChildren : parseInt(String(numberOfChildren), 10) || 1,
-        baptizedCatholic: baptizedCatholic || 'Yes',
-        denomination: denomination.trim(),
-        confirmedCatholic: confirmedCatholic || 'Yes',
+        baptizedCatholic: religion === 'Catholic' ? (isBaptized ? 'Yes' : 'No') : 'No',
+        denomination: religion === 'Non-Catholic' ? denomination.trim() : '',
+        confirmedCatholic: religion === 'Catholic' ? (isConfirmed ? 'Yes' : 'No') : 'No',
 
         // Section G
         siblings: siblings.filter((s) => s.name?.trim()),
@@ -649,8 +757,11 @@ export const StudentFormModal: React.FC<Props> = ({
           </div>
         )}
 
-        {/* Navigation Tabs (Sections A-I) */}
-        <div className="bg-slate-100 border-b border-slate-200 p-2 overflow-x-auto flex items-center gap-1.5 shrink-0">
+        {/* Navigation Tabs (Sections A-K) */}
+        <div
+          ref={tabsNavRef}
+          className="bg-slate-100 border-b border-slate-200 p-2 overflow-x-auto flex items-center gap-1.5 shrink-0 scroll-smooth"
+        >
           {[
             { id: 'A', label: 'A. Basic Info', icon: User },
             { id: 'B', label: 'B. Residence', icon: Home },
@@ -658,7 +769,6 @@ export const StudentFormModal: React.FC<Props> = ({
             { id: 'D', label: 'D. Family', icon: Users },
             { id: 'E', label: 'E. Contact', icon: Phone },
             { id: 'F', label: 'F. Religious & Civil', icon: Church },
-            { id: 'G', label: 'G. Siblings', icon: Users },
             { id: 'H_I', label: 'H & I. Parish & Exam', icon: HeartPulse },
             { id: 'J_K', label: 'J & K. Status & Center', icon: MapPin },
           ].map((tab) => {
@@ -667,6 +777,8 @@ export const StudentFormModal: React.FC<Props> = ({
             return (
               <button
                 key={tab.id}
+                id={`section-tab-btn-${tab.id}`}
+                data-tab-id={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
@@ -683,7 +795,7 @@ export const StudentFormModal: React.FC<Props> = ({
         </div>
 
         {/* Form Body (Scrollable) */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <form ref={formScrollRef} onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* ========================================================================= */}
           {/* SECTION A: BASIC PERSONAL INFORMATION */}
           {/* ========================================================================= */}
@@ -785,14 +897,21 @@ export const StudentFormModal: React.FC<Props> = ({
 
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      Date of Birth (Birthdate)
+                      Date of Birth (MM/DD/YYYY)
                     </label>
-                    <input
+                    <DateOfBirthInput
                       id="input-birthdate"
-                      type="date"
                       value={birthdate}
-                      onChange={(e) => setBirthdate(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      placeholder="mm/dd/yyyy"
+                      onChange={(newDate) => {
+                        setBirthdate(newDate);
+                        const calculatedAge = calculateAgeFromBirthdate(newDate);
+                        if (calculatedAge !== null) {
+                          setAge(calculatedAge);
+                        } else if (!newDate) {
+                          setAge('');
+                        }
+                      }}
                     />
                   </div>
 
@@ -934,7 +1053,7 @@ export const StudentFormModal: React.FC<Props> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Elementary School Graduated
+                    Elementary School
                   </label>
                   <input
                     id="input-elementarySchool"
@@ -983,38 +1102,6 @@ export const StudentFormModal: React.FC<Props> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Report Card (SY)
-                  </label>
-                  <input
-                    id="input-reportCardSy"
-                    type="text"
-                    placeholder="e.g. SY 2024-2025"
-                    value={reportCardSy}
-                    onChange={(e) => setReportCardSy(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Grading Period
-                  </label>
-                  <select
-                    id="select-grading"
-                    value={grading}
-                    onChange={(e) => setGrading(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  >
-                    <option value="Final">Final</option>
-                    <option value="1st">1st Quarter</option>
-                    <option value="2nd">2nd Quarter</option>
-                    <option value="3rd">3rd Quarter</option>
-                    <option value="4th">4th Quarter</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
                     Current Grade
                   </label>
                   <input
@@ -1027,9 +1114,9 @@ export const StudentFormModal: React.FC<Props> = ({
                   />
                 </div>
 
-                <div className="sm:col-span-2">
+                <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Old Graduate / Special Remarks (if any)
+                    If Elementary Graduate – Year Graduated
                   </label>
                   <input
                     id="input-oldGraduateRemarks"
@@ -1045,14 +1132,14 @@ export const StudentFormModal: React.FC<Props> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* SECTION D: FAMILY BACKGROUND */}
+          {/* SECTION D: FAMILY */}
           {/* ========================================================================= */}
           {activeTab === 'D' && (
-            <div id="section-d-family" className="space-y-4 animate-fade-in">
+            <div id="section-d-family" className="space-y-5 animate-fade-in">
               <div className="flex items-center justify-between pb-2 border-b border-blue-100">
                 <div className="flex items-center gap-2 text-[#1E3A8A]">
                   <Users className="w-5 h-5" />
-                  <h3 className="font-extrabold text-sm uppercase tracking-wider">D. Family Background</h3>
+                  <h3 className="font-extrabold text-sm uppercase tracking-wider">D. Family</h3>
                 </div>
                 <span className="text-[11px] font-bold text-gray-500 uppercase">Section D of Official Form</span>
               </div>
@@ -1083,6 +1170,19 @@ export const StudentFormModal: React.FC<Props> = ({
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                     />
                   </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">Age</label>
+                    <input
+                      id="input-fatherAge"
+                      type="number"
+                      min="1"
+                      max="120"
+                      placeholder="e.g. 45"
+                      value={fatherAge}
+                      onChange={(e) => setFatherAge(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 {/* Mother's Info */}
@@ -1110,12 +1210,25 @@ export const StudentFormModal: React.FC<Props> = ({
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                     />
                   </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">Age</label>
+                    <input
+                      id="input-motherAge"
+                      type="number"
+                      min="1"
+                      max="120"
+                      placeholder="e.g. 42"
+                      value={motherAge}
+                      onChange={(e) => setMotherAge(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                    />
+                  </div>
                 </div>
 
                 {/* Guardian's Info */}
                 <div className="sm:col-span-2 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                   <h4 className="font-black text-xs text-slate-800 uppercase">Guardian's Information (Tagapag-alaga, if applicable)</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">Guardian's Full Name</label>
                       <input
@@ -1149,6 +1262,138 @@ export const StudentFormModal: React.FC<Props> = ({
                         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                       />
                     </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">Age</label>
+                      <input
+                        id="input-guardianAge"
+                        type="number"
+                        min="1"
+                        max="120"
+                        placeholder="e.g. 52"
+                        value={guardianAge}
+                        onChange={(e) => setGuardianAge(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Birth Order & Total Children in Family (Directly above Siblings) */}
+                <div className="sm:col-span-2 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <h4 className="font-black text-xs text-slate-800 uppercase">Birth Order & Family Children Count</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+                        Birth Order (Pang-ilan sa Magkakapatid)
+                      </label>
+                      <input
+                        id="input-birthOrder"
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={birthOrder}
+                        onChange={(e) => setBirthOrder(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+                        Total Number of Children in the Family
+                      </label>
+                      <input
+                        id="input-numberOfChildren"
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={numberOfChildren}
+                        onChange={(e) => setNumberOfChildren(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Integrated Siblings' Information */}
+                <div className="sm:col-span-2 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
+                    <div className="flex items-center gap-2 text-[#1E3A8A]">
+                      <Users className="w-4 h-4 text-blue-700" />
+                      <h4 className="font-black text-xs text-blue-900 uppercase tracking-wider">
+                        Siblings' Information (Mga Kapatid)
+                      </h4>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-gray-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                        Total: {siblings.filter((s) => s.name?.trim()).length} sibling{siblings.filter((s) => s.name?.trim()).length === 1 ? '' : 's'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAddSibling}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Sibling Row</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-200">
+                        <tr>
+                          <th className="p-3 w-12 text-center">No.</th>
+                          <th className="p-3">Full Name of Sibling</th>
+                          <th className="p-3 w-24">Age</th>
+                          <th className="p-3">Remarks / Schooling / Work</th>
+                          <th className="p-3 w-16 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {siblings.map((sib, index) => (
+                          <tr key={index} className="hover:bg-slate-50/80">
+                            <td className="p-3 text-center font-bold text-slate-500">{index + 1}</td>
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                placeholder="e.g. Juan Santos Jr."
+                                value={sib.name}
+                                onChange={(e) => handleSiblingChange(index, 'name', e.target.value)}
+                                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                placeholder="e.g. 14"
+                                value={sib.age}
+                                onChange={(e) => handleSiblingChange(index, 'age', e.target.value)}
+                                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-center focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <input
+                                type="text"
+                                placeholder="e.g. Grade 8 / Working / Out of school"
+                                value={sib.remarks}
+                                onChange={(e) => handleSiblingChange(index, 'remarks', e.target.value)}
+                                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                              />
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSibling(index)}
+                                disabled={siblings.length <= 1}
+                                className="p-1.5 text-slate-400 hover:text-red-600 disabled:opacity-30 rounded-md transition-colors cursor-pointer"
+                                title="Delete row"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
@@ -1225,7 +1470,7 @@ export const StudentFormModal: React.FC<Props> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* SECTION F: RELIGIOUS & CIVIL INFORMATION */}
+          {/* SECTION F: RELIGIOUS & CIVIL INFORMATION (STUDENT ONLY) */}
           {/* ========================================================================= */}
           {activeTab === 'F' && (
             <div id="section-f-religious" className="space-y-4 animate-fade-in">
@@ -1234,242 +1479,173 @@ export const StudentFormModal: React.FC<Props> = ({
                   <Church className="w-5 h-5" />
                   <h3 className="font-extrabold text-sm uppercase tracking-wider">F. Religious & Civil Information</h3>
                 </div>
-                <span className="text-[11px] font-bold text-gray-500 uppercase">Section F of Official Form</span>
+                <span className="text-[11px] font-bold text-gray-500 uppercase">Student Information</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    PSA Birth Certificate Submitted?
+              <div className="space-y-4">
+                {/* 1. Documents Submitted */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <label className="block text-xs font-bold text-gray-700 uppercase mb-2">
+                    Documents Submitted
                   </label>
-                  <select
-                    id="select-birthCertificatePsa"
-                    value={birthCertificatePsa}
-                    onChange={(e) => setBirthCertificatePsa(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  >
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                  </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-white rounded-lg border border-slate-200 shadow-xs">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          id="doc-birth-cert"
+                          checked={hasBirthCert}
+                          onChange={(e) => setHasBirthCert(e.target.checked)}
+                          className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                        />
+                        <span className="text-xs font-bold text-gray-800">Birth Certificate</span>
+                      </label>
+                      {hasBirthCert && (
+                        <div className="flex items-center gap-1.5 pl-6 sm:pl-0">
+                          <span className="text-[11px] font-semibold text-gray-500">Source:</span>
+                          <select
+                            id="select-birth-cert-type"
+                            value={birthCertType}
+                            onChange={(e) => setBirthCertType(e.target.value as 'PSA' | 'NSO' | 'Municipal')}
+                            className="px-2 py-1 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          >
+                            <option value="PSA">PSA</option>
+                            <option value="NSO">NSO</option>
+                            <option value="Municipal">Municipal</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    <label className="flex items-center gap-2 p-2.5 bg-white rounded-lg border border-slate-200 shadow-xs cursor-pointer select-none hover:bg-slate-50 transition-colors">
+                      <input
+                        type="checkbox"
+                        id="doc-good-moral"
+                        checked={hasGoodMoral}
+                        onChange={(e) => setHasGoodMoral(e.target.checked)}
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                      />
+                      <span className="text-xs font-bold text-gray-800">Good Moral</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2.5 bg-white rounded-lg border border-slate-200 shadow-xs cursor-pointer select-none hover:bg-slate-50 transition-colors">
+                      <input
+                        type="checkbox"
+                        id="doc-cert-enrollment"
+                        checked={hasCertEnrollment}
+                        onChange={(e) => setHasCertEnrollment(e.target.checked)}
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                      />
+                      <span className="text-xs font-bold text-gray-800">Certificate of Enrollment</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 p-2.5 bg-white rounded-lg border border-slate-200 shadow-xs cursor-pointer select-none hover:bg-slate-50 transition-colors">
+                      <input
+                        type="checkbox"
+                        id="doc-report-card"
+                        checked={hasReportCard}
+                        onChange={(e) => setHasReportCard(e.target.checked)}
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
+                      />
+                      <span className="text-xs font-bold text-gray-800">Grade 6 Report Card</span>
+                    </label>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    PSA Father's Name & Age
-                  </label>
-                  <input
-                    id="input-psaFatherNameAge"
-                    type="text"
-                    placeholder="e.g. Juan Santos (45yo)"
-                    value={psaFatherNameAge}
-                    onChange={(e) => setPsaFatherNameAge(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Father's Religion
-                  </label>
-                  <input
-                    id="input-fatherReligion"
-                    type="text"
-                    placeholder="e.g. Roman Catholic"
-                    value={fatherReligion}
-                    onChange={(e) => setFatherReligion(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    PSA Mother's Name & Age
-                  </label>
-                  <input
-                    id="input-psaMotherNameAge"
-                    type="text"
-                    placeholder="e.g. Maria Dela Cruz (42yo)"
-                    value={psaMotherNameAge}
-                    onChange={(e) => setPsaMotherNameAge(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Mother's Religion
-                  </label>
-                  <input
-                    id="input-motherReligion"
-                    type="text"
-                    placeholder="e.g. Roman Catholic"
-                    value={motherReligion}
-                    onChange={(e) => setMotherReligion(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Birth Order (Pang-ilan sa Magkakapatid)
-                  </label>
-                  <input
-                    id="input-birthOrder"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={birthOrder}
-                    onChange={(e) => setBirthOrder(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Total Number of Children in Family
-                  </label>
-                  <input
-                    id="input-numberOfChildren"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={numberOfChildren}
-                    onChange={(e) => setNumberOfChildren(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Baptized Catholic?
-                  </label>
-                  <select
-                    id="select-baptizedCatholic"
-                    value={baptizedCatholic}
-                    onChange={(e) => setBaptizedCatholic(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  >
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                  </select>
-                </div>
-
-                {baptizedCatholic === 'No' && (
+                {/* 2. Parent Religion Section */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      If Not Catholic, Religious Denomination
+                      Religion of the Father
                     </label>
-                    <input
-                      id="input-denomination"
-                      type="text"
-                      placeholder="e.g. Born Again, INC, etc."
-                      value={denomination}
-                      onChange={(e) => setDenomination(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                    />
+                    <select
+                      id="select-father-religion"
+                      value={fatherReligion}
+                      onChange={(e) => setFatherReligion(e.target.value as 'Catholic' | 'Non-Catholic')}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                    >
+                      <option value="Catholic">Catholic</option>
+                      <option value="Non-Catholic">Non-Catholic</option>
+                    </select>
                   </div>
-                )}
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Confirmed Catholic?
-                  </label>
-                  <select
-                    id="select-confirmedCatholic"
-                    value={confirmedCatholic}
-                    onChange={(e) => setConfirmedCatholic(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  >
-                    <option value="Yes">Yes</option>
-                    <option value="No">No</option>
-                  </select>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                      Religion of the Mother
+                    </label>
+                    <select
+                      id="select-mother-religion"
+                      value={motherReligion}
+                      onChange={(e) => setMotherReligion(e.target.value as 'Catholic' | 'Non-Catholic')}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                    >
+                      <option value="Catholic">Catholic</option>
+                      <option value="Non-Catholic">Non-Catholic</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* ========================================================================= */}
-          {/* SECTION G: SIBLINGS INFORMATION */}
-          {/* ========================================================================= */}
-          {activeTab === 'G' && (
-            <div id="section-g-siblings" className="space-y-4 animate-fade-in">
-              <div className="flex items-center justify-between pb-2 border-b border-blue-100">
-                <div className="flex items-center gap-2 text-[#1E3A8A]">
-                  <Users className="w-5 h-5" />
-                  <h3 className="font-extrabold text-sm uppercase tracking-wider">G. Siblings Information</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-gray-500 uppercase">
-                    Total: {siblings.filter((s) => s.name?.trim()).length} siblings
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleAddSibling}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Sibling Row</span>
-                  </button>
-                </div>
-              </div>
+                {/* 3. Religion of the Student & Denomination / Sacraments */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 items-start">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                      Religion of the Student
+                    </label>
+                    <select
+                      id="select-religion"
+                      value={religion}
+                      onChange={(e) => setReligion(e.target.value as 'Catholic' | 'Non-Catholic')}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                    >
+                      <option value="Catholic">Catholic</option>
+                      <option value="Non-Catholic">Non-Catholic</option>
+                    </select>
+                  </div>
 
-              <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 text-slate-700 font-bold uppercase border-b border-slate-200">
-                    <tr>
-                      <th className="p-3 w-12 text-center">No.</th>
-                      <th className="p-3">Full Name of Sibling</th>
-                      <th className="p-3 w-24">Age</th>
-                      <th className="p-3">Remarks / Schooling / Work</th>
-                      <th className="p-3 w-16 text-center">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {siblings.map((sib, index) => (
-                      <tr key={index} className="hover:bg-slate-50/80">
-                        <td className="p-3 text-center font-bold text-slate-500">{index + 1}</td>
-                        <td className="p-2">
+                  {religion === 'Catholic' ? (
+                    <div className="sm:col-span-1 md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-2">
+                        Sacraments
+                      </label>
+                      <div className="flex items-center gap-6 pt-1">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
                           <input
-                            type="text"
-                            placeholder="e.g. Juan Santos Jr."
-                            value={sib.name}
-                            onChange={(e) => handleSiblingChange(index, 'name', e.target.value)}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                            type="checkbox"
+                            id="checkbox-baptized"
+                            checked={isBaptized}
+                            onChange={(e) => setIsBaptized(e.target.checked)}
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
                           />
-                        </td>
-                        <td className="p-2">
+                          <span className="text-sm font-semibold text-gray-800">Baptized</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
                           <input
-                            type="text"
-                            placeholder="e.g. 14"
-                            value={sib.age}
-                            onChange={(e) => handleSiblingChange(index, 'age', e.target.value)}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-center focus:ring-1 focus:ring-blue-600 focus:outline-none"
+                            type="checkbox"
+                            id="checkbox-confirmed"
+                            checked={isConfirmed}
+                            onChange={(e) => setIsConfirmed(e.target.checked)}
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
                           />
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="text"
-                            placeholder="e.g. Grade 8 / Working / Out of school"
-                            value={sib.remarks}
-                            onChange={(e) => handleSiblingChange(index, 'remarks', e.target.value)}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-1 focus:ring-blue-600 focus:outline-none"
-                          />
-                        </td>
-                        <td className="p-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSibling(index)}
-                            disabled={siblings.length <= 1}
-                            className="p-1.5 text-slate-400 hover:text-red-600 disabled:opacity-30 rounded-md transition-colors cursor-pointer"
-                            title="Delete row"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                          <span className="text-sm font-semibold text-gray-800">Confirmed</span>
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="sm:col-span-1 md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Denomination
+                      </label>
+                      <input
+                        id="input-denomination"
+                        type="text"
+                        placeholder="e.g. Born Again, Iglesia Ni Cristo, Baptist, etc."
+                        value={denomination}
+                        onChange={(e) => setDenomination(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1558,23 +1734,6 @@ export const StudentFormModal: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* Exam Score */}
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      Entrance Exam Score <span className="text-gray-500 font-normal">(Max: {maxExamScore})</span>
-                    </label>
-                    <input
-                      id="input-examScore"
-                      type="number"
-                      step="0.1"
-                      min={0}
-                      max={maxExamScore}
-                      value={examScore}
-                      onChange={(e) => setExamScore(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-black text-blue-950 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                    />
-                  </div>
-
                   {/* Student Signature status */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
@@ -1626,6 +1785,23 @@ export const StudentFormModal: React.FC<Props> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Entrance Exam Score (Relocated directly above Admission Status) */}
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
+                      Entrance Exam Score <span className="text-gray-500 font-normal">(Max: {maxExamScore})</span>
+                    </label>
+                    <input
+                      id="input-examScore"
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      max={maxExamScore}
+                      value={examScore}
+                      onChange={(e) => setExamScore(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-black text-blue-950 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase mb-1.5">
                       Admission Status <span className="text-red-500">*</span>
@@ -1776,11 +1952,34 @@ export const StudentFormModal: React.FC<Props> = ({
             <div className="flex items-center gap-3 w-full sm:w-auto">
               <button
                 type="button"
-                onClick={onClose}
-                disabled={loading}
-                className="flex-1 sm:flex-none px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+                id="btn-preview-page"
+                onClick={handlePreviewPage}
+                disabled={loading || (isFirstTab && isEditing)}
+                className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                  isFirstTab && isEditing
+                    ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                    : 'text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 shadow-xs cursor-pointer active:scale-[0.98]'
+                }`}
+                title={isFirstTab && isEditing ? 'You are on the first section' : 'Return to previous section'}
               >
-                Cancel
+                <ChevronLeft className={`w-4 h-4 ${isFirstTab && isEditing ? 'text-slate-400' : 'text-slate-600'}`} />
+                <span>Preview</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-next-page"
+                onClick={handleNextPage}
+                disabled={isLastTab || loading}
+                className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-5 py-2.5 text-xs font-bold rounded-xl transition-all ${
+                  isLastTab
+                    ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                    : 'bg-white hover:bg-blue-50 text-[#1E3A8A] border-2 border-[#1E3A8A] shadow-xs hover:shadow-sm cursor-pointer active:scale-[0.98]'
+                }`}
+                title={isLastTab ? 'You are on the final section' : 'Proceed to the next section'}
+              >
+                <span>Next Page</span>
+                <ChevronRight className={`w-4 h-4 ${isLastTab ? 'text-slate-400' : 'text-[#1E3A8A]'}`} />
               </button>
 
               <button

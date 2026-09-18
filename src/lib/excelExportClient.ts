@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { StudentRecord, SystemSettings } from '../types';
+import { calculateAgeFromBirthdate } from './dateUtils';
 
 export interface ExcelExportOptions {
   title?: string;
@@ -43,24 +44,27 @@ export async function exportStudentsToExcel(
     { header: 'Municipality / City', key: 'municipality', width: 20 },
     { header: 'Province', key: 'province', width: 18 },
     { header: 'Full Home Address', key: 'address', width: 32 },
-    { header: 'Elementary School Graduated', key: 'elementarySchool', width: 28 },
+    { header: 'Elementary School', key: 'elementarySchool', width: 28 },
     { header: 'School Address', key: 'schoolAddress', width: 24 },
     { header: 'Report Card (SY)', key: 'reportCardSy', width: 20 },
     { header: 'Grading Period', key: 'grading', width: 15 },
     { header: 'Current Grade', key: 'currentGrade', width: 15 },
-    { header: 'Old Graduate Remarks', key: 'oldGraduateRemarks', width: 22 },
+    { header: 'If Elementary Graduate – Year Graduated', key: 'oldGraduateRemarks', width: 32 },
     { header: "Father's Full Name", key: 'fatherName', width: 22 },
     { header: "Father's Occupation", key: 'fatherOccupation', width: 20 },
+    { header: "Father's Age", key: 'fatherAge', width: 14 },
     { header: "Mother's Full Name", key: 'motherName', width: 22 },
     { header: "Mother's Occupation", key: 'motherOccupation', width: 20 },
+    { header: "Mother's Age", key: 'motherAge', width: 14 },
     { header: "Guardian's Full Name", key: 'guardianName', width: 22 },
     { header: "Guardian's Relationship", key: 'guardianRelation', width: 20 },
     { header: "Guardian's Occupation", key: 'guardianOccupation', width: 20 },
+    { header: "Guardian's Age", key: 'guardianAge', width: 14 },
     { header: 'Cellphone Number', key: 'cellphoneNumber', width: 18 },
     { header: 'Cellphone Owner', key: 'cellphoneOwner', width: 18 },
     { header: 'Messenger Account', key: 'messengerAccount', width: 22 },
     { header: 'Messenger Owner', key: 'messengerOwner', width: 18 },
-    { header: 'PSA Birth Certificate', key: 'birthCertificatePsa', width: 18 },
+    { header: 'Documents Submitted', key: 'birthCertificatePsa', width: 28 },
     { header: "PSA Father's Name & Age", key: 'psaFatherNameAge', width: 24 },
     { header: "Father's Religion", key: 'fatherReligion', width: 18 },
     { header: "PSA Mother's Name & Age", key: 'psaMotherNameAge', width: 24 },
@@ -160,7 +164,14 @@ export async function exportStudentsToExcel(
       s.firstName || '',
       s.middleName || '',
       formattedBirthday,
-      s.age !== undefined && s.age !== null ? s.age : '',
+      (() => {
+        const b = s.birthdate || s.birthday;
+        if (b) {
+          const calc = calculateAgeFromBirthdate(b);
+          if (calc !== null) return calc;
+        }
+        return s.age !== undefined && s.age !== null ? s.age : '';
+      })(),
       s.gender || 'Female',
       s.sitioStreet || '',
       s.barangay || '',
@@ -175,16 +186,19 @@ export async function exportStudentsToExcel(
       s.oldGraduateRemarks || '',
       s.fatherName || '',
       s.fatherOccupation || '',
+      s.fatherAge !== undefined && s.fatherAge !== null ? String(s.fatherAge) : '',
       s.motherName || '',
       s.motherOccupation || '',
+      s.motherAge !== undefined && s.motherAge !== null ? String(s.motherAge) : '',
       s.guardianName || '',
       s.guardianRelation || '',
       s.guardianOccupation || '',
+      s.guardianAge !== undefined && s.guardianAge !== null ? String(s.guardianAge) : '',
       s.cellphoneNumber || '',
       s.cellphoneOwner || '',
       s.messengerAccount || '',
       s.messengerOwner || '',
-      s.birthCertificatePsa || '',
+      s.documentsSubmitted && s.documentsSubmitted.length > 0 ? s.documentsSubmitted.join(', ') : (s.birthCertificatePsa || ''),
       s.psaFatherNameAge || '',
       s.fatherReligion || '',
       s.psaMotherNameAge || '',

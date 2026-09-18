@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { StudentRecord } from '../src/types.js';
+import { calculateAgeFromBirthdate } from '../src/lib/dateUtils.js';
 
 export async function generateStudentRecordsExcel(students: StudentRecord[]): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
@@ -34,16 +35,19 @@ export async function generateStudentRecordsExcel(students: StudentRecord[]): Pr
     { header: 'Old Graduate Remarks', key: 'oldGraduateRemarks', width: 22 },
     { header: "Father's Full Name", key: 'fatherName', width: 22 },
     { header: "Father's Occupation", key: 'fatherOccupation', width: 20 },
+    { header: "Father's Age", key: 'fatherAge', width: 14 },
     { header: "Mother's Full Name", key: 'motherName', width: 22 },
     { header: "Mother's Occupation", key: 'motherOccupation', width: 20 },
+    { header: "Mother's Age", key: 'motherAge', width: 14 },
     { header: "Guardian's Full Name", key: 'guardianName', width: 22 },
     { header: "Guardian's Relationship", key: 'guardianRelation', width: 20 },
     { header: "Guardian's Occupation", key: 'guardianOccupation', width: 20 },
+    { header: "Guardian's Age", key: 'guardianAge', width: 14 },
     { header: 'Cellphone Number', key: 'cellphoneNumber', width: 18 },
     { header: 'Cellphone Owner', key: 'cellphoneOwner', width: 18 },
     { header: 'Messenger Account', key: 'messengerAccount', width: 22 },
     { header: 'Messenger Owner', key: 'messengerOwner', width: 18 },
-    { header: 'PSA Birth Certificate', key: 'birthCertificatePsa', width: 18 },
+    { header: 'Documents Submitted', key: 'birthCertificatePsa', width: 28 },
     { header: "PSA Father's Name & Age", key: 'psaFatherNameAge', width: 24 },
     { header: "Father's Religion", key: 'fatherReligion', width: 18 },
     { header: "PSA Mother's Name & Age", key: 'psaMotherNameAge', width: 24 },
@@ -128,7 +132,14 @@ export async function generateStudentRecordsExcel(students: StudentRecord[]): Pr
       firstName: s.firstName || '',
       middleName: s.middleName || '',
       birthdate: formattedBirthday,
-      age: s.age !== undefined && s.age !== null && s.age !== '' ? s.age : '',
+      age: (() => {
+        const b = s.birthdate || s.birthday;
+        if (b) {
+          const calc = calculateAgeFromBirthdate(b);
+          if (calc !== null) return calc;
+        }
+        return s.age !== undefined && s.age !== null && s.age !== '' ? s.age : '';
+      })(),
       gender: s.gender || 'Female',
       sitioStreet: s.sitioStreet || '',
       barangay: s.barangay || '',
@@ -143,16 +154,19 @@ export async function generateStudentRecordsExcel(students: StudentRecord[]): Pr
       oldGraduateRemarks: s.oldGraduateRemarks || '',
       fatherName: s.fatherName || '',
       fatherOccupation: s.fatherOccupation || '',
+      fatherAge: s.fatherAge !== undefined && s.fatherAge !== null ? String(s.fatherAge) : '',
       motherName: s.motherName || '',
       motherOccupation: s.motherOccupation || '',
+      motherAge: s.motherAge !== undefined && s.motherAge !== null ? String(s.motherAge) : '',
       guardianName: s.guardianName || '',
       guardianRelation: s.guardianRelation || '',
       guardianOccupation: s.guardianOccupation || '',
+      guardianAge: s.guardianAge !== undefined && s.guardianAge !== null ? String(s.guardianAge) : '',
       cellphoneNumber: s.cellphoneNumber || '',
       cellphoneOwner: s.cellphoneOwner || '',
       messengerAccount: s.messengerAccount || '',
       messengerOwner: s.messengerOwner || '',
-      birthCertificatePsa: s.birthCertificatePsa || '',
+      birthCertificatePsa: s.documentsSubmitted && s.documentsSubmitted.length > 0 ? s.documentsSubmitted.join(', ') : (s.birthCertificatePsa || ''),
       psaFatherNameAge: s.psaFatherNameAge || '',
       fatherReligion: s.fatherReligion || '',
       psaMotherNameAge: s.psaMotherNameAge || '',

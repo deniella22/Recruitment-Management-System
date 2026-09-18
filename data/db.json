@@ -1,27 +1,511 @@
 {
-  "users": [],
-  "recruitmentLists": [],
-  "students": [],
-  "auditLogs": [],
+  "users": [
+    {
+      "id": "usr_1789433074029_namxh",
+      "role": "Super Administrator",
+      "hasPin": true,
+      "status": "Active",
+      "pinHash": "$2b$10$he/.Tj0TfLdeeUPNLvhuz.jzJ0mc2CSx0fQGdioZFI8niuQ0zHqMG",
+      "fullName": "Sister of Mary of Banneux Inc.",
+      "username": "sistersofmarybiga",
+      "createdAt": "2026-09-15T00:44:34.029Z",
+      "lastLoginAt": "2026-09-16T01:48:53.712Z",
+      "passwordHash": "$2b$10$3LcNI07rHl3Zo5SRxHqrfOaVM3nkxZJYJhzCzpVBAqZAr4GMZydb6",
+      "aliases": [
+        "sisterofmarybiga",
+        "sistersofmarybiga"
+      ]
+    }
+  ],
+  "recruitmentLists": [
+    {
+      "id": "rcl_1788313611579_wawld",
+      "userId": "usr_1788313611579_4oufc",
+      "name": "SY 2026-2027 Recruitment",
+      "schoolName": "Sisters of Mary School – Talisay, Cebu",
+      "branch": "Biga",
+      "archived": false,
+      "createdAt": "2026-09-02T01:46:51.579Z",
+      "updatedAt": "2026-09-02T01:46:51.579Z"
+    },
+    {
+      "id": "rcl_1789439070094_m1k43",
+      "userId": "usr_1789433074029_namxh",
+      "name": "for SY 2027-2028",
+      "schoolName": "Sisters of Mary of Banneux, Inc.",
+      "branch": "Biga",
+      "archived": false,
+      "createdAt": "2026-09-15T02:24:30.094Z",
+      "updatedAt": "2026-09-15T02:24:30.094Z"
+    }
+  ],
+  "students": [
+    {
+      "id": "std_1788313949511_y9mmd",
+      "userId": "usr_1788313611579_4oufc",
+      "recruitmentListId": "rcl_1788313611579_wawld",
+      "idPhotoUrl": "",
+      "lastName": "HALILI",
+      "surname": "HALILI",
+      "firstName": "DENIELLA",
+      "middleName": "ALIMARIO",
+      "birthdate": "2009-08-15",
+      "birthday": "2009-08-15",
+      "age": 17,
+      "gender": "Female",
+      "sitioStreet": "",
+      "barangay": "Antonino",
+      "municipality": "Dolores",
+      "province": "Quezon",
+      "address": "Antonino, Dolores, Quezon",
+      "elementarySchool": "ANTONINO ELEMENTARY SCHOOL",
+      "school": "ANTONINO ELEMENTARY SCHOOL",
+      "schoolAddress": "Quezon Province",
+      "reportCardSy": "SY 2024-2025",
+      "lrn": "123456789101",
+      "grading": "Final",
+      "currentGrade": "Grade 6",
+      "oldGraduateRemarks": "",
+      "fatherName": "DENNIS HALILI",
+      "fatherOccupation": "Farmer",
+      "motherName": "MARINIEL HALILI",
+      "motherOccupation": "Housewife",
+      "guardianName": "MARINJEL HALILI",
+      "guardianRelation": "Mother",
+      "guardianOccupation": "Housewife",
+      "cellphoneNumber": "09469810002",
+      "cellphoneOwner": "Mother",
+      "messengerAccount": "",
+      "messengerOwner": "Applicant/Parent",
+      "birthCertificatePsa": "Yes",
+      "psaFatherNameAge": "DENNIS HALILI",
+      "fatherReligion": "Roman Catholic",
+      "psaMotherNameAge": "MARINJEL HALILI",
+      "motherReligion": "Roman Catholic",
+      "birthOrder": 1,
+      "numberOfChildren": 1,
+      "baptizedCatholic": "Yes",
+      "denomination": "N/A",
+      "confirmedCatholic": "No",
+      "siblings": [
+        {
+          "siblingNo": 1,
+          "name": "Denisze Halili",
+          "age": "8",
+          "remarks": "4"
+        }
+      ],
+      "numSiblings": 1,
+      "parishPlace": "Bungoy Dolores Parish",
+      "parishPriest": "",
+      "admissionStatus": "Conditional",
+      "testingCenterProvince": "",
+      "testingCenterLocation": "",
+      "remarks": "B - PENDING",
+      "additionalNotes": "",
+      "examScore": 90,
+      "healthStatus": "Normal / Fit for schooling",
+      "studentSignature": "Signed",
+      "createdAt": "2026-09-02T01:52:29.511Z",
+      "updatedAt": "2026-09-02T09:15:18.976Z",
+      "createdBy": "Deniella Halili",
+      "updatedBy": "Deniella Halili"
+    },
+    {
+      "id": "std_1788314355221_lrt6k",
+      "userId": "usr_1788313611579_4oufc",
+      "recruitmentListId": "rcl_1788313611579_wawld",
+      "idPhotoUrl": "",
+      "lastName": "LUSTADO",
+      "surname": "LUSTADO",
+      "firstName": "JHAMILLA REY",
+      "middleName": "NATALIO",
+      "birthdate": "2008-10-08",
+      "birthday": "2008-10-08",
+      "age": 17,
+      "gender": "Female",
+      "sitioStreet": "Central 1A",
+      "barangay": "San Miguel",
+      "municipality": "Mauban",
+      "province": "Quezon",
+      "address": "Central 1A, San Miguel, Mauban, Quezon",
+      "elementarySchool": "SMIRES",
+      "school": "SMIRES",
+      "schoolAddress": "San Miguel, Mauban, Quezon",
+      "reportCardSy": "SY 2025-2026",
+      "lrn": "109988140005",
+      "grading": "Final",
+      "currentGrade": "Grade 6",
+      "oldGraduateRemarks": "",
+      "fatherName": "REYNALDO C. LUSTADO",
+      "fatherOccupation": "Unemployed",
+      "motherName": "JEMELYN N. LUSTADO",
+      "motherOccupation": "Unemployed",
+      "guardianName": "JENNELYN LUSTADO",
+      "guardianRelation": "Mother",
+      "guardianOccupation": "",
+      "cellphoneNumber": "09070418661",
+      "cellphoneOwner": "Parent/Guardian",
+      "messengerAccount": "",
+      "messengerOwner": "Mother",
+      "birthCertificatePsa": "Yes",
+      "psaFatherNameAge": "Reynaldo C. Lustado",
+      "fatherReligion": "Roman Catholic",
+      "psaMotherNameAge": "Jemelyn M. Natalio",
+      "motherReligion": "Roman Catholic",
+      "birthOrder": 1,
+      "numberOfChildren": 1,
+      "baptizedCatholic": "Yes",
+      "denomination": "",
+      "confirmedCatholic": "Yes",
+      "siblings": [
+        {
+          "siblingNo": 1,
+          "name": "John Reyniel N. Lustado",
+          "age": "",
+          "remarks": "schooling"
+        },
+        {
+          "siblingNo": 2,
+          "name": "Jeqwell Rey N. Lustado",
+          "age": "",
+          "remarks": "schooling"
+        }
+      ],
+      "numSiblings": 2,
+      "parishPlace": "San Lorenzo Ruiz",
+      "parishPriest": "Fr. Dominic Gu",
+      "admissionStatus": "Conditional",
+      "testingCenterProvince": "",
+      "testingCenterLocation": "",
+      "remarks": "B - PENDING",
+      "additionalNotes": "",
+      "examScore": 0,
+      "healthStatus": "Normal / Fit for schooling",
+      "studentSignature": "Signed",
+      "createdAt": "2026-09-02T01:59:15.221Z",
+      "updatedAt": "2026-09-02T01:59:15.221Z",
+      "createdBy": "Deniella Halili",
+      "updatedBy": "Deniella Halili"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": "log_1789523333715_azk20",
+      "userId": "usr_1789433074029_namxh",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "action": "Login",
+      "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "timestamp": "2026-09-16T01:48:53.715Z"
+    },
+    {
+      "id": "log_1789520683122_o8r8t",
+      "action": "Login",
+      "userId": "usr_1789433074029_namxh",
+      "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-16T01:04:43.122Z"
+    },
+    {
+      "id": "log_1789519241134_h9gnb",
+      "action": "Login",
+      "userId": "usr_1789433074029_namxh",
+      "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-16T00:40:41.134Z"
+    },
+    {
+      "id": "log_1789462315630_gb3dn",
+      "action": "Login",
+      "userId": "usr_1789433074029_namxh",
+      "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-15T08:51:55.630Z"
+    },
+    {
+      "id": "log_1789445765594_un6dv",
+      "action": "Login",
+      "userId": "usr_1789433074029_namxh",
+      "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-15T04:16:05.594Z"
+    },
+    {
+      "id": "log_1789439902152_jtosu",
+      "action": "Login",
+      "userId": "usr_1789433074029_namxh",
+      "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-15T02:38:22.152Z"
+    },
+    {
+      "id": "log_1789439079501_u5qpa",
+      "action": "Recruitment List Deleted",
+      "userId": "usr_1789433074029_namxh",
+      "details": "Deleted recruitment list \"SY 2027-2028 Recruitment\" and 0 associated student records.",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-15T02:24:39.501Z"
+    },
+    {
+      "id": "log_1789439071563_fj65k",
+      "action": "Recruitment List Created",
+      "userId": "usr_1789433074029_namxh",
+      "details": "Created new recruitment list: \"for SY 2027-2028\" for Biga",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-15T02:24:31.563Z"
+    },
+    {
+      "id": "log_1789436602938_cfod5",
+      "action": "Recruitment List Updated",
+      "userId": "usr_1789433074029_namxh",
+      "details": "Updated recruitment list: \"SY 2027-2028 Recruitment\" (Biga)",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-15T01:43:22.939Z"
+    },
+    {
+      "id": "log_1789436582619_hcv5f",
+      "action": "Recruitment List Updated",
+      "userId": "usr_1789433074029_namxh",
+      "details": "Updated recruitment list: \"SY 2026-2027 Recruitment\" (Biga)",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-15T01:43:02.619Z"
+    },
+    {
+      "id": "log_1789436506278_zmd6c",
+      "action": "Login",
+      "userId": "usr_1789433074029_namxh",
+      "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-15T01:41:46.278Z"
+    },
+    {
+      "id": "log_1789436284865_sn83i",
+      "action": "Login",
+      "userId": "usr_1789433074029_namxh",
+      "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-15T01:38:04.865Z"
+    },
+    {
+      "id": "log_1789433075651_zfugz",
+      "action": "Account Created",
+      "userId": "usr_1789433074029_namxh",
+      "details": "Created new account: Sister of Mary of Banneux Inc. (@sistersofmarybiga) - Role: Super Administrator",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-15T00:44:35.651Z"
+    },
+    {
+      "id": "log_1789093965864_w4xut",
+      "action": "Account Reset",
+      "userId": "system",
+      "details": "User accounts were reset. Customized logo, background theme, and school name were preserved.",
+      "userName": "System Administrator",
+      "timestamp": "2026-09-11T02:32:45.864Z"
+    },
+    {
+      "id": "log_1789093960755_d15gg",
+      "action": "Account Reset",
+      "userId": "system",
+      "details": "User accounts were reset. Customized logo, background theme, and school name were preserved.",
+      "userName": "System Administrator",
+      "timestamp": "2026-09-11T02:32:40.755Z"
+    },
+    {
+      "id": "log_1788831040759_lpi6e",
+      "action": "Login",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "User @sampleadmin (Deniella Halili) logged in successfully",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-08T01:30:40.759Z"
+    },
+    {
+      "id": "log_1788487977706_2dsr4",
+      "action": "Login",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "User @sampleadmin (Deniella Halili) logged in successfully",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-04T02:12:57.706Z"
+    },
+    {
+      "id": "log_1788341327443_tt3aw",
+      "action": "Recruitment List Deleted",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Deleted recruitment list \"RECRUITMENT 2027\" and 0 associated student records.",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T09:28:47.443Z"
+    },
+    {
+      "id": "log_1788340520409_tqcta",
+      "action": "Student Edited",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Updated details for student HALILI, DENIELLA (LRN: 123456789101)",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T09:15:20.409Z"
+    },
+    {
+      "id": "log_1788340127744_q4ov0",
+      "action": "Recruitment List Created",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Created new recruitment list: \"RECRUITMENT 2027\" for Talisay, Cebu",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T09:08:47.744Z"
+    },
+    {
+      "id": "log_1788340112170_ni3q8",
+      "action": "Login",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "User @sampleadmin (Deniella Halili) logged in successfully",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T09:08:32.170Z"
+    },
+    {
+      "id": "log_1788336976645_pyg15",
+      "action": "Login",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "User @sampleadmin (Deniella Halili) logged in successfully",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T08:16:16.646Z"
+    },
+    {
+      "id": "log_1788336931237_ss9sp",
+      "action": "Login",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "User @sampleadmin (Deniella Halili) logged in successfully",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T08:15:31.237Z"
+    },
+    {
+      "id": "log_1788336828742_cu37w",
+      "action": "Recruitment List Deleted",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Deleted recruitment list \"RECRUITMENT 2027\" and 0 associated student records.",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T08:13:48.742Z"
+    },
+    {
+      "id": "log_1788336808252_buk13",
+      "action": "Recruitment List Created",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Created new recruitment list: \"RECRUITMENT 2027\" for Talisay, Cebu",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T08:13:28.252Z"
+    },
+    {
+      "id": "log_1788335649710_qm3c7",
+      "action": "Login",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "User @sampleadmin (Deniella Halili) logged in successfully",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T07:54:09.710Z"
+    },
+    {
+      "id": "log_1788328502973_0bfjw",
+      "action": "Login",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "User @sampleadmin (Deniella Halili) logged in successfully",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T05:55:02.973Z"
+    },
+    {
+      "id": "log_1788320013457_9yb1i",
+      "action": "Login",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "User @sampleadmin (Deniella Halili) logged in successfully",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T03:33:33.457Z"
+    },
+    {
+      "id": "log_1788314355398_7ae60",
+      "action": "Student Added",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Encoded new student: LUSTADO, JHAMILLA REY (LRN: 109988140005) - Status: B - PENDING",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T01:59:15.398Z"
+    },
+    {
+      "id": "log_1788314340772_z86q5",
+      "action": "OCR Scan Performed",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Scanned Personal Data Form with OCR (8 smart auto-correction(s) applied): LUSTADO, JHANILLA REY (LRN: 109988140005)",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T01:59:00.772Z"
+    },
+    {
+      "id": "log_1788314169786_5p7j3",
+      "action": "OCR Scan Performed",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Scanned Personal Data Form with OCR (2 smart auto-correction(s) applied): LUSTADO (LRN: N/A)",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T01:56:09.786Z"
+    },
+    {
+      "id": "log_1788314048149_5nwrf",
+      "action": "OCR Scan Performed",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Scanned Personal Data Form with OCR (3 smart auto-correction(s) applied): LUSTADO (LRN: N/A)",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T01:54:08.149Z"
+    },
+    {
+      "id": "log_1788313969873_nodx5",
+      "action": "Login",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "User @sampleadmin (Deniella Halili) logged in successfully",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T01:52:49.873Z"
+    },
+    {
+      "id": "log_1788313950752_da884",
+      "action": "Student Added",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Encoded new student: HALILI, DENIELLA (LRN: 123456789101) - Status: B - PENDING",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T01:52:30.752Z"
+    },
+    {
+      "id": "log_1788313918232_u6b62",
+      "action": "OCR Scan Performed",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Scanned Personal Data Form with OCR (8 smart auto-correction(s) applied): HALILI, DENIELLA (LRN: N/A)",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T01:51:58.232Z"
+    },
+    {
+      "id": "log_1788313689230_jqll9",
+      "action": "OCR Scan Performed",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Scanned Personal Data Form with OCR (2 smart auto-correction(s) applied): HALILI (LRN: N/A)",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T01:48:09.230Z"
+    },
+    {
+      "id": "log_1788313613007_qg3m7",
+      "action": "Account Created",
+      "userId": "usr_1788313611579_4oufc",
+      "details": "Created new account: Deniella Halili (@sampleadmin) - Role: Super Administrator",
+      "userName": "Deniella Halili",
+      "timestamp": "2026-09-02T01:46:53.007Z"
+    }
+  ],
   "settings": {
     "id": "system_default_settings",
-    "setupCompleted": false,
-    "schoolName": "Sisters of Mary School – Talisay, Cebu",
+    "setupCompleted": true,
+    "schoolName": "Sisters of Mary School – Biga",
     "subTitle": "Internal Student Recruitment & Information Management System",
     "systemName": "Student Recruitment Management System",
-    "schoolLocation": "Talisay, Cebu, Philippines",
-    "schoolLogoUrl": "/school-logo.png",
+    "schoolLocation": "Biga, Silang, Cavite, Philippines",
+    "schoolLogoUrl": "/school-logo-biga.png",
     "maxExamScore": 100,
     "dashboardBgTheme": "custom",
     "dashboardBgGradient": "from-[#1E3A8A] via-[#1D4ED8] to-[#172554]",
-    "dashboardBgImageUrl": "/school-campus-background.jpg",
+    "dashboardBgImageUrl": "/school-campus-biga.png",
     "splashBgImageUrl": "/school-sunset-background.jpg",
     "academicYear": "SY 2026-2027 Recruitment",
     "logoPresets": [
       {
-        "id": "default-blue-logo",
-        "name": "Official Blue Circular Emblem",
-        "url": "/school-logo.png",
+        "id": "default-biga-logo",
+        "name": "Official Biga School Emblem",
+        "url": "/school-logo-biga.png",
         "isDefault": true,
         "createdAt": "2026-01-01T00:00:00.000Z"
       },
@@ -31,13 +515,20 @@
         "url": "/school_logo.svg",
         "isDefault": true,
         "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "default-blue-logo",
+        "name": "Official Blue Circular Emblem",
+        "url": "/school-logo.png",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
       }
     ],
     "dashboardBgPresets": [
       {
-        "id": "default-campus-grounds",
-        "name": "School Campus Grounds",
-        "url": "/school-campus-background.jpg",
+        "id": "default-biga-campus",
+        "name": "Biga Campus Grounds",
+        "url": "/school-campus-biga.png",
         "isDefault": true,
         "createdAt": "2026-01-01T00:00:00.000Z"
       },
@@ -45,6 +536,13 @@
         "id": "default-sunset-campus",
         "name": "Campus Sunset Panorama",
         "url": "/school-sunset-background.jpg",
+        "isDefault": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "default-campus-grounds",
+        "name": "School Campus Grounds",
+        "url": "/school-campus-background.jpg",
         "isDefault": true,
         "createdAt": "2026-01-01T00:00:00.000Z"
       }
@@ -60,7 +558,7 @@
       {
         "id": "default-campus-splash",
         "name": "School Campus Grounds",
-        "url": "/school-campus-background.jpg",
+        "url": "/school-campus-biga.png",
         "isDefault": true,
         "createdAt": "2026-01-01T00:00:00.000Z"
       }
@@ -107,6 +605,7 @@
         "createdAt": "2026-01-01T00:00:00.000Z"
       }
     ],
-    "updatedAt": "2026-09-01T00:00:00.000Z"
+    "updatedAt": "2026-09-15T00:44:34.029Z",
+    "administratorUserId": "usr_1789433074029_namxh"
   }
 }
