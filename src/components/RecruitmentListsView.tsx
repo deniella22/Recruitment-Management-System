@@ -239,7 +239,7 @@ export const RecruitmentListsView: React.FC<Props> = ({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-black uppercase tracking-wider text-cyan-400">
-                  SISTERS OF MARY SCHOOL – TALISAY, CEBU
+                  Sisters of Mary of Banneux, Inc.
                 </span>
               </div>
               <h1 className="text-2xl font-black text-white tracking-tight leading-tight">

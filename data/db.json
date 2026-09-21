@@ -1,20 +1,27 @@
 {
   "users": [
     {
-      "id": "usr_1789433074029_namxh",
+      "id": "usr_1789697620889_ms1m8",
       "role": "Super Administrator",
       "hasPin": true,
       "status": "Active",
-      "pinHash": "$2b$10$he/.Tj0TfLdeeUPNLvhuz.jzJ0mc2CSx0fQGdioZFI8niuQ0zHqMG",
-      "fullName": "Sister of Mary of Banneux Inc.",
-      "username": "sistersofmarybiga",
-      "createdAt": "2026-09-15T00:44:34.029Z",
-      "lastLoginAt": "2026-09-16T01:48:53.712Z",
-      "passwordHash": "$2b$10$3LcNI07rHl3Zo5SRxHqrfOaVM3nkxZJYJhzCzpVBAqZAr4GMZydb6",
       "aliases": [
+        "sistersofmarybiga",
         "sisterofmarybiga",
-        "sistersofmarybiga"
-      ]
+        "sister of mary biga",
+        "sisters of mary biga",
+        "admin",
+        "administrator",
+        "smsbiga",
+        "sms-biga",
+        "sms_biga"
+      ],
+      "pinHash": "$2b$10$9tIXZKVnGTq/s3XJ9tg15.uFLusq6KjdqWGiL/2/8m59w7CQx3avG",
+      "fullName": "Sisters of Mary School – Biga Admin",
+      "username": "sistersofmarybiga",
+      "createdAt": "2026-09-18T02:13:40.889Z",
+      "lastLoginAt": "2026-09-21T01:12:47.608Z",
+      "passwordHash": "$2b$10$KHpZely3k1rlFiLNQvhuF.UA9GbaXMNa57tRi5N4naHDMGMQk51XC"
     }
   ],
   "recruitmentLists": [
@@ -37,6 +44,26 @@
       "archived": false,
       "createdAt": "2026-09-15T02:24:30.094Z",
       "updatedAt": "2026-09-15T02:24:30.094Z"
+    },
+    {
+      "id": "rcl_1789624863244_gxvl5",
+      "userId": "usr_1789624863244_azz6b",
+      "name": "SY 2026-2027 Recruitment",
+      "schoolName": "Sisters of Mary School – Biga",
+      "branch": "Biga",
+      "archived": false,
+      "createdAt": "2026-09-17T06:01:03.244Z",
+      "updatedAt": "2026-09-17T06:01:03.244Z"
+    },
+    {
+      "id": "rcl_1789697620889_yj0fj",
+      "userId": "usr_1789697620889_ms1m8",
+      "name": "SY 2026-2027 Recruitment",
+      "schoolName": "Sisters of Mary School – Biga",
+      "branch": "Biga",
+      "archived": false,
+      "createdAt": "2026-09-18T02:13:40.889Z",
+      "updatedAt": "2026-09-18T02:13:40.889Z"
     }
   ],
   "students": [
@@ -68,20 +95,26 @@
       "oldGraduateRemarks": "",
       "fatherName": "DENNIS HALILI",
       "fatherOccupation": "Farmer",
+      "fatherAge": "",
       "motherName": "MARINIEL HALILI",
       "motherOccupation": "Housewife",
+      "motherAge": "",
       "guardianName": "MARINJEL HALILI",
       "guardianRelation": "Mother",
       "guardianOccupation": "Housewife",
+      "guardianAge": "",
       "cellphoneNumber": "09469810002",
       "cellphoneOwner": "Mother",
       "messengerAccount": "",
       "messengerOwner": "Applicant/Parent",
+      "documentsSubmitted": [],
+      "birthCertificateType": "",
       "birthCertificatePsa": "Yes",
+      "religion": "Catholic",
       "psaFatherNameAge": "DENNIS HALILI",
-      "fatherReligion": "Roman Catholic",
+      "fatherReligion": "Catholic",
       "psaMotherNameAge": "MARINJEL HALILI",
-      "motherReligion": "Roman Catholic",
+      "motherReligion": "Catholic",
       "birthOrder": 1,
       "numberOfChildren": 1,
       "baptizedCatholic": "Yes",
@@ -139,20 +172,26 @@
       "oldGraduateRemarks": "",
       "fatherName": "REYNALDO C. LUSTADO",
       "fatherOccupation": "Unemployed",
+      "fatherAge": "",
       "motherName": "JEMELYN N. LUSTADO",
       "motherOccupation": "Unemployed",
+      "motherAge": "",
       "guardianName": "JENNELYN LUSTADO",
       "guardianRelation": "Mother",
       "guardianOccupation": "",
+      "guardianAge": "",
       "cellphoneNumber": "09070418661",
       "cellphoneOwner": "Parent/Guardian",
       "messengerAccount": "",
       "messengerOwner": "Mother",
+      "documentsSubmitted": [],
+      "birthCertificateType": "",
       "birthCertificatePsa": "Yes",
+      "religion": "Catholic",
       "psaFatherNameAge": "Reynaldo C. Lustado",
-      "fatherReligion": "Roman Catholic",
+      "fatherReligion": "Catholic",
       "psaMotherNameAge": "Jemelyn M. Natalio",
-      "motherReligion": "Roman Catholic",
+      "motherReligion": "Catholic",
       "birthOrder": 1,
       "numberOfChildren": 1,
       "baptizedCatholic": "Yes",
@@ -187,15 +226,254 @@
       "updatedAt": "2026-09-02T01:59:15.221Z",
       "createdBy": "Deniella Halili",
       "updatedBy": "Deniella Halili"
+    },
+    {
+      "id": "std_1789951379913_yb1i3",
+      "userId": "usr_1789697620889_ms1m8",
+      "recruitmentListId": "rcl_1789697620889_yj0fj",
+      "idPhotoUrl": "",
+      "lastName": "GLANIDA",
+      "surname": "GLANIDA",
+      "firstName": "ARIANA",
+      "middleName": "BELLO",
+      "birthdate": "2014-11-27",
+      "birthday": "2014-11-27",
+      "age": 11,
+      "gender": "Female",
+      "sitioStreet": "Blk. 28, Excess Lot",
+      "barangay": "Brgy. Acacia",
+      "municipality": "Silang",
+      "province": "Cavite",
+      "address": "Blk. 28, Excess Lot, Brgy. Acacia, Silang, Cavite",
+      "elementarySchool": "Bagong Buhay Elementary School",
+      "school": "Bagong Buhay Elementary School",
+      "schoolAddress": "Ipil, Silang, Cavite",
+      "reportCardSy": "SY 2024-2025",
+      "lrn": "108095200285",
+      "grading": "Final",
+      "currentGrade": "Grade 6",
+      "oldGraduateRemarks": "",
+      "fatherName": "ERNESTO JR. ELVINA GLANIDA",
+      "fatherOccupation": "Construction Worker",
+      "fatherAge": "",
+      "motherName": "SANDRA ABAÑEZ BELLO",
+      "motherOccupation": "Housewife",
+      "motherAge": "",
+      "guardianName": "",
+      "guardianRelation": "",
+      "guardianOccupation": "",
+      "guardianAge": "",
+      "cellphoneNumber": "0935-895-8820",
+      "cellphoneOwner": "Sandy Vella",
+      "messengerAccount": "",
+      "messengerOwner": "Applicant/Parent",
+      "documentsSubmitted": [
+        "Birth Certificate (Municipal)",
+        "Good Moral",
+        "Certificate of Enrollment"
+      ],
+      "birthCertificateType": "Municipal",
+      "birthCertificatePsa": "Municipal",
+      "religion": "Catholic",
+      "psaFatherNameAge": "ERNESTO JR. ELVINA GLANIDA",
+      "fatherReligion": "Catholic",
+      "psaMotherNameAge": "SANDRA ABAÑEZ BELLO",
+      "motherReligion": "Catholic",
+      "birthOrder": 3,
+      "numberOfChildren": 6,
+      "baptizedCatholic": "Yes",
+      "denomination": "",
+      "confirmedCatholic": "No",
+      "siblings": [
+        {
+          "siblingNo": 1,
+          "name": "Alexis B. Glanida",
+          "age": "18",
+          "remarks": "working"
+        },
+        {
+          "siblingNo": 2,
+          "name": "Josh B. Glanida",
+          "age": "14",
+          "remarks": "student - Grace 4"
+        },
+        {
+          "siblingNo": 3,
+          "name": "Ariana B. Glanida",
+          "age": "11",
+          "remarks": "student - Grace 6"
+        },
+        {
+          "siblingNo": 4,
+          "name": "Kenddra B. Glanida",
+          "age": "6",
+          "remarks": "student -Grade 1"
+        },
+        {
+          "siblingNo": 5,
+          "name": "Maureen B. Glanida",
+          "age": "5",
+          "remarks": "Kindeer"
+        },
+        {
+          "siblingNo": 6,
+          "name": "Zakiyah B. Glanida",
+          "age": "1",
+          "remarks": ""
+        }
+      ],
+      "numSiblings": 6,
+      "parishPlace": "",
+      "parishPriest": "",
+      "admissionStatus": "Passed",
+      "testingCenterProvince": "Cavite",
+      "testingCenterLocation": "Our Lady of Pillar Seminary - Imus",
+      "remarks": "Passed",
+      "additionalNotes": "",
+      "examScore": 24,
+      "healthStatus": "Normal / Fit for schooling",
+      "studentSignature": "Signed",
+      "createdAt": "2026-09-21T00:42:59.913Z",
+      "updatedAt": "2026-09-21T01:09:08.634Z",
+      "createdBy": "Admin",
+      "updatedBy": "Admin"
     }
   ],
   "auditLogs": [
     {
-      "id": "log_1789523333715_azk20",
-      "userId": "usr_1789433074029_namxh",
-      "userName": "Sister of Mary of Banneux Inc.",
+      "id": "log_1789953167608_srcog",
+      "userId": "usr_1789697620889_ms1m8",
+      "userName": "Sisters of Mary School – Biga Admin",
       "action": "Login",
+      "details": "User @sistersofmarybiga (Sisters of Mary School – Biga Admin) logged in successfully",
+      "timestamp": "2026-09-21T01:12:47.608Z"
+    },
+    {
+      "id": "log_1789953165158_1tws5",
+      "userId": "usr_1789697620889_ms1m8",
+      "userName": "Sisters of Mary School – Biga Admin",
+      "action": "Login",
+      "details": "User @sistersofmarybiga (Sisters of Mary School – Biga Admin) logged in successfully",
+      "timestamp": "2026-09-21T01:12:45.158Z"
+    },
+    {
+      "id": "log_1789952950073_l13jg",
+      "action": "Student Edited",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "Updated details for student GLANIDA, ARIANA (LRN: 108095200285)",
+      "userName": "Admin",
+      "timestamp": "2026-09-21T01:09:10.073Z"
+    },
+    {
+      "id": "log_1789951381410_lht0z",
+      "action": "Student Added",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "Encoded new student: GLANIDA, ARIANA (LRN: 108095200268) - Status: Passed",
+      "userName": "Admin",
+      "timestamp": "2026-09-21T00:43:01.410Z"
+    },
+    {
+      "id": "log_1789950603235_wu5sx",
+      "action": "Recruitment List Deleted",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "Deleted recruitment list \"RECRUITMENT 2026\" and 0 associated student records.",
+      "userName": "Admin",
+      "timestamp": "2026-09-21T00:30:03.235Z"
+    },
+    {
+      "id": "log_1789950460929_1d9vk",
+      "action": "Recruitment List Created",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "Created new recruitment list: \"RECRUITMENT 2026\" for Biga",
+      "userName": "Admin",
+      "timestamp": "2026-09-21T00:27:40.929Z"
+    },
+    {
+      "id": "log_1789950458911_jadxb",
+      "action": "Login",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "User @admin (Admin) logged in successfully",
+      "userName": "Admin",
+      "timestamp": "2026-09-21T00:27:38.911Z"
+    },
+    {
+      "id": "log_1789950264304_l2fki",
+      "action": "Login",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "User @admin (Admin) logged in successfully",
+      "userName": "Admin",
+      "timestamp": "2026-09-21T00:24:24.304Z"
+    },
+    {
+      "id": "log_1789718045567_de5ju",
+      "action": "OCR Scan Performed",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "Scanned Personal Data Form with OCR (0 smart auto-correction(s) applied):  (LRN: N/A)",
+      "userName": "Admin",
+      "timestamp": "2026-09-18T07:54:05.567Z"
+    },
+    {
+      "id": "log_1789717522885_5ecit",
+      "action": "OCR Scan Performed",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "Scanned Personal Data Form with OCR (0 smart auto-correction(s) applied):  (LRN: N/A)",
+      "userName": "Admin",
+      "timestamp": "2026-09-18T07:45:22.885Z"
+    },
+    {
+      "id": "log_1789697744185_igz7c",
+      "action": "Login",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "User @admin (Admin) logged in successfully",
+      "userName": "Admin",
+      "timestamp": "2026-09-18T02:15:44.185Z"
+    },
+    {
+      "id": "log_1789697622560_r3wi7",
+      "action": "Account Created",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "Created new account: Admin (@admin) - Role: Super Administrator",
+      "userName": "Admin",
+      "timestamp": "2026-09-18T02:13:42.560Z"
+    },
+    {
+      "id": "log_1789697585798_bkwrj",
+      "action": "Account Reset",
+      "userId": "system",
+      "details": "User accounts were reset. Customized logo, background theme, and school name were preserved.",
+      "userName": "System Administrator",
+      "timestamp": "2026-09-18T02:13:05.798Z"
+    },
+    {
+      "id": "log_1789624927746_86xkv",
+      "action": "Login",
+      "userId": "usr_1789433074029_namxh",
       "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-17T06:02:07.746Z"
+    },
+    {
+      "id": "log_1789624863788_krc1q",
+      "action": "Account Created",
+      "userId": "usr_1789624863244_azz6b",
+      "details": "Created new account: sistersofmary@biga.onesms.edu.ph (@sistersofmary@biga.onesms.edu.ph) - Role: Recruitment Staff",
+      "userName": "sistersofmary@biga.onesms.edu.ph",
+      "timestamp": "2026-09-17T06:01:03.788Z"
+    },
+    {
+      "id": "log_1789601759913_ferqn",
+      "action": "Login",
+      "userId": "usr_1789433074029_namxh",
+      "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "userName": "Sister of Mary of Banneux Inc.",
+      "timestamp": "2026-09-16T23:35:59.913Z"
+    },
+    {
+      "id": "log_1789523333715_azk20",
+      "action": "Login",
+      "userId": "usr_1789433074029_namxh",
+      "details": "User @sistersofmarybiga (Sister of Mary of Banneux Inc.) logged in successfully",
+      "userName": "Sister of Mary of Banneux Inc.",
       "timestamp": "2026-09-16T01:48:53.715Z"
     },
     {
@@ -605,7 +883,7 @@
         "createdAt": "2026-01-01T00:00:00.000Z"
       }
     ],
-    "updatedAt": "2026-09-15T00:44:34.029Z",
-    "administratorUserId": "usr_1789433074029_namxh"
+    "updatedAt": "2026-09-18T02:13:40.889Z",
+    "administratorUserId": "usr_1789697620889_ms1m8"
   }
 }
