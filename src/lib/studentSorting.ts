@@ -1,25 +1,52 @@
 import { StudentRecord } from '../types';
 
 /**
- * Extracts the testing center name from a student record.
- * Prioritizes direct testingCenter field, then testingCenterLocation,
- * and falls back to testingCenterProvince / testingCenterProvinceOther.
+ * Resolves the student's province from registration.
+ * Sourced directly from the "Select Province" dropdown (testingCenterProvince).
+ * Falls back to home address province if needed.
+ * SPECIAL HANDLING: If the selected Province is 'Others' (or case-insensitive 'others'),
+ * it is ALWAYS strictly grouped under 'OTHERS' regardless of what is typed in Other Province.
+ */
+export function getStudentProvince(s: Partial<StudentRecord> | any): string {
+  if (!s) return 'OTHERS';
+
+  // Primary: Selected from the "Select Province" dropdown in Section K
+  const tcp = typeof s.testingCenterProvince === 'string' ? s.testingCenterProvince.trim() : '';
+  if (tcp) {
+    if (tcp.toLowerCase() === 'others') {
+      return 'OTHERS';
+    }
+    return tcp.toUpperCase();
+  }
+
+  // Fallback: Address province
+  const p = typeof s.province === 'string' ? s.province.trim() : '';
+  if (p) {
+    if (p.toLowerCase() === 'others') {
+      return 'OTHERS';
+    }
+    return p.toUpperCase();
+  }
+
+  return 'OTHERS';
+}
+
+/**
+ * Extracts the testing center venue/location from a student record.
+ * Represents the specific examination venue/location entered in Testing Center Location.
  */
 export function getTestingCenterName(s: Partial<StudentRecord> | any): string {
-  if (!s) return '';
-  if (typeof s.testingCenter === 'string' && s.testingCenter.trim()) {
-    return s.testingCenter.trim();
-  }
+  if (!s) return 'General Testing Center';
   if (typeof s.testingCenterLocation === 'string' && s.testingCenterLocation.trim()) {
     return s.testingCenterLocation.trim();
   }
-  const prov = s.testingCenterProvince === 'Others'
-    ? (s.testingCenterProvinceOther || 'Others')
-    : (s.testingCenterProvince || '');
-  if (prov && typeof prov === 'string' && prov.trim()) {
-    return prov.trim();
+  if (typeof s.testingCenter === 'string' && s.testingCenter.trim()) {
+    return s.testingCenter.trim();
   }
-  return '';
+  if (typeof s.parishPlace === 'string' && s.parishPlace.trim()) {
+    return s.parishPlace.trim();
+  }
+  return 'General Testing Center';
 }
 
 /**
@@ -94,7 +121,7 @@ export function resolveAdmissionStatus(s: Partial<StudentRecord> | any): 'Passed
 }
 
 /**
- * Tertiary sort: Student Name (Surname, Middle Name, First Name) alphabetically
+ * Tertiary sort: Student Name (Last Name / Surname -> First Name -> Middle Name) alphabetically
  */
 export function compareStudentNames(a: Partial<StudentRecord>, b: Partial<StudentRecord>): number {
   const surnameA = (a.surname || a.lastName || '').trim();
@@ -102,55 +129,89 @@ export function compareStudentNames(a: Partial<StudentRecord>, b: Partial<Studen
   const surnameComp = surnameA.localeCompare(surnameB, undefined, { sensitivity: 'base' });
   if (surnameComp !== 0) return surnameComp;
 
-  const middleA = (a.middleName || '').trim();
-  const middleB = (b.middleName || '').trim();
-  const middleComp = middleA.localeCompare(middleB, undefined, { sensitivity: 'base' });
-  if (middleComp !== 0) return middleComp;
-
   const firstA = (a.firstName || '').trim();
   const firstB = (b.firstName || '').trim();
-  return firstA.localeCompare(firstB, undefined, { sensitivity: 'base' });
+  const firstComp = firstA.localeCompare(firstB, undefined, { sensitivity: 'base' });
+  if (firstComp !== 0) return firstComp;
+
+  const middleA = (a.middleName || '').trim();
+  const middleB = (b.middleName || '').trim();
+  return middleA.localeCompare(middleB, undefined, { sensitivity: 'base' });
 }
 
 /**
  * Sorts student records according to the selected sortBy field and sortOrder.
- * When sortBy === 'testingCenter':
- *  1. Testing Center (A-Z) - Primary
- *  2. Admission Status (Passed -> Conditional -> Pending -> Failed) - Secondary
- *  3. Student Name (Surname, Middle Name, First Name) - Tertiary
+ * When sortBy === 'province' (default):
+ *  1. Province (A–Z) with 'OTHERS' at the end
+ *  2. Testing Center (A–Z)
+ *  3. Admission Status (Passed -> Conditional -> Pending -> Failed)
+ *  4. Student Name (Surname -> First Name -> Middle Name A–Z)
  */
 export function sortStudents(
   students: StudentRecord[],
-  sortBy: string,
+  sortBy: string = 'province',
   sortOrder: 'asc' | 'desc' = 'asc'
 ): StudentRecord[] {
   if (!Array.isArray(students)) return [];
   const order = sortOrder === 'desc' ? -1 : 1;
 
   return [...students].sort((a, b) => {
-    if (sortBy === 'testingCenter') {
-      const centerA = getTestingCenterName(a);
-      const centerB = getTestingCenterName(b);
+    // 1. Province Sort (Default)
+    if (sortBy === 'province' || !sortBy) {
+      const provA = getStudentProvince(a);
+      const provB = getStudentProvince(b);
 
-      // Primary: Testing Center (A-Z)
-      if (!centerA && centerB) return 1 * order;
-      if (centerA && !centerB) return -1 * order;
-      if (centerA && centerB) {
-        const centerComp = centerA.localeCompare(centerB, undefined, { sensitivity: 'base' });
-        if (centerComp !== 0) {
-          return centerComp * order;
-        }
+      // Keep OTHERS grouped together at the end of the province list
+      if (provA !== provB) {
+        if (provA === 'OTHERS') return 1 * order;
+        if (provB === 'OTHERS') return -1 * order;
+        const provComp = provA.localeCompare(provB, undefined, { sensitivity: 'base' });
+        if (provComp !== 0) return provComp * order;
       }
 
-      // Secondary: Admission Status (Passed -> Conditional -> Pending -> Failed)
-      // Must be strictly followed whenever Sorting by Testing Center is active
+      // Inside each Province: Testing Center (A–Z)
+      const centerA = getTestingCenterName(a);
+      const centerB = getTestingCenterName(b);
+      if (centerA !== centerB) {
+        const centerComp = centerA.localeCompare(centerB, undefined, { sensitivity: 'base' });
+        if (centerComp !== 0) return centerComp * order;
+      }
+
+      // Inside each Testing Center: Admission Status (Passed -> Conditional -> Pending -> Failed)
       const rankA = getAdmissionStatusRank(a);
       const rankB = getAdmissionStatusRank(b);
       if (rankA !== rankB) {
         return rankA - rankB;
       }
 
-      // Tertiary: Student Name (Surname, Middle Name, First Name)
+      // Student Name (Surname -> First Name -> Middle Name A–Z)
+      return compareStudentNames(a, b);
+    }
+
+    if (sortBy === 'testingCenter') {
+      const provA = getStudentProvince(a);
+      const provB = getStudentProvince(b);
+
+      if (provA !== provB) {
+        if (provA === 'OTHERS') return 1 * order;
+        if (provB === 'OTHERS') return -1 * order;
+        const provComp = provA.localeCompare(provB, undefined, { sensitivity: 'base' });
+        if (provComp !== 0) return provComp * order;
+      }
+
+      const centerA = getTestingCenterName(a);
+      const centerB = getTestingCenterName(b);
+      if (centerA !== centerB) {
+        const centerComp = centerA.localeCompare(centerB, undefined, { sensitivity: 'base' });
+        if (centerComp !== 0) return centerComp * order;
+      }
+
+      const rankA = getAdmissionStatusRank(a);
+      const rankB = getAdmissionStatusRank(b);
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+
       return compareStudentNames(a, b);
     }
 
@@ -169,11 +230,6 @@ export function sortStudents(
 
     let valA: any = (a as any)[sortBy];
     let valB: any = (b as any)[sortBy];
-
-    if (sortBy === 'birthday' || sortBy === 'birthdate') {
-      valA = a.birthdate || a.birthday || '';
-      valB = b.birthdate || b.birthday || '';
-    }
 
     if (typeof valA === 'number' && typeof valB === 'number') {
       if (valA !== valB) {

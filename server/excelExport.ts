@@ -1,14 +1,20 @@
 import ExcelJS from 'exceljs';
 import { StudentRecord } from '../src/types.js';
 import { calculateAgeFromBirthdate } from '../src/lib/dateUtils.js';
-import { sortStudents, getTestingCenterName, resolveAdmissionStatus } from '../src/lib/studentSorting.js';
+import {
+  sortStudents,
+  getTestingCenterName,
+  getStudentProvince,
+  resolveAdmissionStatus,
+} from '../src/lib/studentSorting.js';
 
 export async function generateStudentRecordsExcel(students: StudentRecord[]): Promise<Buffer> {
   // Always sort students using exact required hierarchy:
-  // 1. PRIMARY: Testing Center / Place (A–Z)
-  // 2. SECONDARY: Admission Status (Passed -> Conditional -> Pending -> Failed)
-  // 3. TERTIARY: Student Name (Last Name / Surname, then First Name A–Z)
-  const sortedStudents = sortStudents(students, 'testingCenter', 'asc');
+  // 1. PRIMARY: Province (A–Z)
+  // 2. SECONDARY: Testing Center / Place (A–Z)
+  // 3. TERTIARY: Admission Status (Passed -> Conditional -> Pending -> Failed)
+  // 4. QUATERNARY: Student Name (Surname, First Name, Middle Name A–Z)
+  const sortedStudents = sortStudents(students, 'province', 'asc');
 
   const schoolName = 'Sisters of Mary of Banneux, Inc.';
   const workbook = new ExcelJS.Workbook();
@@ -108,63 +114,97 @@ export async function generateStudentRecordsExcel(students: StudentRecord[]): Pr
     };
   });
 
-  // Group sorted students by Testing Center (Alphabetical A–Z)
-  const centerGroups = new Map<string, StudentRecord[]>();
+  // Group sorted students by Province -> Testing Center
+  const provMap = new Map<string, Map<string, StudentRecord[]>>();
   for (const s of sortedStudents) {
-    const center = getTestingCenterName(s) || 'UNASSIGNED TESTING CENTER';
-    if (!centerGroups.has(center)) {
-      centerGroups.set(center, []);
+    const prov = getStudentProvince(s);
+    const center = getTestingCenterName(s);
+
+    if (!provMap.has(prov)) {
+      provMap.set(prov, new Map<string, StudentRecord[]>());
     }
-    centerGroups.get(center)!.push(s);
+    const centerMap = provMap.get(prov)!;
+    if (!centerMap.has(center)) {
+      centerMap.set(center, []);
+    }
+    centerMap.get(center)!.push(s);
   }
 
   let currentRowNum = 2;
   let globalStudentIndex = 1;
 
-  for (const [centerName, groupStudents] of centerGroups.entries()) {
+  for (const [provName, centerMap] of provMap.entries()) {
+    let provStudentCount = 0;
+    for (const cStudents of centerMap.values()) {
+      provStudentCount += cStudents.length;
+    }
+
+    // Spacer row before new Province section
     if (currentRowNum > 2) {
       const spacerRow = worksheet.getRow(currentRowNum);
-      spacerRow.height = 10;
+      spacerRow.height = 14;
       currentRowNum++;
     }
 
-    // SECTION HEADER ROW: Highlighted across the entire width of the table
+    // 1. PROVINCE SECTION HEADER (Strong, prominent highlight across table width)
     worksheet.mergeCells(currentRowNum, 1, currentRowNum, totalCols);
-    const sectionHeaderRow = worksheet.getRow(currentRowNum);
-    sectionHeaderRow.height = 32;
+    const provHeaderRow = worksheet.getRow(currentRowNum);
+    provHeaderRow.height = 34;
 
-    const bannerCell = sectionHeaderRow.getCell(1);
-    bannerCell.value = `📍  ${centerName.toUpperCase()}   —   [ TESTING CENTER  •  ${groupStudents.length} ${
-      groupStudents.length === 1 ? 'APPLICANT' : 'APPLICANTS'
+    const provCell = provHeaderRow.getCell(1);
+    provCell.value = `📍  ${provName}   —   [ PROVINCE  •  ${provStudentCount} ${
+      provStudentCount === 1 ? 'APPLICANT' : 'APPLICANTS'
     } ]`;
-    bannerCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
-    bannerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-    bannerCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-    bannerCell.border = {
-      top: { style: 'medium', color: { argb: 'FF0F172A' } },
-      left: { style: 'thin', color: { argb: 'FF3B82F6' } },
-      bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
-      right: { style: 'thin', color: { argb: 'FF3B82F6' } },
+    provCell.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+    provCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    provCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    provCell.border = {
+      top: { style: 'medium', color: { argb: 'FF1E3A8A' } },
+      left: { style: 'thin', color: { argb: 'FF1E3A8A' } },
+      bottom: { style: 'medium', color: { argb: 'FF1E3A8A' } },
+      right: { style: 'thin', color: { argb: 'FF1E3A8A' } },
     };
     currentRowNum++;
 
-    // Section Sub-Header Row
-    const subHeaderRow = worksheet.getRow(currentRowNum);
-    subHeaderRow.height = 24;
-    columns.forEach((col, cIdx) => {
-      const cell = subHeaderRow.getCell(cIdx + 1);
-      cell.value = col.header;
-      cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FF334155' } },
-        left: { style: 'thin', color: { argb: 'FF334155' } },
+    // 2. Testing Centers under this Province
+    for (const [centerName, groupStudents] of centerMap.entries()) {
+      // TESTING CENTER SUB-HEADER BANNER
+      worksheet.mergeCells(currentRowNum, 1, currentRowNum, totalCols);
+      const centerHeaderRow = worksheet.getRow(currentRowNum);
+      centerHeaderRow.height = 28;
+
+      const centerCell = centerHeaderRow.getCell(1);
+      centerCell.value = `   🏛️  ${centerName.toUpperCase()}   (Testing Center  •  ${groupStudents.length} ${
+        groupStudents.length === 1 ? 'Applicant' : 'Applicants'
+      })`;
+      centerCell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      centerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+      centerCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 2 };
+      centerCell.border = {
+        top: { style: 'thin', color: { argb: 'FF3B82F6' } },
+        left: { style: 'thin', color: { argb: 'FF3B82F6' } },
         bottom: { style: 'thin', color: { argb: 'FF0F172A' } },
-        right: { style: 'thin', color: { argb: 'FF334155' } },
+        right: { style: 'thin', color: { argb: 'FF3B82F6' } },
       };
-    });
-    currentRowNum++;
+      currentRowNum++;
+
+      // Testing Center Table Column Sub-Header
+      const subHeaderRow = worksheet.getRow(currentRowNum);
+      subHeaderRow.height = 24;
+      columns.forEach((col, cIdx) => {
+        const cell = subHeaderRow.getCell(cIdx + 1);
+        cell.value = col.header;
+        cell.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF334155' } },
+          left: { style: 'thin', color: { argb: 'FF334155' } },
+          bottom: { style: 'thin', color: { argb: 'FF0F172A' } },
+          right: { style: 'thin', color: { argb: 'FF334155' } },
+        };
+      });
+      currentRowNum++;
 
     // Student Rows for this Testing Center
     groupStudents.forEach((s, sIdx) => {
@@ -345,6 +385,7 @@ export async function generateStudentRecordsExcel(students: StudentRecord[]): Pr
       currentRowNum++;
       globalStudentIndex++;
     });
+    }
   }
 
   const buffer = await workbook.xlsx.writeBuffer();

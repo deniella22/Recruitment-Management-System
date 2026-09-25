@@ -18,7 +18,18 @@ import {
   MapPin,
 } from 'lucide-react';
 import { StudentRecord, UserRole } from '../types';
-import { getTestingCenterName } from '../lib/studentSorting';
+import { getTestingCenterName, getStudentProvince, sortStudents } from '../lib/studentSorting';
+
+interface TestingCenterGroup {
+  centerName: string;
+  students: StudentRecord[];
+}
+
+interface ProvinceGroup {
+  provinceName: string;
+  totalStudents: number;
+  testingCenters: TestingCenterGroup[];
+}
 
 interface Props {
   students: StudentRecord[];
@@ -84,21 +95,44 @@ export const StudentListView: React.FC<Props> = ({
     }
   };
 
-  const testingCenterGroups = React.useMemo(() => {
-    if (sortBy !== 'testingCenter') return null;
-    const map = new Map<string, StudentRecord[]>();
-    for (const s of students) {
-      const center = getTestingCenterName(s) || 'Unassigned / To Be Determined';
-      if (!map.has(center)) {
-        map.set(center, []);
+  const provinceGroups = React.useMemo(() => {
+    if (sortBy !== 'province' && sortBy !== 'testingCenter') return null;
+
+    // Strict hierarchy: Province A–Z -> Testing Center A–Z -> Status -> Name
+    const sorted = sortStudents(students, 'province', sortOrder);
+
+    const provMap = new Map<string, Map<string, StudentRecord[]>>();
+    for (const s of sorted) {
+      const prov = getStudentProvince(s);
+      const center = getTestingCenterName(s);
+
+      if (!provMap.has(prov)) {
+        provMap.set(prov, new Map<string, StudentRecord[]>());
       }
-      map.get(center)!.push(s);
+      const centerMap = provMap.get(prov)!;
+      if (!centerMap.has(center)) {
+        centerMap.set(center, []);
+      }
+      centerMap.get(center)!.push(s);
     }
-    return Array.from(map.entries()).map(([centerName, groupStudents]) => ({
-      centerName,
-      students: groupStudents,
-    }));
-  }, [students, sortBy]);
+
+    const result: ProvinceGroup[] = [];
+    for (const [prov, centerMap] of provMap.entries()) {
+      const centers: TestingCenterGroup[] = [];
+      let provTotal = 0;
+      for (const [center, cStudents] of centerMap.entries()) {
+        centers.push({ centerName: center, students: cStudents });
+        provTotal += cStudents.length;
+      }
+      result.push({
+        provinceName: prov,
+        totalStudents: provTotal,
+        testingCenters: centers,
+      });
+    }
+
+    return result;
+  }, [students, sortBy, sortOrder]);
 
   const renderStudentRow = (student: StudentRecord, idx: number, showTestingCenterTag: boolean) => (
     <tr
@@ -276,16 +310,16 @@ export const StudentListView: React.FC<Props> = ({
               onChange={(e) => {
                 const nextSort = e.target.value;
                 setSortBy(nextSort);
-                if (nextSort === 'testingCenter') {
+                if (nextSort === 'province' || nextSort === 'testingCenter') {
                   setSortOrder('asc');
                 }
               }}
               className="bg-slate-50 border border-gray-200 text-gray-800 rounded-xl py-2 px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
             >
+              <option value="province">Sort: Province</option>
               <option value="fullName">Sort: Student Name</option>
               <option value="testingCenter">Sort: Testing Center</option>
               <option value="lrn">Sort: LRN</option>
-              <option value="birthday">Sort: Birthday</option>
               <option value="examScore">Sort: Exam Score</option>
               <option value="elementarySchool">Sort: Elementary School</option>
               <option value="remarks">Sort: Status</option>
@@ -440,100 +474,130 @@ export const StudentListView: React.FC<Props> = ({
               </div>
             )}
           </div>
-        ) : sortBy === 'testingCenter' && testingCenterGroups ? (
-          <div className="space-y-6 p-4 bg-slate-50/50 rounded-2xl">
-            {testingCenterGroups.map((group) => {
-              const passedCount = group.students.filter(
-                (s) => s.admissionStatus === 'Passed' || s.remarks === 'A - PASS'
-              ).length;
-              const condCount = group.students.filter(
-                (s) => s.admissionStatus === 'Conditional' || s.remarks === 'Conditional'
-              ).length;
-              const pendCount = group.students.filter(
-                (s) =>
-                  (!s.admissionStatus && !s.remarks) ||
-                  s.admissionStatus === 'Pending' ||
-                  s.remarks === 'B - PENDING' ||
-                  s.remarks === 'Pending'
-              ).length;
-              const failCount = group.students.filter(
-                (s) => s.admissionStatus === 'Failed' || s.remarks === 'Failed'
-              ).length;
-
-              return (
-                <div key={group.centerName} className="space-y-3">
-                  {/* Visually Prominent Testing Center Heading */}
-                  <div className="bg-gradient-to-r from-[#0F172A] via-[#1E3A8A] to-[#1E40AF] text-white p-4 rounded-2xl shadow-sm border border-blue-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/20 shadow-xs">
-                        <MapPin className="w-5 h-5 text-amber-300" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-200 bg-blue-950/70 px-2.5 py-0.5 rounded-full border border-blue-400/20">
-                            Testing Center
-                          </span>
-                          <span className="text-[11px] font-bold text-blue-200">
-                            {group.students.length} {group.students.length === 1 ? 'Applicant' : 'Applicants'}
-                          </span>
-                        </div>
-                        <h3 className="text-base sm:text-lg font-black tracking-wide text-white mt-1">
-                          📍 {group.centerName.toUpperCase()}
-                        </h3>
-                      </div>
+        ) : provinceGroups ? (
+          <div className="space-y-8 p-3 sm:p-5 bg-slate-50/60 rounded-2xl border border-slate-200/60">
+            {provinceGroups.map((provGroup) => (
+              <div key={provGroup.provinceName} className="space-y-4">
+                {/* 📍 Province Heading */}
+                <div className="bg-gradient-to-r from-[#0F172A] via-[#1E3A8A] to-[#1E40AF] text-white p-4 sm:p-5 rounded-2xl shadow-sm border border-blue-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/20 shadow-xs">
+                      <MapPin className="w-6 h-6 text-amber-300" />
                     </div>
-
-                    {/* Status Breakdown Badges */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {passedCount > 0 && (
-                        <span className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 font-bold text-[11px] rounded-lg">
-                          Passed: {passedCount}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-200 bg-blue-950/70 px-2.5 py-0.5 rounded-full border border-blue-400/20">
+                          PROVINCE
                         </span>
-                      )}
-                      {condCount > 0 && (
-                        <span className="px-2.5 py-1 bg-amber-500/20 border border-amber-400/30 text-amber-300 font-bold text-[11px] rounded-lg">
-                          Conditional: {condCount}
+                        <span className="text-xs font-bold text-blue-200">
+                          {provGroup.totalStudents} {provGroup.totalStudents === 1 ? 'Applicant' : 'Applicants'}
                         </span>
-                      )}
-                      {pendCount > 0 && (
-                        <span className="px-2.5 py-1 bg-blue-400/20 border border-blue-300/30 text-blue-200 font-bold text-[11px] rounded-lg">
-                          Pending: {pendCount}
-                        </span>
-                      )}
-                      {failCount > 0 && (
-                        <span className="px-2.5 py-1 bg-red-500/20 border border-red-400/30 text-red-300 font-bold text-[11px] rounded-lg">
-                          Failed: {failCount}
-                        </span>
-                      )}
+                      </div>
+                      <h2 className="text-lg sm:text-xl font-black tracking-wide text-white mt-1">
+                        📍 {provGroup.provinceName}
+                      </h2>
                     </div>
                   </div>
 
-                  {/* Table for this Testing Center */}
-                  <div className="bg-white rounded-2xl border border-blue-100 shadow-xs overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-[#1E3A8A] text-white font-bold uppercase tracking-wider">
-                          <tr>
-                            <th className="py-3 px-4">LRN</th>
-                            <th className="py-3 px-4">Student Name (SN, MN, FN)</th>
-                            <th className="py-3 px-4">Birthday</th>
-                            <th className="py-3 px-4">Elementary School</th>
-                            <th className="py-3 px-4">Exam Score</th>
-                            <th className="py-3 px-4">Admission Status</th>
-                            <th className="py-3 px-4 text-center">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 font-medium">
-                          {group.students.map((student, idx) =>
-                            renderStudentRow(student, idx, false)
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-blue-200 bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 self-start sm:self-auto">
+                    <span>
+                      {provGroup.testingCenters.length}{' '}
+                      {provGroup.testingCenters.length === 1 ? 'Testing Center' : 'Testing Centers'}
+                    </span>
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Testing Centers within this Province */}
+                <div className="space-y-5 sm:pl-3">
+                  {provGroup.testingCenters.map((centerGroup) => {
+                    const passedCount = centerGroup.students.filter(
+                      (s) => s.admissionStatus === 'Passed' || s.remarks === 'A - PASS'
+                    ).length;
+                    const condCount = centerGroup.students.filter(
+                      (s) => s.admissionStatus === 'Conditional' || s.remarks === 'Conditional'
+                    ).length;
+                    const pendCount = centerGroup.students.filter(
+                      (s) =>
+                        (!s.admissionStatus && !s.remarks) ||
+                        s.admissionStatus === 'Pending' ||
+                        s.remarks === 'B - PENDING' ||
+                        s.remarks === 'Pending'
+                    ).length;
+                    const failCount = centerGroup.students.filter(
+                      (s) => s.admissionStatus === 'Failed' || s.remarks === 'Failed'
+                    ).length;
+
+                    return (
+                      <div key={centerGroup.centerName} className="space-y-2.5">
+                        {/* Testing Center Heading */}
+                        <div className="bg-blue-50/90 border border-blue-200/80 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-xs">
+                          <div>
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-700 block">
+                              Testing Center:
+                            </span>
+                            <h3 className="text-sm sm:text-base font-extrabold text-gray-900 tracking-tight">
+                              {centerGroup.centerName}
+                            </h3>
+                          </div>
+
+                          {/* Status Badges */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] font-bold text-gray-600 bg-white border border-gray-200 px-2 py-0.5 rounded-md">
+                              {centerGroup.students.length}{' '}
+                              {centerGroup.students.length === 1 ? 'student' : 'students'}
+                            </span>
+                            {passedCount > 0 && (
+                              <span className="px-2 py-0.5 bg-emerald-100/90 border border-emerald-300 text-emerald-800 font-bold text-[11px] rounded-md">
+                                Passed: {passedCount}
+                              </span>
+                            )}
+                            {condCount > 0 && (
+                              <span className="px-2 py-0.5 bg-amber-100/90 border border-amber-300 text-amber-800 font-bold text-[11px] rounded-md">
+                                Conditional: {condCount}
+                              </span>
+                            )}
+                            {pendCount > 0 && (
+                              <span className="px-2 py-0.5 bg-blue-100/90 border border-blue-300 text-blue-800 font-bold text-[11px] rounded-md">
+                                Pending: {pendCount}
+                              </span>
+                            )}
+                            {failCount > 0 && (
+                              <span className="px-2 py-0.5 bg-red-100/90 border border-red-300 text-red-800 font-bold text-[11px] rounded-md">
+                                Failed: {failCount}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Table for this Testing Center */}
+                        <div className="bg-white rounded-2xl border border-blue-100 shadow-xs overflow-hidden">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                              <thead className="bg-[#1E3A8A] text-white font-bold uppercase tracking-wider">
+                                <tr>
+                                  <th className="py-3 px-4">LRN</th>
+                                  <th className="py-3 px-4">Student Name (SN, FN, MN)</th>
+                                  <th className="py-3 px-4">Birthday</th>
+                                  <th className="py-3 px-4">Elementary School</th>
+                                  <th className="py-3 px-4">Exam Score</th>
+                                  <th className="py-3 px-4">Admission Status</th>
+                                  <th className="py-3 px-4 text-center">Action</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100 font-medium">
+                                {centerGroup.students.map((student, idx) =>
+                                  renderStudentRow(student, idx, false)
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -554,7 +618,7 @@ export const StudentListView: React.FC<Props> = ({
                     className="py-3.5 px-4 cursor-pointer hover:bg-blue-900 transition-colors"
                   >
                     <div className="flex items-center gap-1">
-                      <span>Student Name (SN, MN, FN)</span>
+                      <span>Student Name (SN, FN, MN)</span>
                       <ArrowUpDown className="w-3 h-3 opacity-60" />
                     </div>
                   </th>

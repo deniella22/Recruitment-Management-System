@@ -201,7 +201,7 @@ export const StudentFormModal: React.FC<Props> = ({
 
   // --- SECTION K: Testing Center ---
   const initialProvinceResolved = resolveProvince(
-    studentToEdit?.testingCenterProvince || '',
+    studentToEdit?.testingCenterProvince || studentToEdit?.province || '',
     studentToEdit?.testingCenterProvinceOther
   );
   const [testingCenterProvince, setTestingCenterProvince] = useState<string>(
@@ -211,7 +211,7 @@ export const StudentFormModal: React.FC<Props> = ({
     initialProvinceResolved.specifiedOther
   );
   const [testingCenterLocation, setTestingCenterLocation] = useState<string>(
-    studentToEdit?.testingCenterLocation || ''
+    studentToEdit?.testingCenterLocation || studentToEdit?.testingCenter || studentToEdit?.parishPlace || ''
   );
 
   // UI / Submission state

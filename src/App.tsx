@@ -85,9 +85,11 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<string>(() => {
     try {
-      return localStorage.getItem('sms_student_sort_by') || 'fullName';
+      const saved = localStorage.getItem('sms_student_sort_by');
+      if (saved === 'birthday' || !saved) return 'province';
+      return saved;
     } catch {
-      return 'fullName';
+      return 'province';
     }
   });
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(() => {
