@@ -33,6 +33,7 @@ import { UserManagementView } from './components/UserManagementView';
 import { AuditLogsView } from './components/AuditLogsView';
 import { SettingsView } from './components/SettingsView';
 import { AlertCircle, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { sortStudents } from './lib/studentSorting';
 
 const getInitialSettings = (): SystemSettings => {
   try {
@@ -82,8 +83,37 @@ export default function App() {
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [sortBy, setSortBy] = useState<string>('fullName');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useState<string>(() => {
+    try {
+      return localStorage.getItem('sms_student_sort_by') || 'fullName';
+    } catch {
+      return 'fullName';
+    }
+  });
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(() => {
+    try {
+      const saved = localStorage.getItem('sms_student_sort_order');
+      return saved === 'desc' ? 'desc' : 'asc';
+    } catch {
+      return 'asc';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sms_student_sort_by', sortBy);
+    } catch (e) {
+      // Ignore storage error
+    }
+  }, [sortBy]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sms_student_sort_order', sortOrder);
+    } catch (e) {
+      // Ignore storage error
+    }
+  }, [sortOrder]);
 
   // Modal States
   const [isFormModalOpen, setIsFormModalOpen] = useState<boolean>(false);
@@ -161,7 +191,7 @@ export default function App() {
         }),
       ]);
       setDashboardStats(statsData);
-      setStudents(studentsData);
+      setStudents(sortStudents(studentsData, sortBy, sortOrder));
     } catch (err: any) {
       console.error('Failed to load student records:', err);
     } finally {
@@ -228,12 +258,14 @@ export default function App() {
     // Optimistically update local student array immediately for instant UI responsiveness
     setStudents((prev) => {
       const idx = prev.findIndex((s) => s.id === savedStudent.id);
+      let next: StudentRecord[];
       if (idx >= 0) {
-        const next = [...prev];
+        next = [...prev];
         next[idx] = savedStudent;
-        return next;
+      } else {
+        next = [savedStudent, ...prev];
       }
-      return [savedStudent, ...prev];
+      return sortStudents(next, sortBy, sortOrder);
     });
     // Immediately reload authoritative fresh data and metrics from the database
     loadStudentData();

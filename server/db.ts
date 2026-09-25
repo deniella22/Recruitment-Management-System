@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import pg from 'pg';
 import { User, StudentRecord, SiblingRecord, AuditLogEntry, SystemSettings, BrandingPreset, ThemePreset, RecruitmentList, RecruitmentListWithStats, PaginatedResult } from '../src/types.js';
 import { calculateAgeFromBirthdate } from '../src/lib/dateUtils.js';
+import { sortStudents } from './studentSorting.js';
 
 export function sanitizeStudentRecord(s: any): StudentRecord {
   const lastName = (s.lastName || s.surname || '').trim();
@@ -120,9 +121,10 @@ export function sanitizeStudentRecord(s: any): StudentRecord {
   }
 
   // K. Testing Center
+  const rawCenter = (s.testingCenter || s.testingCenterLocation || '').trim();
   const testingCenterProvince = (s.testingCenterProvince || '').trim();
   const testingCenterProvinceOther = s.testingCenterProvinceOther ? String(s.testingCenterProvinceOther).trim() : undefined;
-  const testingCenterLocation = (s.testingCenterLocation || '').trim();
+  const testingCenterLocation = rawCenter || (s.testingCenterLocation || '').trim();
 
   const remarks = (s.remarks || admissionStatus).trim();
   const additionalNotes = (s.additionalNotes || '').trim();
@@ -194,6 +196,7 @@ export function sanitizeStudentRecord(s: any): StudentRecord {
     testingCenterProvince,
     testingCenterProvinceOther: testingCenterProvince === 'Others' ? (testingCenterProvinceOther || undefined) : undefined,
     testingCenterLocation,
+    testingCenter: rawCenter || testingCenterLocation,
     remarks,
     additionalNotes,
     examScore,
@@ -1515,52 +1518,7 @@ export const dbService = {
 
     // Sorting
     const sortBy = params.sortBy || 'fullName';
-    const order = params.sortOrder === 'desc' ? -1 : 1;
-
-    records.sort((a, b) => {
-      let comp = 0;
-      switch (sortBy) {
-        case 'lrn':
-          comp = (a.lrn || '').localeCompare(b.lrn || '');
-          break;
-        case 'lastName':
-        case 'surname':
-          comp = (a.lastName || a.surname || '').localeCompare(b.lastName || b.surname || '');
-          break;
-        case 'birthday':
-        case 'birthdate':
-          comp = (a.birthdate || a.birthday || '').localeCompare(b.birthdate || b.birthday || '');
-          break;
-        case 'examScore':
-          comp = (a.examScore || 0) - (b.examScore || 0);
-          break;
-        case 'elementarySchool':
-          comp = (a.elementarySchool || '').localeCompare(b.elementarySchool || '');
-          break;
-        case 'admissionStatus':
-        case 'status':
-        case 'remarks':
-          comp = (a.admissionStatus || a.remarks || '').localeCompare(b.admissionStatus || b.remarks || '');
-          break;
-        case 'testingCenterProvince':
-          comp = (a.testingCenterProvince || '').localeCompare(b.testingCenterProvince || '');
-          break;
-        case 'testingCenterLocation':
-          comp = (a.testingCenterLocation || '').localeCompare(b.testingCenterLocation || '');
-          break;
-        case 'createdAt':
-          comp = (a.createdAt || '').localeCompare(b.createdAt || '');
-          break;
-        case 'fullName':
-        default: {
-          const nameA = `${a.lastName || a.surname || ''} ${a.firstName || ''}`.toLowerCase();
-          const nameB = `${b.lastName || b.surname || ''} ${b.firstName || ''}`.toLowerCase();
-          comp = nameA.localeCompare(nameB);
-          break;
-        }
-      }
-      return comp * order;
-    });
+    records = sortStudents(records, sortBy, params.sortOrder);
 
     const totalRecords = records.length;
     const limit = params.limit !== undefined && params.limit > 0 ? params.limit : (records.length || 20);

@@ -1,255 +1,351 @@
 import ExcelJS from 'exceljs';
 import { StudentRecord } from '../src/types.js';
 import { calculateAgeFromBirthdate } from '../src/lib/dateUtils.js';
+import { sortStudents, getTestingCenterName, resolveAdmissionStatus } from '../src/lib/studentSorting.js';
 
 export async function generateStudentRecordsExcel(students: StudentRecord[]): Promise<Buffer> {
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'Sisters of Mary School';
-  workbook.lastModifiedBy = 'Sisters of Mary School – Recruitment System';
-  workbook.created = new Date();
+  // Always sort students using exact required hierarchy:
+  // 1. PRIMARY: Testing Center / Place (A–Z)
+  // 2. SECONDARY: Admission Status (Passed -> Conditional -> Pending -> Failed)
+  // 3. TERTIARY: Student Name (Last Name / Surname, then First Name A–Z)
+  const sortedStudents = sortStudents(students, 'testingCenter', 'asc');
 
+  const schoolName = 'Sisters of Mary of Banneux, Inc.';
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = schoolName;
+  workbook.lastModifiedBy = `${schoolName} – Recruitment System`;
+  workbook.created = new Date();
+  workbook.title = `${schoolName} - Student Recruitment Records`;
+  workbook.subject = 'Official Student Recruitment Records';
+  workbook.company = schoolName;
+
+  // Single organized worksheet with frozen header row and clearly highlighted Testing Center sections
   const worksheet = workbook.addWorksheet('Recruitment Records', {
-    views: [{ state: 'frozen', xSplit: 0, ySplit: 1 }],
+    views: [{ state: 'frozen', xSplit: 0, ySplit: 1, activeCell: 'A2' }],
   });
 
-  // Define complete columns matching the Official Recruitment Personal Information Form
+  worksheet.headerFooter.oddHeader = `&C&B${schoolName}&B\nOfficial Student Recruitment Personal Information Records`;
+  worksheet.headerFooter.oddFooter = `&LGenerated: ${new Date().toLocaleDateString('en-US', { dateStyle: 'medium' })}&RPage &P of &N`;
+
   const columns = [
-    { header: 'Status / Remarks', key: 'remarks', width: 16 },
-    { header: 'LRN (12 Digits)', key: 'lrn', width: 16 },
-    { header: 'Last Name / Surname', key: 'lastName', width: 20 },
-    { header: 'First Name', key: 'firstName', width: 20 },
-    { header: 'Middle Name', key: 'middleName', width: 18 },
-    { header: 'Birthdate', key: 'birthdate', width: 14 },
-    { header: 'Age', key: 'age', width: 8 },
-    { header: 'Sex / Gender', key: 'gender', width: 12 },
-    { header: 'Sitio / Street', key: 'sitioStreet', width: 22 },
-    { header: 'Barangay', key: 'barangay', width: 18 },
-    { header: 'Municipality / City', key: 'municipality', width: 20 },
-    { header: 'Province', key: 'province', width: 18 },
-    { header: 'Full Home Address', key: 'address', width: 32 },
-    { header: 'Elementary School Graduated', key: 'elementarySchool', width: 28 },
-    { header: 'School Address', key: 'schoolAddress', width: 24 },
+    { header: 'No.', key: 'index', width: 7 },
+    { header: 'Admission Status', key: 'admissionStatus', width: 18 },
+    { header: 'Status / Remarks', key: 'remarks', width: 18 },
+    { header: 'LRN (12 Digits)', key: 'lrn', width: 18 },
+    { header: 'Last Name / Surname', key: 'lastName', width: 22 },
+    { header: 'First Name', key: 'firstName', width: 22 },
+    { header: 'Middle Name', key: 'middleName', width: 20 },
+    { header: 'Birthdate', key: 'birthdate', width: 15 },
+    { header: 'Age', key: 'age', width: 9 },
+    { header: 'Sex / Gender', key: 'gender', width: 14 },
+    { header: 'Sitio / Street', key: 'sitioStreet', width: 24 },
+    { header: 'Barangay', key: 'barangay', width: 20 },
+    { header: 'Municipality / City', key: 'municipality', width: 22 },
+    { header: 'Province', key: 'province', width: 20 },
+    { header: 'Full Home Address', key: 'address', width: 36 },
+    { header: 'Elementary School Graduated', key: 'elementarySchool', width: 32 },
+    { header: 'School Address', key: 'schoolAddress', width: 26 },
     { header: 'Report Card (SY)', key: 'reportCardSy', width: 20 },
-    { header: 'Grading Period', key: 'grading', width: 15 },
-    { header: 'Current Grade', key: 'currentGrade', width: 15 },
-    { header: 'Old Graduate Remarks', key: 'oldGraduateRemarks', width: 22 },
-    { header: "Father's Full Name", key: 'fatherName', width: 22 },
-    { header: "Father's Occupation", key: 'fatherOccupation', width: 20 },
+    { header: 'Grading Period', key: 'grading', width: 16 },
+    { header: 'Current Grade', key: 'currentGrade', width: 16 },
+    { header: 'Old Graduate Remarks', key: 'oldGraduateRemarks', width: 32 },
+    { header: "Father's Full Name", key: 'fatherName', width: 24 },
+    { header: "Father's Occupation", key: 'fatherOccupation', width: 22 },
     { header: "Father's Age", key: 'fatherAge', width: 14 },
-    { header: "Mother's Full Name", key: 'motherName', width: 22 },
-    { header: "Mother's Occupation", key: 'motherOccupation', width: 20 },
+    { header: "Mother's Full Name", key: 'motherName', width: 24 },
+    { header: "Mother's Occupation", key: 'motherOccupation', width: 22 },
     { header: "Mother's Age", key: 'motherAge', width: 14 },
-    { header: "Guardian's Full Name", key: 'guardianName', width: 22 },
-    { header: "Guardian's Relationship", key: 'guardianRelation', width: 20 },
-    { header: "Guardian's Occupation", key: 'guardianOccupation', width: 20 },
+    { header: "Guardian's Full Name", key: 'guardianName', width: 24 },
+    { header: "Guardian's Relationship", key: 'guardianRelation', width: 22 },
+    { header: "Guardian's Occupation", key: 'guardianOccupation', width: 22 },
     { header: "Guardian's Age", key: 'guardianAge', width: 14 },
-    { header: 'Cellphone Number', key: 'cellphoneNumber', width: 18 },
-    { header: 'Cellphone Owner', key: 'cellphoneOwner', width: 18 },
-    { header: 'Messenger Account', key: 'messengerAccount', width: 22 },
-    { header: 'Messenger Owner', key: 'messengerOwner', width: 18 },
-    { header: 'Documents Submitted', key: 'birthCertificatePsa', width: 28 },
-    { header: "PSA Father's Name & Age", key: 'psaFatherNameAge', width: 24 },
+    { header: 'Cellphone Number', key: 'cellphoneNumber', width: 20 },
+    { header: 'Cellphone Owner', key: 'cellphoneOwner', width: 20 },
+    { header: 'Messenger Account', key: 'messengerAccount', width: 24 },
+    { header: 'Messenger Owner', key: 'messengerOwner', width: 20 },
+    { header: 'Documents Submitted', key: 'birthCertificatePsa', width: 30 },
+    { header: "PSA Father's Name & Age", key: 'psaFatherNameAge', width: 26 },
     { header: "Father's Religion", key: 'fatherReligion', width: 18 },
-    { header: "PSA Mother's Name & Age", key: 'psaMotherNameAge', width: 24 },
+    { header: "PSA Mother's Name & Age", key: 'psaMotherNameAge', width: 26 },
     { header: "Mother's Religion", key: 'motherReligion', width: 18 },
     { header: 'Birth Order', key: 'birthOrder', width: 12 },
     { header: 'Number of Children', key: 'numberOfChildren', width: 16 },
     { header: 'Baptized Catholic', key: 'baptizedCatholic', width: 16 },
-    { header: 'Other Denomination', key: 'denomination', width: 18 },
+    { header: 'Other Denomination', key: 'denomination', width: 20 },
     { header: 'Confirmed Catholic', key: 'confirmedCatholic', width: 16 },
-    { header: 'Siblings Breakdown', key: 'siblingsSummary', width: 36 },
-    { header: 'Parish / Place', key: 'parishPlace', width: 22 },
-    { header: 'Parish Priest', key: 'parishPriest', width: 22 },
-    { header: 'Exam Score', key: 'examScore', width: 12 },
-    { header: 'Health Status', key: 'healthStatus', width: 22 },
-    { header: 'Admission Status', key: 'admissionStatus', width: 18 },
-    { header: 'Testing Center Province', key: 'testingCenterProvince', width: 22 },
-    { header: 'Testing Center Location', key: 'testingCenterLocation', width: 28 },
-    { header: 'Additional Notes', key: 'additionalNotes', width: 28 },
+    { header: 'Siblings Breakdown', key: 'siblingsSummary', width: 40 },
+    { header: 'Parish / Place', key: 'parishPlace', width: 24 },
+    { header: 'Parish Priest', key: 'parishPriest', width: 24 },
+    { header: 'Exam Score', key: 'examScore', width: 14 },
+    { header: 'Health Status', key: 'healthStatus', width: 24 },
+    { header: 'Testing Center Province', key: 'testingCenterProvince', width: 24 },
+    { header: 'Testing Center Location', key: 'testingCenterLocation', width: 30 },
+    { header: 'Additional Notes', key: 'additionalNotes', width: 30 },
     { header: 'Student Signature Confirmed', key: 'studentSignature', width: 22 },
   ];
 
-  worksheet.columns = columns.map((col) => ({
-    header: col.header,
-    key: col.key,
-    width: col.width,
-  }));
+  const totalCols = columns.length;
 
-  // Style Header Row (Row 1) - Classic Navy/Maroon Institutional Theme
-  const headerRow = worksheet.getRow(1);
-  headerRow.height = 30;
-  headerRow.eachCell((cell) => {
-    cell.font = {
-      name: 'Calibri',
-      size: 11,
-      bold: true,
-      color: { argb: 'FFFFFFFF' },
-    };
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF1E3A8A' }, // Rich SMS Navy Blue #1E3A8A
-    };
-    cell.alignment = {
-      horizontal: 'center',
-      vertical: 'middle',
-      wrapText: true,
-    };
+  columns.forEach((col, i) => {
+    const colNumber = i + 1;
+    worksheet.getColumn(colNumber).width = col.width;
+  });
+
+  // Top Frozen Main Column Header (Row 1)
+  const mainHeaderRow = worksheet.getRow(1);
+  mainHeaderRow.height = 30;
+  columns.forEach((col, idx) => {
+    const cell = mainHeaderRow.getCell(idx + 1);
+    cell.value = col.header;
+    cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
     cell.border = {
       top: { style: 'thin', color: { argb: 'FF3B82F6' } },
       left: { style: 'thin', color: { argb: 'FF3B82F6' } },
-      bottom: { style: 'medium', color: { argb: 'FF172554' } },
+      bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
       right: { style: 'thin', color: { argb: 'FF3B82F6' } },
     };
   });
 
-  // Populate Student Rows
-  students.forEach((s, idx) => {
-    // Format Birthdate as MM/DD/YYYY
-    const bDate = s.birthdate || s.birthday || '';
-    let formattedBirthday = bDate;
-    if (bDate && bDate.includes('-')) {
-      const parts = bDate.split('-');
-      if (parts.length === 3) {
-        formattedBirthday = `${parts[1]}/${parts[2]}/${parts[0]}`;
+  // Group sorted students by Testing Center (Alphabetical A–Z)
+  const centerGroups = new Map<string, StudentRecord[]>();
+  for (const s of sortedStudents) {
+    const center = getTestingCenterName(s) || 'UNASSIGNED TESTING CENTER';
+    if (!centerGroups.has(center)) {
+      centerGroups.set(center, []);
+    }
+    centerGroups.get(center)!.push(s);
+  }
+
+  let currentRowNum = 2;
+  let globalStudentIndex = 1;
+
+  for (const [centerName, groupStudents] of centerGroups.entries()) {
+    if (currentRowNum > 2) {
+      const spacerRow = worksheet.getRow(currentRowNum);
+      spacerRow.height = 10;
+      currentRowNum++;
+    }
+
+    // SECTION HEADER ROW: Highlighted across the entire width of the table
+    worksheet.mergeCells(currentRowNum, 1, currentRowNum, totalCols);
+    const sectionHeaderRow = worksheet.getRow(currentRowNum);
+    sectionHeaderRow.height = 32;
+
+    const bannerCell = sectionHeaderRow.getCell(1);
+    bannerCell.value = `📍  ${centerName.toUpperCase()}   —   [ TESTING CENTER  •  ${groupStudents.length} ${
+      groupStudents.length === 1 ? 'APPLICANT' : 'APPLICANTS'
+    } ]`;
+    bannerCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+    bannerCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    bannerCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    bannerCell.border = {
+      top: { style: 'medium', color: { argb: 'FF0F172A' } },
+      left: { style: 'thin', color: { argb: 'FF3B82F6' } },
+      bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
+      right: { style: 'thin', color: { argb: 'FF3B82F6' } },
+    };
+    currentRowNum++;
+
+    // Section Sub-Header Row
+    const subHeaderRow = worksheet.getRow(currentRowNum);
+    subHeaderRow.height = 24;
+    columns.forEach((col, cIdx) => {
+      const cell = subHeaderRow.getCell(cIdx + 1);
+      cell.value = col.header;
+      cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF334155' } },
+        left: { style: 'thin', color: { argb: 'FF334155' } },
+        bottom: { style: 'thin', color: { argb: 'FF0F172A' } },
+        right: { style: 'thin', color: { argb: 'FF334155' } },
+      };
+    });
+    currentRowNum++;
+
+    // Student Rows for this Testing Center
+    groupStudents.forEach((s, sIdx) => {
+      const bDate = s.birthdate || s.birthday || '';
+      let formattedBirthday = bDate;
+      if (bDate && bDate.includes('-')) {
+        const parts = bDate.split('-');
+        if (parts.length === 3) {
+          formattedBirthday = `${parts[1]}/${parts[2]}/${parts[0]}`;
+        }
       }
-    }
 
-    // Format siblings breakdown string
-    let siblingsSummary = '';
-    if (Array.isArray(s.siblings) && s.siblings.length > 0) {
-      siblingsSummary = s.siblings
-        .map((sib, i) => `${i + 1}. ${sib.name || 'Unnamed'} (${sib.age ? `${sib.age}yo` : 'Age N/A'}) ${sib.remarks ? `- ${sib.remarks}` : ''}`)
-        .join('; ');
-    } else if (s.numSiblings) {
-      siblingsSummary = `${s.numSiblings} sibling(s) indicated`;
-    }
+      let siblingsSummary = '';
+      if (Array.isArray(s.siblings) && s.siblings.length > 0) {
+        siblingsSummary = s.siblings
+          .map(
+            (sib, i) =>
+              `${i + 1}. ${sib.name || 'Unnamed'} (${sib.age ? `${sib.age}yo` : 'Age N/A'}) ${
+                sib.remarks ? `- ${sib.remarks}` : ''
+              }`
+          )
+          .join('; ');
+      } else if (s.numSiblings) {
+        siblingsSummary = `${s.numSiblings} sibling(s) indicated`;
+      }
 
-    const row = worksheet.addRow({
-      remarks: s.remarks || 'B - PENDING',
-      lrn: String(s.lrn || '').trim(),
-      lastName: s.lastName || s.surname || '',
-      firstName: s.firstName || '',
-      middleName: s.middleName || '',
-      birthdate: formattedBirthday,
-      age: (() => {
+      const calculatedAge = (() => {
         const b = s.birthdate || s.birthday;
         if (b) {
           const calc = calculateAgeFromBirthdate(b);
           if (calc !== null) return calc;
         }
-        return s.age !== undefined && s.age !== null && s.age !== '' ? s.age : '';
-      })(),
-      gender: s.gender || 'Female',
-      sitioStreet: s.sitioStreet || '',
-      barangay: s.barangay || '',
-      municipality: s.municipality || '',
-      province: s.province || '',
-      address: s.address || '',
-      elementarySchool: s.elementarySchool || s.school || '',
-      schoolAddress: s.schoolAddress || '',
-      reportCardSy: s.reportCardSy || '',
-      grading: s.grading || '',
-      currentGrade: s.currentGrade || 'Grade 6',
-      oldGraduateRemarks: s.oldGraduateRemarks || '',
-      fatherName: s.fatherName || '',
-      fatherOccupation: s.fatherOccupation || '',
-      fatherAge: s.fatherAge !== undefined && s.fatherAge !== null ? String(s.fatherAge) : '',
-      motherName: s.motherName || '',
-      motherOccupation: s.motherOccupation || '',
-      motherAge: s.motherAge !== undefined && s.motherAge !== null ? String(s.motherAge) : '',
-      guardianName: s.guardianName || '',
-      guardianRelation: s.guardianRelation || '',
-      guardianOccupation: s.guardianOccupation || '',
-      guardianAge: s.guardianAge !== undefined && s.guardianAge !== null ? String(s.guardianAge) : '',
-      cellphoneNumber: s.cellphoneNumber || '',
-      cellphoneOwner: s.cellphoneOwner || '',
-      messengerAccount: s.messengerAccount || '',
-      messengerOwner: s.messengerOwner || '',
-      birthCertificatePsa: s.documentsSubmitted && s.documentsSubmitted.length > 0 ? s.documentsSubmitted.join(', ') : (s.birthCertificatePsa || ''),
-      psaFatherNameAge: s.psaFatherNameAge || '',
-      fatherReligion: s.fatherReligion || '',
-      psaMotherNameAge: s.psaMotherNameAge || '',
-      motherReligion: s.motherReligion || '',
-      birthOrder: s.birthOrder || 1,
-      numberOfChildren: s.numberOfChildren || (s.numSiblings ? Number(s.numSiblings) + 1 : 1),
-      baptizedCatholic: s.baptizedCatholic || 'Yes',
-      denomination: s.denomination || '',
-      confirmedCatholic: s.confirmedCatholic || 'Yes',
-      siblingsSummary,
-      parishPlace: s.parishPlace || '',
-      parishPriest: s.parishPriest || '',
-      examScore: typeof s.examScore === 'number' ? s.examScore : Number(s.examScore) || 0,
-      healthStatus: s.healthStatus || 'Normal / Fit for schooling',
-      admissionStatus:
-        s.admissionStatus ||
-        (s.remarks === 'A - PASS'
-          ? 'Passed'
-          : s.remarks === 'Passed'
-          ? 'Passed'
-          : s.remarks === 'Conditional'
-          ? 'Conditional'
-          : s.remarks === 'Failed'
-          ? 'Failed'
-          : 'Pending'),
-      testingCenterProvince:
+        return s.age !== undefined && s.age !== null && s.age !== '' ? Number(s.age) || s.age : '';
+      })();
+
+      const resolvedStatus = resolveAdmissionStatus(s);
+
+      const values = [
+        globalStudentIndex,
+        resolvedStatus,
+        s.remarks || (resolvedStatus === 'Passed' ? 'Passed' : resolvedStatus),
+        String(s.lrn || '').trim(),
+        (s.lastName || s.surname || '').trim(),
+        (s.firstName || '').trim(),
+        (s.middleName || '').trim(),
+        formattedBirthday,
+        calculatedAge,
+        s.gender || 'Female',
+        s.sitioStreet || '',
+        s.barangay || '',
+        s.municipality || '',
+        s.province || '',
+        s.address || '',
+        s.elementarySchool || s.school || '',
+        s.schoolAddress || '',
+        s.reportCardSy || '',
+        s.grading || '',
+        s.currentGrade || 'Grade 6',
+        s.oldGraduateRemarks || '',
+        s.fatherName || '',
+        s.fatherOccupation || '',
+        s.fatherAge !== undefined && s.fatherAge !== null ? String(s.fatherAge) : '',
+        s.motherName || '',
+        s.motherOccupation || '',
+        s.motherAge !== undefined && s.motherAge !== null ? String(s.motherAge) : '',
+        s.guardianName || '',
+        s.guardianRelation || '',
+        s.guardianOccupation || '',
+        s.guardianAge !== undefined && s.guardianAge !== null ? String(s.guardianAge) : '',
+        s.cellphoneNumber || '',
+        s.cellphoneOwner || '',
+        s.messengerAccount || '',
+        s.messengerOwner || '',
+        s.documentsSubmitted && s.documentsSubmitted.length > 0
+          ? s.documentsSubmitted.join(', ')
+          : s.birthCertificatePsa || '',
+        s.psaFatherNameAge || '',
+        s.fatherReligion || '',
+        s.psaMotherNameAge || '',
+        s.motherReligion || '',
+        s.birthOrder || 1,
+        s.numberOfChildren || (s.numSiblings ? Number(s.numSiblings) + 1 : 1),
+        s.baptizedCatholic || 'Yes',
+        s.denomination || '',
+        s.confirmedCatholic || 'Yes',
+        siblingsSummary,
+        s.parishPlace || '',
+        s.parishPriest || '',
+        typeof s.examScore === 'number' ? s.examScore : Number(s.examScore) || 0,
+        s.healthStatus || 'Normal / Fit for schooling',
         s.testingCenterProvince === 'Others'
           ? s.testingCenterProvinceOther || 'Others'
           : s.testingCenterProvince || '',
-      testingCenterLocation: s.testingCenterLocation || '',
-      additionalNotes: s.additionalNotes || '',
-      studentSignature: s.studentSignature || 'Signed / Confirmed',
-    });
+        s.testingCenterLocation || '',
+        s.additionalNotes || '',
+        s.studentSignature || 'Signed / Confirmed',
+      ];
 
-    row.height = 22;
+      const row = worksheet.getRow(currentRowNum);
+      row.height = 22;
 
-    const isEven = idx % 2 === 0;
-    const bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC'; // Clean zebra striping
+      const isEven = sIdx % 2 === 0;
+      const rowBgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
 
-    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-      cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF1F2937' } };
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: bgArgb },
-      };
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-      };
+      values.forEach((val, colIdx) => {
+        const cell = row.getCell(colIdx + 1);
+        cell.value = val;
+        cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF1F2937' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBgArgb } };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        };
 
-      // Status column (col 1)
-      if (colNumber === 1) {
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        if (cell.value === 'A - PASS') {
-          cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF15803D' } };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+        if (colIdx === 0) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.numFmt = '#,##0';
+        } else if (colIdx === 1) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          if (val === 'Passed') {
+            cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF166534' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } };
+          } else if (val === 'Conditional') {
+            cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF0369A1' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
+          } else if (val === 'Failed') {
+            cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF991B1B' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+          } else {
+            cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF92400E' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+          }
+        } else if (colIdx === 2) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          if (val === 'A - PASS' || val === 'Passed') {
+            cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF166534' } };
+          } else if (val === 'Failed') {
+            cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF991B1B' } };
+          } else {
+            cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF92400E' } };
+          }
+        } else if (colIdx === 3) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.numFmt = '@';
+        } else if (colIdx === 4) {
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
+          cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
+        } else if (colIdx === 7) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colIdx === 8) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          cell.numFmt = '#,##0';
+        } else if (colIdx === 9) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colIdx === 17 || colIdx === 18 || colIdx === 19) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colIdx === 31) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.numFmt = '@';
+        } else if (colIdx === 40 || colIdx === 41) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          cell.numFmt = '#,##0';
+        } else if (colIdx === 42 || colIdx === 44) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else if (colIdx === 48) {
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          cell.numFmt = '#,##0';
+          cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
+        } else if (colIdx === 53) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
         } else {
-          cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFB45309' } };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+          cell.alignment = { horizontal: 'left', vertical: 'middle' };
         }
-      } else if (colNumber === 2) {
-        // LRN column - strictly string format
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        cell.numFmt = '@';
-      } else if (colNumber === 6 || colNumber === 8 || colNumber === 36 || colNumber === 37) {
-        // Birthdate, Gender, Birth Order, Number of Children
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-      } else if (colNumber === 7 || colNumber === 44) {
-        // Age & Exam Score
-        cell.alignment = { horizontal: 'right', vertical: 'middle' };
-        cell.numFmt = '#,##0';
-      } else {
-        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
-      }
-    });
-  });
+      });
 
-  // Enable Auto-Filter over the data range
-  const lastRow = Math.max(students.length + 1, 2);
-  worksheet.autoFilter = `A1:AV${lastRow}`;
+      currentRowNum++;
+      globalStudentIndex++;
+    });
+  }
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);

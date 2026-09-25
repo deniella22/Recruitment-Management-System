@@ -15,8 +15,10 @@ import {
   Camera,
   ChevronDown,
   Download,
+  MapPin,
 } from 'lucide-react';
 import { StudentRecord, UserRole } from '../types';
+import { getTestingCenterName } from '../lib/studentSorting';
 
 interface Props {
   students: StudentRecord[];
@@ -81,6 +83,113 @@ export const StudentListView: React.FC<Props> = ({
       setSortOrder('asc');
     }
   };
+
+  const testingCenterGroups = React.useMemo(() => {
+    if (sortBy !== 'testingCenter') return null;
+    const map = new Map<string, StudentRecord[]>();
+    for (const s of students) {
+      const center = getTestingCenterName(s) || 'Unassigned / To Be Determined';
+      if (!map.has(center)) {
+        map.set(center, []);
+      }
+      map.get(center)!.push(s);
+    }
+    return Array.from(map.entries()).map(([centerName, groupStudents]) => ({
+      centerName,
+      students: groupStudents,
+    }));
+  }, [students, sortBy]);
+
+  const renderStudentRow = (student: StudentRecord, idx: number, showTestingCenterTag: boolean) => (
+    <tr
+      key={student.id}
+      className={`hover:bg-blue-50/50 transition-colors ${
+        idx % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'
+      }`}
+    >
+      <td className="py-3.5 px-4 font-mono font-bold text-gray-900 select-all">
+        {student.lrn}
+      </td>
+      <td className="py-3.5 px-4 font-bold text-gray-900">
+        <button
+          onClick={() => onViewStudent(student)}
+          className="text-left hover:text-[#1E3A8A] hover:underline cursor-pointer block"
+        >
+          {student.surname}, {student.firstName}{' '}
+          {student.middleName ? `${student.middleName}` : ''}
+        </button>
+        {showTestingCenterTag && getTestingCenterName(student) && (
+          <span className="text-[10px] text-blue-700 font-medium block mt-0.5">
+            📍 {getTestingCenterName(student)}
+          </span>
+        )}
+      </td>
+      <td className="py-3.5 px-4 text-gray-700 font-medium">
+        {formatBirthday(student.birthday)}
+      </td>
+      <td className="py-3.5 px-4 text-gray-700 font-medium">
+        {student.elementarySchool || 'N/A'}
+      </td>
+      <td className="py-3.5 px-4 font-bold text-gray-900">
+        {student.examScore}
+      </td>
+      <td className="py-3.5 px-4">
+        {student.admissionStatus === 'Passed' || student.remarks === 'A - PASS' ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full font-bold text-[11px]">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            Passed
+          </span>
+        ) : student.admissionStatus === 'Conditional' ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-bold text-[11px]">
+            <Clock className="w-3.5 h-3.5 text-amber-600" />
+            Conditional
+          </span>
+        ) : student.admissionStatus === 'Failed' ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-800 border border-red-200 rounded-full font-bold text-[11px]">
+            <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+            Failed
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-800 border border-slate-300 rounded-full font-bold text-[11px]">
+            <Clock className="w-3.5 h-3.5 text-slate-500" />
+            Pending
+          </span>
+        )}
+      </td>
+      <td className="py-3.5 px-4 text-center">
+        <div className="flex items-center justify-center gap-1.5">
+          <button
+            onClick={() => onViewStudent(student)}
+            className="px-3 py-1 bg-blue-50 hover:bg-[#1E3A8A] hover:text-white text-[#1E3A8A] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 border border-blue-200/60"
+            title="View Complete Student Profile"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>VIEW</span>
+          </button>
+
+          {!isViewer && (
+            <>
+              <button
+                onClick={() => onEditStudent(student)}
+                className="p-1.5 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all cursor-pointer"
+                title="Edit Record"
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => onDeleteStudent(student)}
+                className="p-1.5 text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
+                title="Delete Record"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
 
   return (
     <div className="space-y-5">
@@ -164,10 +273,17 @@ export const StudentListView: React.FC<Props> = ({
           <div className="flex items-center gap-2">
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => {
+                const nextSort = e.target.value;
+                setSortBy(nextSort);
+                if (nextSort === 'testingCenter') {
+                  setSortOrder('asc');
+                }
+              }}
               className="bg-slate-50 border border-gray-200 text-gray-800 rounded-xl py-2 px-3 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]"
             >
               <option value="fullName">Sort: Student Name</option>
+              <option value="testingCenter">Sort: Testing Center</option>
               <option value="lrn">Sort: LRN</option>
               <option value="birthday">Sort: Birthday</option>
               <option value="examScore">Sort: Exam Score</option>
@@ -324,6 +440,101 @@ export const StudentListView: React.FC<Props> = ({
               </div>
             )}
           </div>
+        ) : sortBy === 'testingCenter' && testingCenterGroups ? (
+          <div className="space-y-6 p-4 bg-slate-50/50 rounded-2xl">
+            {testingCenterGroups.map((group) => {
+              const passedCount = group.students.filter(
+                (s) => s.admissionStatus === 'Passed' || s.remarks === 'A - PASS'
+              ).length;
+              const condCount = group.students.filter(
+                (s) => s.admissionStatus === 'Conditional' || s.remarks === 'Conditional'
+              ).length;
+              const pendCount = group.students.filter(
+                (s) =>
+                  (!s.admissionStatus && !s.remarks) ||
+                  s.admissionStatus === 'Pending' ||
+                  s.remarks === 'B - PENDING' ||
+                  s.remarks === 'Pending'
+              ).length;
+              const failCount = group.students.filter(
+                (s) => s.admissionStatus === 'Failed' || s.remarks === 'Failed'
+              ).length;
+
+              return (
+                <div key={group.centerName} className="space-y-3">
+                  {/* Visually Prominent Testing Center Heading */}
+                  <div className="bg-gradient-to-r from-[#0F172A] via-[#1E3A8A] to-[#1E40AF] text-white p-4 rounded-2xl shadow-sm border border-blue-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/20 shadow-xs">
+                        <MapPin className="w-5 h-5 text-amber-300" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-200 bg-blue-950/70 px-2.5 py-0.5 rounded-full border border-blue-400/20">
+                            Testing Center
+                          </span>
+                          <span className="text-[11px] font-bold text-blue-200">
+                            {group.students.length} {group.students.length === 1 ? 'Applicant' : 'Applicants'}
+                          </span>
+                        </div>
+                        <h3 className="text-base sm:text-lg font-black tracking-wide text-white mt-1">
+                          📍 {group.centerName.toUpperCase()}
+                        </h3>
+                      </div>
+                    </div>
+
+                    {/* Status Breakdown Badges */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {passedCount > 0 && (
+                        <span className="px-2.5 py-1 bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 font-bold text-[11px] rounded-lg">
+                          Passed: {passedCount}
+                        </span>
+                      )}
+                      {condCount > 0 && (
+                        <span className="px-2.5 py-1 bg-amber-500/20 border border-amber-400/30 text-amber-300 font-bold text-[11px] rounded-lg">
+                          Conditional: {condCount}
+                        </span>
+                      )}
+                      {pendCount > 0 && (
+                        <span className="px-2.5 py-1 bg-blue-400/20 border border-blue-300/30 text-blue-200 font-bold text-[11px] rounded-lg">
+                          Pending: {pendCount}
+                        </span>
+                      )}
+                      {failCount > 0 && (
+                        <span className="px-2.5 py-1 bg-red-500/20 border border-red-400/30 text-red-300 font-bold text-[11px] rounded-lg">
+                          Failed: {failCount}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Table for this Testing Center */}
+                  <div className="bg-white rounded-2xl border border-blue-100 shadow-xs overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-[#1E3A8A] text-white font-bold uppercase tracking-wider">
+                          <tr>
+                            <th className="py-3 px-4">LRN</th>
+                            <th className="py-3 px-4">Student Name (SN, MN, FN)</th>
+                            <th className="py-3 px-4">Birthday</th>
+                            <th className="py-3 px-4">Elementary School</th>
+                            <th className="py-3 px-4">Exam Score</th>
+                            <th className="py-3 px-4">Admission Status</th>
+                            <th className="py-3 px-4 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 font-medium">
+                          {group.students.map((student, idx) =>
+                            renderStudentRow(student, idx, false)
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -387,91 +598,9 @@ export const StudentListView: React.FC<Props> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-medium">
-                {students.map((student, idx) => (
-                  <tr
-                    key={student.id}
-                    className={`hover:bg-blue-50/50 transition-colors ${
-                      idx % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'
-                    }`}
-                  >
-                    <td className="py-3.5 px-4 font-mono font-bold text-gray-900 select-all">
-                      {student.lrn}
-                    </td>
-                    <td className="py-3.5 px-4 font-bold text-gray-900">
-                      <button
-                        onClick={() => onViewStudent(student)}
-                        className="text-left hover:text-[#1E3A8A] hover:underline cursor-pointer"
-                      >
-                        {student.surname}, {student.firstName}{' '}
-                        {student.middleName ? `${student.middleName}` : ''}
-                      </button>
-                    </td>
-                    <td className="py-3.5 px-4 text-gray-700 font-medium">
-                      {formatBirthday(student.birthday)}
-                    </td>
-                    <td className="py-3.5 px-4 text-gray-700 font-medium">
-                      {student.elementarySchool || 'N/A'}
-                    </td>
-                    <td className="py-3.5 px-4 font-bold text-gray-900">
-                      {student.examScore}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      {student.admissionStatus === 'Passed' || student.remarks === 'A - PASS' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full font-bold text-[11px]">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          Passed
-                        </span>
-                      ) : student.admissionStatus === 'Conditional' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full font-bold text-[11px]">
-                          <Clock className="w-3.5 h-3.5 text-amber-600" />
-                          Conditional
-                        </span>
-                      ) : student.admissionStatus === 'Failed' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-800 border border-red-200 rounded-full font-bold text-[11px]">
-                          <AlertCircle className="w-3.5 h-3.5 text-red-600" />
-                          Failed
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-800 border border-slate-300 rounded-full font-bold text-[11px]">
-                          <Clock className="w-3.5 h-3.5 text-slate-500" />
-                          Pending
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => onViewStudent(student)}
-                          className="px-3 py-1 bg-blue-50 hover:bg-[#1E3A8A] hover:text-white text-[#1E3A8A] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 border border-blue-200/60"
-                          title="View Complete Student Profile"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>VIEW</span>
-                        </button>
-
-                        {!isViewer && (
-                          <>
-                            <button
-                              onClick={() => onEditStudent(student)}
-                              className="p-1.5 text-gray-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all cursor-pointer"
-                              title="Edit Record"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-
-                            <button
-                              onClick={() => onDeleteStudent(student)}
-                              className="p-1.5 text-gray-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
-                              title="Delete Record"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {students.map((student, idx) =>
+                  renderStudentRow(student, idx, true)
+                )}
               </tbody>
             </table>
           </div>

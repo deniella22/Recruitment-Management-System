@@ -7,6 +7,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { dbService, initDatabaseAsync, getDatabaseStatus, isDatabaseHealthy } from './server/db.js';
 import { generateStudentRecordsExcel } from './server/excelExport.js';
 import { applySmartOcrCorrection } from './server/ocrCorrection.js';
+import { sortStudents } from './server/studentSorting.js';
 import { User, StudentRecord, AdmissionStatus, SystemSettings } from './src/types.js';
 
 // Explicitly load .env.local first (local developer overrides), then fallback to .env
@@ -613,23 +614,7 @@ async function startServer() {
     }
 
     if (sortBy && typeof sortBy === 'string') {
-      const order = sortOrder === 'desc' ? -1 : 1;
-      students = [...students].sort((a, b) => {
-        let valA: any = (a as any)[sortBy];
-        let valB: any = (b as any)[sortBy];
-
-        if (sortBy === 'fullName') {
-          valA = `${a.surname || a.lastName} ${a.firstName}`;
-          valB = `${b.surname || b.lastName} ${b.firstName}`;
-        }
-
-        if (typeof valA === 'string') valA = valA.toLowerCase();
-        if (typeof valB === 'string') valB = valB.toLowerCase();
-
-        if (valA < valB) return -1 * order;
-        if (valA > valB) return 1 * order;
-        return 0;
-      });
+      students = sortStudents(students, sortBy, sortOrder === 'desc' ? 'desc' : 'asc');
     }
 
     return res.json(students);
@@ -729,7 +714,7 @@ async function startServer() {
     }
     const testingCenterProvince = (body.testingCenterProvince || '').trim();
     const testingCenterProvinceOther = (body.testingCenterProvinceOther || '').trim();
-    const testingCenterLocation = (body.testingCenterLocation || '').trim();
+    const testingCenterLocation = (body.testingCenterLocation || body.testingCenter || '').trim();
 
     // Duplicate check before saving
     const dupCheck = dbService.checkDuplicate(
@@ -776,6 +761,7 @@ async function startServer() {
           testingCenterProvince,
           testingCenterProvinceOther,
           testingCenterLocation,
+          testingCenter: testingCenterLocation,
           remarks: admissionStatus,
           createdBy: currentUser.fullName,
           updatedBy: currentUser.fullName,
@@ -867,7 +853,8 @@ async function startServer() {
           ...(finalAdmissionStatus && { admissionStatus: finalAdmissionStatus, remarks: finalAdmissionStatus }),
           ...(body.testingCenterProvince !== undefined && { testingCenterProvince: String(body.testingCenterProvince).trim() }),
           ...(body.testingCenterProvinceOther !== undefined && { testingCenterProvinceOther: String(body.testingCenterProvinceOther).trim() }),
-          ...(body.testingCenterLocation !== undefined && { testingCenterLocation: String(body.testingCenterLocation).trim() }),
+          ...(body.testingCenterLocation !== undefined && { testingCenterLocation: String(body.testingCenterLocation).trim(), testingCenter: String(body.testingCenterLocation).trim() }),
+          ...(body.testingCenter !== undefined && { testingCenter: String(body.testingCenter).trim(), testingCenterLocation: String(body.testingCenter).trim() }),
           ...(bDate && { birthdate: bDate, birthday: bDate }),
           ...(body.lastName && { lastName: body.lastName.trim(), surname: body.lastName.trim() }),
           ...(body.surname && { lastName: body.surname.trim(), surname: body.surname.trim() }),

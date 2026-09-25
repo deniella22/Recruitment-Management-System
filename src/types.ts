@@ -131,6 +131,7 @@ export interface StudentRecord {
   testingCenterProvince: string; // Province
   testingCenterProvinceOther?: string; // Specified province when 'Others' is selected
   testingCenterLocation: string; // Testing Center Location / Venue
+  testingCenter?: string; // Testing Center identifier/name
 
   // Legacy field preserved for backward compatibility
   remarks?: string;
