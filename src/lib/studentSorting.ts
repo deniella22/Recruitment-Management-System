@@ -53,8 +53,7 @@ export function getTestingCenterName(s: Partial<StudentRecord> | any): string {
  * Returns priority rank for admission status:
  * 1: Passed
  * 2: Conditional
- * 3: Pending
- * 4: Failed
+ * 3: Failed
  */
 export function getAdmissionStatusRank(s: Partial<StudentRecord> | any): number {
   const status = (s?.admissionStatus || '').trim().toLowerCase();
@@ -78,33 +77,15 @@ export function getAdmissionStatusRank(s: Partial<StudentRecord> | any): number 
     return 2;
   }
 
-  // 4. Failed (evaluate before general pending fallback)
-  if (
-    status === 'failed' ||
-    remarks === 'failed' ||
-    remarks.includes('fail')
-  ) {
-    return 4;
-  }
-
-  // 3. Pending
-  if (
-    status === 'pending' ||
-    remarks === 'b - pending' ||
-    remarks === 'pending' ||
-    (!status && !remarks)
-  ) {
-    return 3;
-  }
-
+  // 3. Failed (default for failed or any unclassified)
   return 3;
 }
 
 /**
  * Resolves normalized admission status string:
- * 'Passed' | 'Conditional' | 'Pending' | 'Failed'
+ * 'Passed' | 'Conditional' | 'Failed'
  */
-export function resolveAdmissionStatus(s: Partial<StudentRecord> | any): 'Passed' | 'Conditional' | 'Pending' | 'Failed' {
+export function resolveAdmissionStatus(s: Partial<StudentRecord> | any): 'Passed' | 'Conditional' | 'Failed' {
   const status = (s?.admissionStatus || '').trim().toLowerCase();
   const remarks = (s?.remarks || '').trim().toLowerCase();
 
@@ -114,10 +95,7 @@ export function resolveAdmissionStatus(s: Partial<StudentRecord> | any): 'Passed
   if (status === 'conditional' || remarks === 'conditional') {
     return 'Conditional';
   }
-  if (status === 'failed' || remarks === 'failed' || remarks.includes('fail')) {
-    return 'Failed';
-  }
-  return 'Pending';
+  return 'Failed';
 }
 
 /**
@@ -144,7 +122,7 @@ export function compareStudentNames(a: Partial<StudentRecord>, b: Partial<Studen
  * When sortBy === 'province' (default):
  *  1. Province (A–Z) with 'OTHERS' at the end
  *  2. Testing Center (A–Z)
- *  3. Admission Status (Passed -> Conditional -> Pending -> Failed)
+ *  3. Admission Status (Passed -> Conditional -> Failed)
  *  4. Student Name (Surname -> First Name -> Middle Name A–Z)
  */
 export function sortStudents(
@@ -177,7 +155,7 @@ export function sortStudents(
         if (centerComp !== 0) return centerComp * order;
       }
 
-      // Inside each Testing Center: Admission Status (Passed -> Conditional -> Pending -> Failed)
+      // Inside each Testing Center: Admission Status (Passed -> Conditional -> Failed)
       const rankA = getAdmissionStatusRank(a);
       const rankB = getAdmissionStatusRank(b);
       if (rankA !== rankB) {

@@ -8,6 +8,7 @@ interface DateOfBirthInputProps {
   className?: string;
   placeholder?: string;
   required?: boolean;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 /**
@@ -62,6 +63,7 @@ export const DateOfBirthInput: React.FC<DateOfBirthInputProps> = ({
   className = '',
   placeholder = 'mm/dd/yyyy',
   required = false,
+  onKeyDown,
 }) => {
   const [textValue, setTextValue] = useState<string>(() => toMmDdYyyy(value));
   const [error, setError] = useState<string>('');
@@ -240,6 +242,14 @@ export const DateOfBirthInput: React.FC<DateOfBirthInputProps> = ({
           value={textValue}
           onChange={handleInputChange}
           onBlur={handleBlur}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleBlur();
+            }
+            if (onKeyDown) {
+              onKeyDown(e);
+            }
+          }}
           className={`w-full px-3 py-2 pr-10 border ${
             error ? 'border-red-500 focus:ring-red-500' : 'border-slate-300 focus:ring-blue-600'
           } rounded-xl text-sm font-semibold text-gray-900 placeholder:text-slate-400 placeholder:font-normal focus:ring-2 focus:outline-none bg-white transition-colors ${className}`}

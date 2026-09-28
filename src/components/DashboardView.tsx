@@ -161,7 +161,7 @@ export const DashboardView: React.FC<Props> = ({
       </div>
 
       {/* Database Statistics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         {/* Total Students */}
         <div
           onClick={() => onNavigateToStudents('ALL')}
@@ -234,25 +234,6 @@ export const DashboardView: React.FC<Props> = ({
             <p className="text-3xl font-black text-rose-700">{totalFailed}</p>
             <p className="text-[11px] text-rose-600 mt-1 font-semibold">
               Status: Failed
-            </p>
-          </div>
-        </div>
-
-        {/* Total Pending */}
-        <div
-          onClick={() => onNavigateToStudents('Pending')}
-          className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:shadow-md transition-all cursor-pointer group"
-        >
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">PENDING</p>
-            <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center group-hover:bg-slate-700 group-hover:text-white transition-all">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <p className="text-3xl font-black text-slate-800">{totalPending}</p>
-            <p className="text-[11px] text-slate-500 mt-1 font-semibold">
-              Status: Pending
             </p>
           </div>
         </div>
@@ -362,9 +343,9 @@ export const DashboardView: React.FC<Props> = ({
                           );
                         }
                         return (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-800 border border-slate-300 rounded-full font-bold text-[11px]">
-                            <Clock className="w-3.5 h-3.5 text-slate-500" />
-                            Pending
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 text-rose-800 border border-rose-200 rounded-full font-bold text-[11px]">
+                            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                            Failed
                           </span>
                         );
                       })()}

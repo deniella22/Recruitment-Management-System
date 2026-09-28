@@ -414,7 +414,7 @@ export function sanitizeSchoolField(raw: string): { corrected: string; wasChange
 
 export function normalizeAdmissionStatus(raw: string): { corrected: AdmissionStatus; wasChanged: boolean; reason: string } {
   if (!raw || !raw.trim()) {
-    return { corrected: 'Pending', wasChanged: false, reason: 'Defaulted to Pending' };
+    return { corrected: 'Passed', wasChanged: false, reason: 'Defaulted to Passed' };
   }
   const lower = raw.trim().toLowerCase();
 
@@ -458,24 +458,10 @@ export function normalizeAdmissionStatus(raw: string): { corrected: AdmissionSta
     };
   }
 
-  if (
-    lower.includes('pending') ||
-    lower.includes('b - pending') ||
-    lower.includes('b-pending') ||
-    lower.includes('under evaluation') ||
-    lower === 'b'
-  ) {
-    return {
-      corrected: 'Pending',
-      wasChanged: raw !== 'Pending',
-      reason: 'Mapped admission evaluation to standard "Pending" status',
-    };
-  }
-
   return {
-    corrected: 'Pending',
-    wasChanged: true,
-    reason: 'Unrecognized admission status, defaulted to "Pending"',
+    corrected: 'Passed',
+    wasChanged: raw !== 'Passed',
+    reason: 'Mapped admission evaluation to standard "Passed" status',
   };
 }
 

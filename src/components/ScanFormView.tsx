@@ -150,12 +150,12 @@ export const ScanFormView: React.FC<Props> = ({
   // --- SECTION I: Health Assessment & Exam ---
   const [healthStatus, setHealthStatus] = useState<string>('Normal / Fit for schooling');
   const [examScore, setExamScore] = useState<number | string>(0);
-  const [remarks, setRemarks] = useState<AdmissionStatus>('B - PENDING');
+  const [remarks, setRemarks] = useState<AdmissionStatus>('Passed');
   const [additionalNotes, setAdditionalNotes] = useState<string>('');
   const [studentSignature, setStudentSignature] = useState<string>('Signed');
 
   // --- SECTION J: Admission Status ---
-  const [admissionStatus, setAdmissionStatus] = useState<string>('Pending');
+  const [admissionStatus, setAdmissionStatus] = useState<string>('Passed');
 
   // --- SECTION K: Testing Center ---
   const [testingCenterProvince, setTestingCenterProvince] = useState<string>('');
@@ -198,12 +198,36 @@ export const ScanFormView: React.FC<Props> = ({
   const currentReviewTabIndex = reviewTabOrder.indexOf(activeReviewTab);
   const isLastReviewTab = currentReviewTabIndex === reviewTabOrder.length - 1;
 
+  const focusFirstInputInReviewTab = (selectText = true) => {
+    if (!reviewFormScrollRef.current) return;
+    const focusableSelector = [
+      'input:not([type="hidden"]):not([type="file"]):not([disabled]):not([tabindex="-1"])',
+      'select:not([disabled]):not([tabindex="-1"])',
+      'textarea:not([disabled]):not([tabindex="-1"])',
+    ].join(', ');
+
+    const focusable = (Array.from(
+      reviewFormScrollRef.current.querySelectorAll(focusableSelector)
+    ) as HTMLElement[]).filter((el) => el.offsetParent !== null && !el.hasAttribute('aria-hidden'));
+
+    if (focusable.length > 0) {
+      const firstEl = focusable[0];
+      firstEl.focus();
+      if (selectText && firstEl instanceof HTMLInputElement && (firstEl.type === 'text' || firstEl.type === 'number')) {
+        firstEl.select?.();
+      }
+    }
+  };
+
   const handleNextReviewTab = () => {
     if (currentReviewTabIndex < reviewTabOrder.length - 1) {
       setActiveReviewTab(reviewTabOrder[currentReviewTabIndex + 1]);
       if (reviewFormScrollRef.current) {
         reviewFormScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
       }
+      setTimeout(() => {
+        focusFirstInputInReviewTab(true);
+      }, 70);
     }
   };
 
@@ -212,6 +236,100 @@ export const ScanFormView: React.FC<Props> = ({
       setActiveReviewTab(reviewTabOrder[currentReviewTabIndex - 1]);
       if (reviewFormScrollRef.current) {
         reviewFormScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      setTimeout(() => {
+        focusFirstInputInReviewTab(true);
+      }, 70);
+    }
+  };
+
+  useEffect(() => {
+    if (stage === 'review') {
+      const timer = setTimeout(() => {
+        focusFirstInputInReviewTab(true);
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [stage, activeReviewTab]);
+
+  const handleReviewFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === 'PageDown' && (e.target as HTMLElement)?.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      handleNextReviewTab();
+      return;
+    }
+    if (e.key === 'PageUp' && (e.target as HTMLElement)?.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      handlePrevReviewTab();
+      return;
+    }
+
+    if (e.key !== 'Enter') return;
+
+    const target = e.target as HTMLElement;
+    if (!target) return;
+
+    if (target.tagName === 'TEXTAREA') {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (currentReviewTabIndex < reviewTabOrder.length - 1) {
+          handleNextReviewTab();
+        }
+      }
+      return;
+    }
+
+    if (
+      target.id === 'btn-save-reviewed-record' ||
+      (target.tagName === 'BUTTON' && (target as HTMLButtonElement).type === 'submit')
+    ) {
+      return;
+    }
+
+    if (target.tagName === 'BUTTON') {
+      return;
+    }
+
+    e.preventDefault();
+
+    if (target.id === 'select-review-testingCenterProvince') {
+      const val = (target as HTMLSelectElement).value;
+      if (val === 'Others') {
+        setTimeout(() => {
+          document.getElementById('input-review-testingCenterProvinceOther')?.focus();
+        }, 50);
+      } else {
+        setTimeout(() => {
+          document.getElementById('input-review-testingCenterLocation')?.focus();
+        }, 50);
+      }
+      return;
+    }
+
+    if (!reviewFormScrollRef.current) return;
+    const focusableSelector = [
+      'input:not([type="hidden"]):not([type="file"]):not([disabled]):not([tabindex="-1"])',
+      'select:not([disabled]):not([tabindex="-1"])',
+      'textarea:not([disabled]):not([tabindex="-1"])',
+    ].join(', ');
+
+    const focusable = (Array.from(
+      reviewFormScrollRef.current.querySelectorAll(focusableSelector)
+    ) as HTMLElement[]).filter((el) => !el.hasAttribute('aria-hidden') && (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0));
+
+    const currentIndex = focusable.indexOf(target);
+
+    if (currentIndex >= 0 && currentIndex < focusable.length - 1) {
+      const nextEl = focusable[currentIndex + 1];
+      nextEl.focus();
+      if (nextEl instanceof HTMLInputElement && (nextEl.type === 'text' || nextEl.type === 'number')) {
+        nextEl.select?.();
+      }
+    } else if (currentIndex === focusable.length - 1) {
+      if (currentReviewTabIndex < reviewTabOrder.length - 1) {
+        handleNextReviewTab();
+      } else {
+        document.getElementById('btn-save-reviewed-record')?.focus();
       }
     }
   };
@@ -606,8 +724,8 @@ export const ScanFormView: React.FC<Props> = ({
       setAdditionalNotes(data.additionalNotes || '');
       setStudentSignature(data.studentSignature || 'Signed');
 
-      // Section J: Admission Status (Normalize to Pending, Passed, Conditional, or Failed)
-      let detectedStatus = 'Pending';
+      // Section J: Admission Status (Normalize to Passed, Conditional, or Failed)
+      let detectedStatus = 'Passed';
       const rawCandidate = String(data.admissionStatus || data.remarks || '').trim().toLowerCase();
       if (rawCandidate === 'passed' || rawCandidate === 'a - pass' || rawCandidate === 'pass' || rawCandidate === 'qualified') {
         detectedStatus = 'Passed';
@@ -615,8 +733,8 @@ export const ScanFormView: React.FC<Props> = ({
         detectedStatus = 'Conditional';
       } else if (rawCandidate === 'failed' || rawCandidate.includes('fail') || rawCandidate.includes('not qualify')) {
         detectedStatus = 'Failed';
-      } else if (rawCandidate === 'pending' || rawCandidate === 'b - pending' || rawCandidate.includes('evaluat')) {
-        detectedStatus = 'Pending';
+      } else {
+        detectedStatus = 'Passed';
       }
       setAdmissionStatus(detectedStatus);
 
@@ -752,7 +870,7 @@ export const ScanFormView: React.FC<Props> = ({
     }
 
     if (!admissionStatus) {
-      setSaveError('Please select an Admission Status (Pending, Passed, Conditional, or Failed) under Section J.');
+      setSaveError('Please select an Admission Status (Passed, Conditional, or Failed) under Section J.');
       setActiveReviewTab('J_K');
       return;
     }
@@ -852,7 +970,7 @@ export const ScanFormView: React.FC<Props> = ({
         // Section I
         healthStatus: healthStatus.trim() || 'Normal / Fit for schooling',
         examScore: parsedScore,
-        remarks: (admissionStatus === 'Passed' ? 'A - PASS' : admissionStatus === 'Conditional' ? 'Conditional' : admissionStatus === 'Failed' ? 'Failed' : 'B - PENDING') as any,
+        remarks: (admissionStatus === 'Passed' ? 'A - PASS' : admissionStatus === 'Conditional' ? 'Conditional' : 'Failed') as any,
         additionalNotes: additionalNotes.trim(),
         studentSignature: studentSignature || 'Signed',
 
@@ -1382,7 +1500,12 @@ export const ScanFormView: React.FC<Props> = ({
             </div>
 
             {/* Review Form Content */}
-            <form ref={reviewFormScrollRef} onSubmit={handleSaveReviewedRecord} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+            <form
+              ref={reviewFormScrollRef}
+              onSubmit={handleSaveReviewedRecord}
+              onKeyDown={handleReviewFormKeyDown}
+              className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5"
+            >
               {/* SECTION A */}
               {activeReviewTab === 'A' && (
                 <div className="space-y-4 animate-fade-in">
@@ -2176,7 +2299,6 @@ export const ScanFormView: React.FC<Props> = ({
                           onChange={(e) => setAdmissionStatus(e.target.value)}
                           className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
                         >
-                          <option value="Pending">Pending</option>
                           <option value="Passed">Passed</option>
                           <option value="Conditional">Conditional</option>
                           <option value="Failed">Failed</option>
@@ -2186,12 +2308,6 @@ export const ScanFormView: React.FC<Props> = ({
                       <div className="flex flex-col justify-center">
                         <span className="text-xs font-bold text-gray-500 uppercase mb-1">Current Status</span>
                         <div>
-                          {admissionStatus === 'Pending' && (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 border border-blue-300 text-blue-900 rounded-lg text-xs font-black">
-                              <Clock className="w-3.5 h-3.5 text-blue-600" />
-                              <span>PENDING</span>
-                            </span>
-                          )}
                           {admissionStatus === 'Passed' && (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-lg text-xs font-black">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -2241,6 +2357,10 @@ export const ScanFormView: React.FC<Props> = ({
                             setTestingCenterProvince(val);
                             if (val !== 'Others') {
                               setTestingCenterProvinceOther('');
+                            } else {
+                              setTimeout(() => {
+                                document.getElementById('input-review-testingCenterProvinceOther')?.focus();
+                              }, 50);
                             }
                           }}
                           className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
@@ -2261,6 +2381,7 @@ export const ScanFormView: React.FC<Props> = ({
                             Specify Province <span className="text-red-500">*</span>
                           </label>
                           <input
+                            id="input-review-testingCenterProvinceOther"
                             type="text"
                             placeholder="Enter province name..."
                             value={testingCenterProvinceOther}
@@ -2282,6 +2403,7 @@ export const ScanFormView: React.FC<Props> = ({
                           Testing Center Location
                         </label>
                         <input
+                          id="input-review-testingCenterLocation"
                           type="text"
                           placeholder="e.g. Silang Central Elementary School / Parish Hall"
                           value={testingCenterLocation}

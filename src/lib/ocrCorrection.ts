@@ -463,7 +463,7 @@ export function sanitizeSchoolField(raw: string): { corrected: string; wasChange
 
 /**
  * Normalizes Admission Status Remarks:
- * Strictly maps to 'A - PASS' or 'B - PENDING'.
+ * Maps to 'Passed', 'Conditional', or 'Failed'.
  */
 export function normalizeAdmissionStatus(raw: string): { corrected: AdmissionStatus; wasChanged: boolean; reason: string } {
   const lower = (raw || '').trim().toLowerCase();

@@ -178,15 +178,10 @@ export const StudentListView: React.FC<Props> = ({
             <Clock className="w-3.5 h-3.5 text-amber-600" />
             Conditional
           </span>
-        ) : student.admissionStatus === 'Failed' ? (
+        ) : (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-800 border border-red-200 rounded-full font-bold text-[11px]">
             <AlertCircle className="w-3.5 h-3.5 text-red-600" />
             Failed
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 text-slate-800 border border-slate-300 rounded-full font-bold text-[11px]">
-            <Clock className="w-3.5 h-3.5 text-slate-500" />
-            Pending
           </span>
         )}
       </td>
@@ -289,17 +284,6 @@ export const StudentListView: React.FC<Props> = ({
             >
               <AlertCircle className="w-3.5 h-3.5" />
               <span>Failed</span>
-            </button>
-            <button
-              onClick={() => setStatusFilter('Pending')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                statusFilter === 'Pending' || statusFilter === 'B - PENDING'
-                  ? 'bg-blue-700 text-white shadow-xs'
-                  : 'text-blue-700 hover:bg-blue-50'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>Pending</span>
             </button>
           </div>
 
@@ -516,15 +500,8 @@ export const StudentListView: React.FC<Props> = ({
                     const condCount = centerGroup.students.filter(
                       (s) => s.admissionStatus === 'Conditional' || s.remarks === 'Conditional'
                     ).length;
-                    const pendCount = centerGroup.students.filter(
-                      (s) =>
-                        (!s.admissionStatus && !s.remarks) ||
-                        s.admissionStatus === 'Pending' ||
-                        s.remarks === 'B - PENDING' ||
-                        s.remarks === 'Pending'
-                    ).length;
                     const failCount = centerGroup.students.filter(
-                      (s) => s.admissionStatus === 'Failed' || s.remarks === 'Failed'
+                      (s) => s.admissionStatus === 'Failed' || s.remarks === 'Failed' || (!s.admissionStatus && !s.remarks) || s.admissionStatus === 'Pending' || s.remarks === 'Pending'
                     ).length;
 
                     return (
@@ -554,11 +531,6 @@ export const StudentListView: React.FC<Props> = ({
                             {condCount > 0 && (
                               <span className="px-2 py-0.5 bg-amber-100/90 border border-amber-300 text-amber-800 font-bold text-[11px] rounded-md">
                                 Conditional: {condCount}
-                              </span>
-                            )}
-                            {pendCount > 0 && (
-                              <span className="px-2 py-0.5 bg-blue-100/90 border border-blue-300 text-blue-800 font-bold text-[11px] rounded-md">
-                                Pending: {pendCount}
                               </span>
                             )}
                             {failCount > 0 && (

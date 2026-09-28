@@ -29,19 +29,13 @@ export const ReportsView: React.FC<Props> = ({
   onViewStudentProfile,
   systemSettings,
 }) => {
-  const [selectedReportTab, setSelectedReportTab] = useState<'all' | 'pass' | 'conditional' | 'failed' | 'pending' | 'schools'>('all');
+  const [selectedReportTab, setSelectedReportTab] = useState<'all' | 'pass' | 'conditional' | 'failed' | 'schools'>('all');
   const [searchFilter, setSearchFilter] = useState('');
 
   const totalStudents = students.length;
   const passStudents = students.filter((s) => s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed');
   const conditionalStudents = students.filter((s) => s.admissionStatus === 'Conditional' || s.remarks === 'Conditional');
-  const failedStudents = students.filter((s) => s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail')));
-  const pendingStudents = students.filter(
-    (s) =>
-      !passStudents.includes(s) &&
-      !conditionalStudents.includes(s) &&
-      !failedStudents.includes(s)
-  );
+  const failedStudents = students.filter((s) => !passStudents.includes(s) && !conditionalStudents.includes(s));
 
   const schoolMap: Record<string, { total: number; pass: number; conditional: number; failed: number }> = {};
   students.forEach((s) => {
@@ -54,7 +48,7 @@ export const ReportsView: React.FC<Props> = ({
       schoolMap[sch].pass += 1;
     } else if (s.admissionStatus === 'Conditional' || s.remarks === 'Conditional') {
       schoolMap[sch].conditional += 1;
-    } else if (s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'))) {
+    } else {
       schoolMap[sch].failed += 1;
     }
   });
@@ -75,9 +69,6 @@ export const ReportsView: React.FC<Props> = ({
   } else if (selectedReportTab === 'failed') {
     displayedStudents = failedStudents;
     currentFilterLabel = 'Failed Candidates';
-  } else if (selectedReportTab === 'pending') {
-    displayedStudents = pendingStudents;
-    currentFilterLabel = 'Pending Evaluation Candidates';
   }
 
   if (searchFilter) {
@@ -148,7 +139,7 @@ export const ReportsView: React.FC<Props> = ({
       </div>
 
       {/* Summary Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div
           onClick={() => setSelectedReportTab('all')}
           className={`p-4 rounded-2xl border transition-all cursor-pointer ${
@@ -214,22 +205,6 @@ export const ReportsView: React.FC<Props> = ({
         </div>
 
         <div
-          onClick={() => setSelectedReportTab('pending')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer ${
-            selectedReportTab === 'pending'
-              ? 'bg-slate-700 text-white border-slate-700 shadow-md'
-              : 'bg-white border-slate-200 hover:border-slate-300'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700">Pending</span>
-            <Clock className="w-4 h-4 text-slate-500" />
-          </div>
-          <p className="text-2xl font-black text-slate-800 mt-2">{pendingStudents.length}</p>
-          <p className="text-[10px] text-slate-500 font-semibold mt-1">Awaiting Review</p>
-        </div>
-
-        <div
           onClick={() => setSelectedReportTab('schools')}
           className={`p-4 rounded-2xl border transition-all cursor-pointer ${
             selectedReportTab === 'schools'
@@ -289,16 +264,6 @@ export const ReportsView: React.FC<Props> = ({
               }`}
             >
               Failed ({failedStudents.length})
-            </button>
-            <button
-              onClick={() => setSelectedReportTab('pending')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
-                selectedReportTab === 'pending'
-                  ? 'bg-slate-700 text-white'
-                  : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
-              }`}
-            >
-              Pending ({pendingStudents.length})
             </button>
             <button
               onClick={() => setSelectedReportTab('schools')}
@@ -433,13 +398,9 @@ export const ReportsView: React.FC<Props> = ({
                             <span className="px-2.5 py-1 bg-amber-50 text-amber-800 rounded-full font-bold text-[11px] border border-amber-200">
                               Conditional
                             </span>
-                          ) : s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail')) ? (
+                          ) : (
                             <span className="px-2.5 py-1 bg-red-50 text-red-800 rounded-full font-bold text-[11px] border border-red-200">
                               Failed
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full font-bold text-[11px] border border-slate-300">
-                              Pending
                             </span>
                           )}
                         </td>

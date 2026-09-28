@@ -13,7 +13,7 @@ export interface User {
   aliases?: string[];
 }
 
-export type AdmissionStatus = 'Pending' | 'Passed' | 'Conditional' | 'Failed';
+export type AdmissionStatus = 'Passed' | 'Conditional' | 'Failed';
 
 export * from './constants/provinces';
 
@@ -55,6 +55,7 @@ export interface StudentRecord {
   surname?: string;             // SN (Alias for backward compatibility)
   firstName: string;            // First Name / Pangalan
   middleName: string;           // Middle Name / Apelyido ng Ina
+  suffix?: string;              // Name Extension / Suffix (Jr., Sr., III, etc.)
   birthdate: string;            // Birthdate / Araw ng Kapanganakan (YYYY-MM-DD)
   birthday?: string;            // Alias for birthdate
   age: number | string;         // Age / Edad Kasalukuyan

@@ -538,11 +538,9 @@ async function startServer() {
       (s) => s.admissionStatus === 'Conditional' || s.remarks === 'Conditional'
     ).length;
     const totalFailed = students.filter(
-      (s) => s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'))
+      (s) => s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail')) || (!s.admissionStatus && !s.remarks) || s.admissionStatus === 'Pending' || s.remarks === 'Pending'
     ).length;
-    const totalPending = students.filter(
-      (s) => s.admissionStatus === 'Pending' || s.remarks === 'B - PENDING' || s.remarks === 'Pending' || (!s.admissionStatus && !s.remarks)
-    ).length;
+    const totalPending = 0;
     const totalPass = totalPassed;
 
     const schoolsSet = new Set(students.map((s) => s.elementarySchool?.trim()).filter(Boolean));
@@ -607,8 +605,7 @@ async function startServer() {
       students = students.filter((s) => {
         if (status === 'Passed') return s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed';
         if (status === 'Conditional') return s.admissionStatus === 'Conditional' || s.remarks === 'Conditional';
-        if (status === 'Failed') return s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'));
-        if (status === 'Pending') return s.admissionStatus === 'Pending' || s.remarks === 'B - PENDING' || s.remarks === 'Pending' || (!s.admissionStatus && !s.remarks);
+        if (status === 'Failed') return s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail')) || (!s.admissionStatus && !s.remarks) || s.admissionStatus === 'Pending' || s.remarks === 'Pending';
         return s.admissionStatus === status || s.remarks === status;
       });
     }
@@ -696,20 +693,16 @@ async function startServer() {
       return res.status(400).json({ error: `Exam score cannot exceed the maximum configured score of ${settings.maxExamScore}.` });
     }
 
-    let admissionStatus: AdmissionStatus = 'Pending';
+    let admissionStatus: AdmissionStatus = 'Passed';
     const rawStatus = body.admissionStatus || body.remarks;
     if (rawStatus) {
       const sLower = String(rawStatus).trim().toLowerCase();
-      if (sLower === 'pending' || sLower === 'b - pending') {
-        admissionStatus = 'Pending';
-      } else if (sLower === 'conditional') {
+      if (sLower === 'conditional') {
         admissionStatus = 'Conditional';
       } else if (sLower.includes('fail')) {
         admissionStatus = 'Failed';
-      } else if (sLower.includes('pass') || sLower === 'a - pass') {
-        admissionStatus = 'Passed';
       } else {
-        admissionStatus = 'Pending';
+        admissionStatus = 'Passed';
       }
     }
     const testingCenterProvince = (body.testingCenterProvince || '').trim();
@@ -836,9 +829,9 @@ async function startServer() {
       } else if (raw.includes('fail')) {
         finalAdmissionStatus = 'Failed';
       } else if (raw === 'pending' || raw === 'b - pending') {
-        finalAdmissionStatus = 'Pending';
+        finalAdmissionStatus = 'Passed';
       } else {
-        return res.status(400).json({ error: 'Admission status must be "Pending", "Passed", "Conditional", or "Failed".' });
+        return res.status(400).json({ error: 'Admission status must be "Passed", "Conditional", or "Failed".' });
       }
     }
 

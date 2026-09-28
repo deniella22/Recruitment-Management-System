@@ -45,6 +45,8 @@ interface Props {
   onSuccess: (student: StudentRecord) => void;
 }
 
+export type SectionTabId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'H_I' | 'J_K';
+
 export const StudentFormModal: React.FC<Props> = ({
   studentToEdit,
   initialMode = 'selection',
@@ -68,6 +70,7 @@ export const StudentFormModal: React.FC<Props> = ({
   const [lastName, setLastName] = useState<string>(studentToEdit?.lastName || studentToEdit?.surname || '');
   const [firstName, setFirstName] = useState<string>(studentToEdit?.firstName || '');
   const [middleName, setMiddleName] = useState<string>(studentToEdit?.middleName || '');
+  const [suffix, setSuffix] = useState<string>(studentToEdit?.suffix || '');
   const [birthdate, setBirthdate] = useState<string>(studentToEdit?.birthdate || studentToEdit?.birthday || '');
   const [age, setAge] = useState<number | string>(() => {
     const b = studentToEdit?.birthdate || studentToEdit?.birthday || '';
@@ -79,11 +82,18 @@ export const StudentFormModal: React.FC<Props> = ({
   });
   const [gender, setGender] = useState<'Female' | 'Male' | string>(studentToEdit?.gender || 'Female');
 
+  // Province resolution for Section B & Section K
+  const initialProvinceResolved = resolveProvince(
+    studentToEdit?.testingCenterProvince || studentToEdit?.province || '',
+    studentToEdit?.testingCenterProvinceOther
+  );
+
   // --- SECTION B: Residence / Address Information ---
   const [sitioStreet, setSitioStreet] = useState<string>(studentToEdit?.sitioStreet || '');
   const [barangay, setBarangay] = useState<string>(studentToEdit?.barangay || '');
   const [municipality, setMunicipality] = useState<string>(studentToEdit?.municipality || '');
-  const [province, setProvince] = useState<string>(studentToEdit?.province || '');
+  const [province, setProvince] = useState<string>(initialProvinceResolved.dropdownValue);
+  const [provinceOther, setProvinceOther] = useState<string>(initialProvinceResolved.specifiedOther);
   const [address, setAddress] = useState<string>(studentToEdit?.address || '');
 
   // --- SECTION C: Educational Background ---
@@ -189,21 +199,15 @@ export const StudentFormModal: React.FC<Props> = ({
 
   // --- SECTION J: Admission Status ---
   const getInitialAdmissionStatus = () => {
-    if (!studentToEdit) return 'Pending';
-    if (studentToEdit.admissionStatus) return studentToEdit.admissionStatus;
-    if (studentToEdit.remarks === 'A - PASS' || studentToEdit.remarks === 'Passed') return 'Passed';
-    if (studentToEdit.remarks === 'Conditional') return 'Conditional';
-    if (studentToEdit.remarks === 'Failed') return 'Failed';
-    if (studentToEdit.remarks === 'B - PENDING' || studentToEdit.remarks === 'Pending') return 'Pending';
-    return 'Pending';
+    if (!studentToEdit) return 'Passed';
+    if (studentToEdit.admissionStatus === 'Passed' || studentToEdit.remarks === 'A - PASS' || studentToEdit.remarks === 'Passed') return 'Passed';
+    if (studentToEdit.admissionStatus === 'Conditional' || studentToEdit.remarks === 'Conditional') return 'Conditional';
+    if (studentToEdit.admissionStatus === 'Failed' || studentToEdit.remarks === 'Failed') return 'Failed';
+    return 'Passed';
   };
   const [admissionStatus, setAdmissionStatus] = useState<string>(getInitialAdmissionStatus());
 
   // --- SECTION K: Testing Center ---
-  const initialProvinceResolved = resolveProvince(
-    studentToEdit?.testingCenterProvince || studentToEdit?.province || '',
-    studentToEdit?.testingCenterProvinceOther
-  );
   const [testingCenterProvince, setTestingCenterProvince] = useState<string>(
     initialProvinceResolved.dropdownValue
   );
@@ -243,23 +247,465 @@ export const StudentFormModal: React.FC<Props> = ({
   const isFirstTab = currentTabIndex === 0;
   const isLastTab = currentTabIndex === tabOrder.length - 1;
 
+  // Helper to find and focus the first editable input in the currently active tab
+  const focusFirstInputInActiveTab = (selectText = true) => {
+    if (!formScrollRef.current) return;
+    // If an input within form is already focused and active, do not disrupt it
+    if (
+      document.activeElement &&
+      formScrollRef.current.contains(document.activeElement) &&
+      document.activeElement !== formScrollRef.current
+    ) {
+      return;
+    }
+
+    const focusableSelector = [
+      'input:not([type="hidden"]):not([type="file"]):not([disabled]):not([tabindex="-1"])',
+      'select:not([disabled]):not([tabindex="-1"])',
+      'textarea:not([disabled]):not([tabindex="-1"])',
+    ].join(', ');
+
+    const focusable = (Array.from(
+      formScrollRef.current.querySelectorAll(focusableSelector)
+    ) as HTMLElement[]).filter((el) => el.offsetParent !== null && !el.hasAttribute('aria-hidden'));
+
+    if (focusable.length > 0) {
+      const firstEl = focusable[0];
+      firstEl.focus();
+      if (selectText && firstEl instanceof HTMLInputElement && (firstEl.type === 'text' || firstEl.type === 'number')) {
+        firstEl.select?.();
+      }
+    }
+  };
+
   const handleNextPage = () => {
     if (currentTabIndex < tabOrder.length - 1) {
-      setActiveTab(tabOrder[currentTabIndex + 1]);
+      const nextTab = tabOrder[currentTabIndex + 1];
+      setActiveTab(nextTab);
       if (formScrollRef.current) {
         formScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
       }
+      setTimeout(() => {
+        (document.activeElement as HTMLElement)?.blur?.();
+        focusFirstInputInActiveTab(true);
+      }, 70);
     }
   };
 
   const handlePreviewPage = () => {
     if (currentTabIndex > 0) {
-      setActiveTab(tabOrder[currentTabIndex - 1]);
+      const prevTab = tabOrder[currentTabIndex - 1];
+      setActiveTab(prevTab);
       if (formScrollRef.current) {
         formScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
       }
+      setTimeout(() => {
+        (document.activeElement as HTMLElement)?.blur?.();
+        focusFirstInputInActiveTab(true);
+      }, 70);
     } else if (!isEditing && initialMode === 'selection') {
       setMode('selection');
+    }
+  };
+
+  // Auto-focus first input field when form view is active or when active section tab changes
+  useEffect(() => {
+    if (mode === 'form') {
+      const timer = setTimeout(() => {
+        focusFirstInputInActiveTab(true);
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [mode, activeTab]);
+
+  // Explicit Field Transition Logic for Continuous Fast Keyboard Data Entry:
+  // Understands: Page -> Field -> Next Field -> Next Page -> First Field.
+  // Never jumps across intermediate pages or steps.
+  // Last field of the whole form (Testing Center Location) -> Enter -> Save Student.
+  const getNextFieldConfig = (
+    currentId: string,
+    targetEl?: HTMLElement | null
+  ): { tab: SectionTabId; fieldId: string; isFinalSave?: boolean } | null => {
+    switch (currentId) {
+      // =======================================================================
+      // PAGE 1: SECTION A - Basic Personal Information
+      // =======================================================================
+      case 'input-lastName':
+        return { tab: 'A', fieldId: 'input-firstName' };
+      case 'input-firstName':
+        // Crucial: First Name explicitly proceeds to Middle Name (never jumps to Residence)
+        return { tab: 'A', fieldId: 'input-middleName' };
+      case 'input-middleName':
+        return { tab: 'A', fieldId: 'input-suffix' };
+      case 'input-suffix':
+        return { tab: 'A', fieldId: 'input-lrn' };
+      case 'input-lrn':
+        return { tab: 'A', fieldId: 'input-birthdate' };
+      case 'input-birthdate':
+        return { tab: 'A', fieldId: 'input-age' };
+      case 'input-age':
+        return { tab: 'A', fieldId: 'select-gender' };
+      case 'select-gender':
+        // Last field on Page 1 -> Next Page: Page 2 (Section B), first field
+        return { tab: 'B', fieldId: 'select-province' };
+
+      // =======================================================================
+      // PAGE 2: SECTION B - Residence / Address Information
+      // =======================================================================
+      case 'select-province':
+      case 'input-province': {
+        const isOthers =
+          (targetEl instanceof HTMLSelectElement && targetEl.value === 'Others') ||
+          province === 'Others';
+        return isOthers
+          ? { tab: 'B', fieldId: 'input-provinceOther' }
+          : { tab: 'B', fieldId: 'input-sitioStreet' };
+      }
+      case 'input-provinceOther':
+        return { tab: 'B', fieldId: 'input-sitioStreet' };
+      case 'input-sitioStreet':
+        return { tab: 'B', fieldId: 'input-barangay' };
+      case 'input-barangay':
+        return { tab: 'B', fieldId: 'input-municipality' };
+      case 'input-municipality':
+        return { tab: 'B', fieldId: 'input-address' };
+      case 'input-address':
+        // Last field on Page 2 -> Next Page: Page 3 (Section C), first field
+        // NEVER jump to Testing Center Location! Continuous entry through every intermediate page!
+        return { tab: 'C', fieldId: 'input-elementarySchool' };
+
+      // =======================================================================
+      // PAGE 3: SECTION C - Educational Background
+      // =======================================================================
+      case 'input-elementarySchool':
+        return { tab: 'C', fieldId: 'input-schoolAddress' };
+      case 'input-schoolAddress':
+        return { tab: 'C', fieldId: 'input-schoolLrn' };
+      case 'input-schoolLrn':
+        return { tab: 'C', fieldId: 'input-currentGrade' };
+      case 'input-currentGrade':
+        return { tab: 'C', fieldId: 'input-oldGraduateRemarks' };
+      case 'input-oldGraduateRemarks':
+        // Last field on Page 3 -> Next Page: Page 4 (Section D), first field
+        return { tab: 'D', fieldId: 'input-fatherName' };
+
+      // =======================================================================
+      // PAGE 4: SECTION D - Family
+      // =======================================================================
+      case 'input-fatherName':
+        return { tab: 'D', fieldId: 'input-fatherOccupation' };
+      case 'input-fatherOccupation':
+        return { tab: 'D', fieldId: 'input-fatherAge' };
+      case 'input-fatherAge':
+        return { tab: 'D', fieldId: 'input-motherName' };
+      case 'input-motherName':
+        return { tab: 'D', fieldId: 'input-motherOccupation' };
+      case 'input-motherOccupation':
+        return { tab: 'D', fieldId: 'input-motherAge' };
+      case 'input-motherAge':
+        return { tab: 'D', fieldId: 'input-guardianName' };
+      case 'input-guardianName':
+        return { tab: 'D', fieldId: 'input-guardianRelation' };
+      case 'input-guardianRelation':
+        return { tab: 'D', fieldId: 'input-guardianOccupation' };
+      case 'input-guardianOccupation':
+        return { tab: 'D', fieldId: 'input-guardianAge' };
+      case 'input-guardianAge':
+        return { tab: 'D', fieldId: 'input-birthOrder' };
+      case 'input-birthOrder':
+        return { tab: 'D', fieldId: 'input-numberOfChildren' };
+      case 'input-numberOfChildren': {
+        // SIBLINGS INFORMATION RULE:
+        // When the user presses Enter on Total Number of Children in the Family:
+        // DO NOT go to the next page immediately.
+        // Instead, move the focus to the Siblings' Information section.
+        // If a sibling row already exists, focus the first available sibling input:
+        const hasSiblingRow =
+          (siblings && siblings.length > 0) ||
+          Boolean(document.getElementById('input-sibling-0-name'));
+        if (hasSiblingRow) {
+          return { tab: 'D', fieldId: 'input-sibling-0-name' };
+        }
+        // WHEN THERE ARE ZERO SIBLINGS:
+        // If the student is an only child and Total Number of Children = 1, there may be no sibling row to encode.
+        // In that case, Enter may proceed to the next page.
+        const totalKids = typeof numberOfChildren === 'number'
+          ? numberOfChildren
+          : parseInt(String(numberOfChildren), 10);
+        if (!isNaN(totalKids) && totalKids > 1) {
+          // If total children > 1 and zero sibling rows, focus the Add Sibling Row button
+          return { tab: 'D', fieldId: 'btn-add-sibling' };
+        }
+        // Otherwise only child, proceed to Page 5 (Section E)
+        return { tab: 'E', fieldId: 'input-cellphoneNumber' };
+      }
+
+      // =======================================================================
+      // PAGE 5: SECTION E - Contact Information
+      // =======================================================================
+      case 'input-cellphoneNumber':
+        return { tab: 'E', fieldId: 'input-cellphoneOwner' };
+      case 'input-cellphoneOwner':
+        return { tab: 'E', fieldId: 'input-messengerAccount' };
+      case 'input-messengerAccount':
+        return { tab: 'E', fieldId: 'input-messengerOwner' };
+      case 'input-messengerOwner':
+        // Last field on Page 5 -> Next Page: Page 6 (Section F), first field
+        return { tab: 'F', fieldId: 'doc-birth-cert' };
+
+      // =======================================================================
+      // PAGE 6: SECTION F - Religious & Civil Information
+      // =======================================================================
+      case 'doc-birth-cert':
+        return hasBirthCert
+          ? { tab: 'F', fieldId: 'select-birth-cert-type' }
+          : { tab: 'F', fieldId: 'doc-good-moral' };
+      case 'select-birth-cert-type':
+      case 'select-birthCertType':
+        return { tab: 'F', fieldId: 'doc-good-moral' };
+      case 'doc-good-moral':
+        return { tab: 'F', fieldId: 'doc-cert-enrollment' };
+      case 'doc-cert-enrollment':
+        return { tab: 'F', fieldId: 'doc-report-card' };
+      case 'doc-report-card':
+        return { tab: 'F', fieldId: 'select-father-religion' };
+      case 'select-father-religion':
+      case 'select-fatherReligion':
+        return { tab: 'F', fieldId: 'select-mother-religion' };
+      case 'select-mother-religion':
+      case 'select-motherReligion':
+        return { tab: 'F', fieldId: 'select-religion' };
+      case 'select-religion': {
+        const isNonCatholic =
+          (targetEl instanceof HTMLSelectElement && targetEl.value === 'Non-Catholic') ||
+          religion === 'Non-Catholic';
+        return isNonCatholic
+          ? { tab: 'F', fieldId: 'input-denomination' }
+          : { tab: 'F', fieldId: 'checkbox-baptized' };
+      }
+      case 'checkbox-baptized':
+      case 'select-baptizedCatholic':
+        return { tab: 'F', fieldId: 'checkbox-confirmed' };
+      case 'checkbox-confirmed':
+      case 'select-confirmedCatholic':
+        // Last field on Page 6 (Catholic) -> Next Page: Page 7 (Section H & I), first field
+        return { tab: 'H_I', fieldId: 'input-parishPlace' };
+      case 'input-denomination':
+        // Last field on Page 6 (Non-Catholic) -> Next Page: Page 7 (Section H & I), first field
+        return { tab: 'H_I', fieldId: 'input-parishPlace' };
+
+      // =======================================================================
+      // PAGE 7: SECTION H & I - Parish Information & Health Assessment
+      // =======================================================================
+      case 'input-parishPlace':
+        return { tab: 'H_I', fieldId: 'input-parishPriest' };
+      case 'input-parishPriest':
+        return { tab: 'H_I', fieldId: 'input-healthStatus' };
+      case 'input-healthStatus':
+        return { tab: 'H_I', fieldId: 'select-studentSignature' };
+      case 'select-studentSignature':
+        return { tab: 'H_I', fieldId: 'input-additionalNotes' };
+      case 'input-additionalNotes':
+        // Last field on Page 7 -> Next Page: Page 8 (Section J & K - FINAL PAGE!), first field
+        return { tab: 'J_K', fieldId: 'input-examScore' };
+
+      // =======================================================================
+      // PAGE 8: SECTION J & K - Admission Status & Testing Center (FINAL PAGE)
+      // =======================================================================
+      case 'input-examScore':
+        return { tab: 'J_K', fieldId: 'select-admissionStatus' };
+      case 'select-admissionStatus':
+        return { tab: 'J_K', fieldId: 'select-testingCenterProvince' };
+      case 'select-testingCenterProvince': {
+        const isOthers =
+          (targetEl instanceof HTMLSelectElement && targetEl.value === 'Others') ||
+          testingCenterProvince === 'Others';
+        return isOthers
+          ? { tab: 'J_K', fieldId: 'input-testingCenterProvinceOther' }
+          : { tab: 'J_K', fieldId: 'input-testingCenterLocation' };
+      }
+      case 'input-testingCenterProvinceOther':
+        return { tab: 'J_K', fieldId: 'input-testingCenterLocation' };
+      case 'input-testingCenterLocation':
+        // FINAL PAGE RULE:
+        // Only when the user reaches the Testing Center Location, which is the final required field of the entire form:
+        // Testing Center Location → Enter → Save Student
+        return { tab: 'J_K', fieldId: 'btn-save-applicant-form', isFinalSave: true };
+
+      default: {
+        if (currentId.startsWith('input-sibling-')) {
+          const parts = currentId.split('-');
+          const idx = parseInt(parts[2], 10);
+          const field = parts[3];
+          if (field === 'name') {
+            return { tab: 'D', fieldId: `input-sibling-${idx}-age` };
+          }
+          if (field === 'age') {
+            return { tab: 'D', fieldId: `input-sibling-${idx}-remarks` };
+          }
+          if (field === 'remarks') {
+            const hasNextInState = idx + 1 < siblings.length;
+            const hasNextInDOM = Boolean(document.getElementById(`input-sibling-${idx + 1}-name`));
+            if (hasNextInState || hasNextInDOM) {
+              return { tab: 'D', fieldId: `input-sibling-${idx + 1}-name` };
+            }
+            // Only after all applicable sibling information has been processed should Enter move to the next page
+            return { tab: 'E', fieldId: 'input-cellphoneNumber' };
+          }
+        }
+        return null;
+      }
+    }
+  };
+
+  const triggerSaveStudent = () => {
+    if (formScrollRef.current) {
+      if (typeof formScrollRef.current.requestSubmit === 'function') {
+        formScrollRef.current.requestSubmit();
+        return;
+      }
+    }
+    const saveBtn = document.getElementById('btn-save-applicant-form');
+    if (saveBtn) {
+      saveBtn.click();
+    }
+  };
+
+  const focusTargetField = (fieldId: string, tabId: SectionTabId) => {
+    if (tabId && tabId !== activeTab) {
+      setActiveTab(tabId);
+      if (formScrollRef.current) {
+        formScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    let attempts = 0;
+    const maxAttempts = 25;
+
+    const tryFocus = () => {
+      attempts++;
+      const el = document.getElementById(fieldId);
+      if (el) {
+        // Never skip sibling fields or the Add Sibling Row button!
+        const isSiblingField = fieldId.startsWith('input-sibling-') || fieldId === 'btn-add-sibling';
+        if (!isSiblingField) {
+          const isActuallyDisabled = (el as HTMLInputElement).disabled;
+          const isAriaHidden = el.getAttribute('aria-hidden') === 'true';
+          const isDisplayNone =
+            typeof window !== 'undefined' &&
+            window.getComputedStyle &&
+            window.getComputedStyle(el).display === 'none';
+
+          if (isActuallyDisabled || isAriaHidden || isDisplayNone) {
+            const next = getNextFieldConfig(fieldId, el);
+            if (next) {
+              if (next.isFinalSave) {
+                triggerSaveStudent();
+              } else {
+                focusTargetField(next.fieldId, next.tab);
+              }
+              return;
+            }
+          }
+        }
+
+        el.focus();
+        if (el instanceof HTMLInputElement && (el.type === 'text' || el.type === 'number')) {
+          el.select?.();
+        }
+        el.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      } else if (attempts < maxAttempts) {
+        setTimeout(tryFocus, 20);
+      }
+    };
+
+    setTimeout(tryFocus, 15);
+  };
+
+  // Universal Keyboard Navigation Handler for Fast Continuous Data Entry:
+  // Continuous Type -> Enter -> Type -> Enter across every page/step.
+  // Enter moves smoothly to next field or next page without premature submission.
+  // Testing Center Location -> Enter -> Save Student.
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    // PageDown / PageUp for quick section tab flipping
+    if (e.key === 'PageDown' && (e.target as HTMLElement)?.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      handleNextPage();
+      return;
+    }
+    if (e.key === 'PageUp' && (e.target as HTMLElement)?.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      handlePreviewPage();
+      return;
+    }
+
+    if (e.key !== 'Enter') return;
+
+    const target = e.target as HTMLElement;
+    if (!target) return;
+
+    // FINAL REQUIRED FIELD: Testing Center Location -> Enter -> Save Student
+    if (target.id === 'input-testingCenterLocation') {
+      e.preventDefault();
+      triggerSaveStudent();
+      return;
+    }
+
+    // Submit button: allow standard form submission
+    if (
+      target.id === 'btn-save-applicant-form' ||
+      (target.tagName === 'BUTTON' && (target as HTMLButtonElement).type === 'submit')
+    ) {
+      return;
+    }
+
+    // Other buttons: allow native button click
+    if (target.tagName === 'BUTTON') {
+      return;
+    }
+
+    // Textareas: allow multi-line shift+enter, while Enter navigates to next field/page
+    if (target.tagName === 'TEXTAREA') {
+      if (e.shiftKey) {
+        // Allow multi-line newline with Shift+Enter
+        return;
+      }
+      e.preventDefault();
+      const targetId = target.id;
+      const nextConfig = getNextFieldConfig(targetId, target);
+      if (nextConfig) {
+        if (nextConfig.isFinalSave) {
+          triggerSaveStudent();
+        } else {
+          focusTargetField(nextConfig.fieldId, nextConfig.tab);
+        }
+      } else if (currentTabIndex < tabOrder.length - 1) {
+        handleNextPage();
+      } else {
+        triggerSaveStudent();
+      }
+      return;
+    }
+
+    // Input and select fields: PREVENT DEFAULT to avoid premature submission!
+    e.preventDefault();
+
+    const targetId = target.id;
+    const nextConfig = getNextFieldConfig(targetId, target);
+
+    if (nextConfig) {
+      if (nextConfig.isFinalSave) {
+        triggerSaveStudent();
+      } else {
+        focusTargetField(nextConfig.fieldId, nextConfig.tab);
+      }
+    } else {
+      // Fallback: If unknown field, advance to next tab or save
+      if (currentTabIndex < tabOrder.length - 1) {
+        handleNextPage();
+      } else {
+        triggerSaveStudent();
+      }
     }
   };
 
@@ -373,6 +819,7 @@ export const StudentFormModal: React.FC<Props> = ({
 
   // Siblings handling
   const handleAddSibling = () => {
+    const nextIndex = siblings.length;
     setSiblings((prev) => [
       ...prev,
       {
@@ -382,6 +829,19 @@ export const StudentFormModal: React.FC<Props> = ({
         remarks: '',
       },
     ]);
+    let attempts = 0;
+    const focusNewSibling = () => {
+      attempts++;
+      const nextInput = document.getElementById(`input-sibling-${nextIndex}-name`);
+      if (nextInput) {
+        nextInput.focus();
+        (nextInput as any).select?.();
+        nextInput.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      } else if (attempts < 25) {
+        setTimeout(focusNewSibling, 25);
+      }
+    };
+    setTimeout(focusNewSibling, 30);
   };
 
   const handleRemoveSibling = (index: number) => {
@@ -438,7 +898,7 @@ export const StudentFormModal: React.FC<Props> = ({
     }
 
     if (!admissionStatus) {
-      setError('Please select an Admission Status (Pending, Passed, Conditional, or Failed) under Section J.');
+      setError('Please select an Admission Status (Passed, Conditional, or Failed) under Section J.');
       setActiveTab('J_K');
       return;
     }
@@ -465,6 +925,7 @@ export const StudentFormModal: React.FC<Props> = ({
         surname: cleanLastName,
         firstName: cleanFirstName,
         middleName: middleName.trim(),
+        suffix: suffix.trim() || undefined,
         birthdate: birthdate.trim(),
         birthday: birthdate.trim(),
         age: typeof age === 'number' ? age : parseInt(String(age), 10) || 0,
@@ -474,8 +935,17 @@ export const StudentFormModal: React.FC<Props> = ({
         sitioStreet: sitioStreet.trim(),
         barangay: barangay.trim(),
         municipality: municipality.trim(),
-        province: province.trim(),
-        address: address.trim() || [sitioStreet, barangay, municipality, province].filter(Boolean).join(', '),
+        province: (province === 'Others' ? (provinceOther.trim() || 'Others') : province.trim()) || undefined,
+        address:
+          address.trim() ||
+          [
+            sitioStreet,
+            barangay,
+            municipality,
+            province === 'Others' ? provinceOther : province,
+          ]
+            .filter(Boolean)
+            .join(', '),
 
         // Section C
         elementarySchool: elementarySchool.trim(),
@@ -539,7 +1009,7 @@ export const StudentFormModal: React.FC<Props> = ({
         // Section I
         healthStatus: healthStatus.trim() || 'Normal / Fit for schooling',
         examScore: parsedScore,
-        remarks: (admissionStatus === 'Passed' ? 'A - PASS' : admissionStatus === 'Conditional' ? 'Conditional' : admissionStatus === 'Failed' ? 'Failed' : 'B - PENDING') as any,
+        remarks: (admissionStatus === 'Passed' ? 'A - PASS' : admissionStatus === 'Conditional' ? 'Conditional' : 'Failed') as any,
         additionalNotes: additionalNotes.trim(),
         studentSignature: studentSignature || 'Signed',
 
@@ -795,7 +1265,12 @@ export const StudentFormModal: React.FC<Props> = ({
         </div>
 
         {/* Form Body (Scrollable) */}
-        <form ref={formScrollRef} onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        <form
+          ref={formScrollRef}
+          onSubmit={handleSubmit}
+          onKeyDown={handleFormKeyDown}
+          className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6"
+        >
           {/* ========================================================================= */}
           {/* SECTION A: BASIC PERSONAL INFORMATION */}
           {/* ========================================================================= */}
@@ -850,100 +1325,140 @@ export const StudentFormModal: React.FC<Props> = ({
                 </div>
 
                 {/* Name & Details Fields */}
-                <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      Last Name / Surname <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="input-lastName"
-                      type="text"
-                      required
-                      placeholder="e.g. SANTOS"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value.toUpperCase())}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                    />
+                <div className="md:col-span-3 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Last Name / Surname <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="input-lastName"
+                        type="text"
+                        required
+                        autoFocus
+                        placeholder="e.g. ATOS"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value.toUpperCase())}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        First Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="input-firstName"
+                        type="text"
+                        required
+                        placeholder="e.g. CHELLE ZANDRA"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value.toUpperCase())}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Middle Name
+                      </label>
+                      <input
+                        id="input-middleName"
+                        type="text"
+                        placeholder="e.g. LOVEÑA"
+                        value={middleName}
+                        onChange={(e) => setMiddleName(e.target.value.toUpperCase())}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Suffix
+                      </label>
+                      <input
+                        id="input-suffix"
+                        type="text"
+                        placeholder="e.g. Jr., III"
+                        value={suffix}
+                        onChange={(e) => setSuffix(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      First Name <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="input-firstName"
-                      type="text"
-                      required
-                      placeholder="e.g. MARIA CLARA"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value.toUpperCase())}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                    />
-                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Learner Reference Number (LRN) <span className="text-red-500">* (12 Digits)</span>
+                      </label>
+                      <input
+                        id="input-lrn"
+                        type="text"
+                        required
+                        maxLength={12}
+                        placeholder="12-digit LRN"
+                        value={lrn}
+                        onChange={(e) => setLrn(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-mono font-black text-blue-900 tracking-wider focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                      <div className="flex justify-between items-center text-[10px] font-bold mt-1">
+                        <span className={lrn.length === 12 ? 'text-emerald-600' : 'text-amber-600'}>
+                          {lrn.length === 12 ? '✓ 12 Digits verified' : `${lrn.length}/12 Digits`}
+                        </span>
+                      </div>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      Middle Name
-                    </label>
-                    <input
-                      id="input-middleName"
-                      type="text"
-                      placeholder="e.g. DELA CRUZ"
-                      value={middleName}
-                      onChange={(e) => setMiddleName(e.target.value.toUpperCase())}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 uppercase focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Date of Birth (MM/DD/YYYY)
+                      </label>
+                      <DateOfBirthInput
+                        id="input-birthdate"
+                        value={birthdate}
+                        placeholder="mm/dd/yyyy"
+                        onChange={(newDate) => {
+                          setBirthdate(newDate);
+                          const calculatedAge = calculateAgeFromBirthdate(newDate);
+                          if (calculatedAge !== null) {
+                            setAge(calculatedAge);
+                          } else if (!newDate) {
+                            setAge('');
+                          }
+                        }}
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      Date of Birth (MM/DD/YYYY)
-                    </label>
-                    <DateOfBirthInput
-                      id="input-birthdate"
-                      value={birthdate}
-                      placeholder="mm/dd/yyyy"
-                      onChange={(newDate) => {
-                        setBirthdate(newDate);
-                        const calculatedAge = calculateAgeFromBirthdate(newDate);
-                        if (calculatedAge !== null) {
-                          setAge(calculatedAge);
-                        } else if (!newDate) {
-                          setAge('');
-                        }
-                      }}
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Age (Years)
+                      </label>
+                      <input
+                        id="input-age"
+                        type="number"
+                        min={1}
+                        max={99}
+                        value={age}
+                        onChange={(e) => setAge(e.target.value)}
+                        placeholder="Calculated automatically"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      Age (Years)
-                    </label>
-                    <input
-                      id="input-age"
-                      type="number"
-                      min={1}
-                      max={99}
-                      value={age}
-                      onChange={(e) => setAge(e.target.value)}
-                      placeholder="Calculated automatically"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                      Sex / Gender
-                    </label>
-                    <select
-                      id="select-gender"
-                      value={gender}
-                      onChange={(e) => setGender(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                    >
-                      <option value="Female">Female</option>
-                      <option value="Male">Male</option>
-                    </select>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                        Sex / Gender
+                      </label>
+                      <select
+                        id="select-gender"
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                      >
+                        <option value="Female">Female</option>
+                        <option value="Male">Male</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -964,6 +1479,59 @@ export const StudentFormModal: React.FC<Props> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                {/* Province Dropdown */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                    Province <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    id="select-province"
+                    value={province}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setProvince(val);
+                      if (!testingCenterProvince || testingCenterProvince === province) {
+                        setTestingCenterProvince(val);
+                      }
+                      if (val !== 'Others') {
+                        setProvinceOther('');
+                      } else {
+                        setTimeout(() => {
+                          document.getElementById('input-provinceOther')?.focus();
+                        }, 50);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                  >
+                    <option value="">Select Province</option>
+                    {PROVINCE_OPTIONS.map((prov) => (
+                      <option key={prov} value={prov}>
+                        {prov}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Other Province - only shown when Province === 'Others' */}
+                {province === 'Others' && (
+                  <div className="animate-fade-in">
+                    <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
+                      Specify Other Province <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="input-provinceOther"
+                      type="text"
+                      placeholder="Enter province name..."
+                      value={provinceOther}
+                      onChange={(e) => {
+                        setProvinceOther(e.target.value);
+                        setTestingCenterProvinceOther(e.target.value);
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white"
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
                     Sitio / Street / Purok
@@ -1002,20 +1570,6 @@ export const StudentFormModal: React.FC<Props> = ({
                     placeholder="e.g. Silang"
                     value={municipality}
                     onChange={(e) => setMunicipality(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 uppercase mb-1">
-                    Province
-                  </label>
-                  <input
-                    id="input-province"
-                    type="text"
-                    placeholder="e.g. Cavite"
-                    value={province}
-                    onChange={(e) => setProvince(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                   />
                 </div>
@@ -1084,7 +1638,7 @@ export const StudentFormModal: React.FC<Props> = ({
                     Learner Reference Number (LRN) <span className="text-red-500">* (12 Digits)</span>
                   </label>
                   <input
-                    id="input-lrn"
+                    id="input-schoolLrn"
                     type="text"
                     required
                     maxLength={12}
@@ -1327,9 +1881,18 @@ export const StudentFormModal: React.FC<Props> = ({
                         Total: {siblings.filter((s) => s.name?.trim()).length} sibling{siblings.filter((s) => s.name?.trim()).length === 1 ? '' : 's'}
                       </span>
                       <button
+                        id="btn-add-sibling"
                         type="button"
+                        tabIndex={0}
                         onClick={handleAddSibling}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleAddSibling();
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#1E3A8A] hover:bg-[#1D4ED8] focus:ring-2 focus:ring-blue-600 focus:outline-none text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Add Sibling Row</span>
@@ -1354,6 +1917,7 @@ export const StudentFormModal: React.FC<Props> = ({
                             <td className="p-3 text-center font-bold text-slate-500">{index + 1}</td>
                             <td className="p-2">
                               <input
+                                id={`input-sibling-${index}-name`}
                                 type="text"
                                 placeholder="e.g. Juan Santos Jr."
                                 value={sib.name}
@@ -1363,6 +1927,7 @@ export const StudentFormModal: React.FC<Props> = ({
                             </td>
                             <td className="p-2">
                               <input
+                                id={`input-sibling-${index}-age`}
                                 type="text"
                                 placeholder="e.g. 14"
                                 value={sib.age}
@@ -1372,6 +1937,7 @@ export const StudentFormModal: React.FC<Props> = ({
                             </td>
                             <td className="p-2">
                               <input
+                                id={`input-sibling-${index}-remarks`}
                                 type="text"
                                 placeholder="e.g. Grade 8 / Working / Out of school"
                                 value={sib.remarks}
@@ -1812,7 +2378,6 @@ export const StudentFormModal: React.FC<Props> = ({
                       onChange={(e) => setAdmissionStatus(e.target.value)}
                       className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"
                     >
-                      <option value="Pending">Pending</option>
                       <option value="Passed">Passed</option>
                       <option value="Conditional">Conditional</option>
                       <option value="Failed">Failed</option>
@@ -1823,12 +2388,6 @@ export const StudentFormModal: React.FC<Props> = ({
                   <div className="flex flex-col justify-center">
                     <span className="text-xs font-bold text-gray-500 uppercase mb-1.5">Current Status</span>
                     <div className="flex items-center gap-2">
-                      {admissionStatus === 'Pending' && (
-                        <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-100 border border-blue-300 text-blue-900 rounded-xl text-xs font-black">
-                          <Clock className="w-4 h-4 text-blue-600" />
-                          <span>PENDING</span>
-                        </div>
-                      )}
                       {admissionStatus === 'Passed' && (
                         <div className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-black">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -1879,6 +2438,10 @@ export const StudentFormModal: React.FC<Props> = ({
                         setTestingCenterProvince(val);
                         if (val !== 'Others') {
                           setTestingCenterProvinceOther('');
+                        } else {
+                          setTimeout(() => {
+                            document.getElementById('input-testingCenterProvinceOther')?.focus();
+                          }, 50);
                         }
                       }}
                       className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none bg-white shadow-xs"

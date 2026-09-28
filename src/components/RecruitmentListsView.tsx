@@ -492,18 +492,22 @@ export const RecruitmentListsView: React.FC<Props> = ({
 
                   {/* Card Body - Statistics */}
                   <div className="my-5 space-y-3">
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
-                        <span className="text-[10px] uppercase font-bold text-slate-400">Total</span>
-                        <p className="text-base font-black text-white mt-0.5">{list.totalApplicants}</p>
+                    <div className="grid grid-cols-4 gap-1.5 text-center">
+                      <div className="bg-slate-900/60 p-2 rounded-xl border border-slate-800">
+                        <span className="text-[9px] uppercase font-bold text-slate-400">Total</span>
+                        <p className="text-sm font-black text-white mt-0.5">{list.totalApplicants}</p>
                       </div>
-                      <div className="bg-emerald-950/40 p-2.5 rounded-xl border border-emerald-900/40">
-                        <span className="text-[10px] uppercase font-bold text-emerald-400">Passed</span>
-                        <p className="text-base font-black text-emerald-300 mt-0.5">{list.passedApplicants}</p>
+                      <div className="bg-emerald-950/40 p-2 rounded-xl border border-emerald-900/40">
+                        <span className="text-[9px] uppercase font-bold text-emerald-400">Passed</span>
+                        <p className="text-sm font-black text-emerald-300 mt-0.5">{list.passedApplicants}</p>
                       </div>
-                      <div className="bg-amber-950/40 p-2.5 rounded-xl border border-amber-900/40">
-                        <span className="text-[10px] uppercase font-bold text-amber-400">Pending</span>
-                        <p className="text-base font-black text-amber-300 mt-0.5">{list.pendingApplicants}</p>
+                      <div className="bg-amber-950/40 p-2 rounded-xl border border-amber-900/40">
+                        <span className="text-[9px] uppercase font-bold text-amber-400">Cond</span>
+                        <p className="text-sm font-black text-amber-300 mt-0.5">{list.conditionalApplicants ?? 0}</p>
+                      </div>
+                      <div className="bg-rose-950/40 p-2 rounded-xl border border-rose-900/40">
+                        <span className="text-[9px] uppercase font-bold text-rose-400">Failed</span>
+                        <p className="text-sm font-black text-rose-300 mt-0.5">{list.failedApplicants ?? 0}</p>
                       </div>
                     </div>
 

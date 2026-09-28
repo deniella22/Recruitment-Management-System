@@ -91,7 +91,6 @@ export async function exportStudentsToPdf(
   const passCount = students.filter((s) => s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed').length;
   const condCount = students.filter((s) => s.admissionStatus === 'Conditional' || s.remarks === 'Conditional').length;
   const failCount = students.filter((s) => s.admissionStatus === 'Failed' || (s.remarks && s.remarks.toLowerCase().includes('fail'))).length;
-  const pendingCount = Math.max(0, students.length - passCount - condCount - failCount);
   const passRate = students.length > 0 ? Math.round((passCount / students.length) * 100) : 0;
 
   doc.setFillColor(248, 250, 252); // Slate-50
@@ -108,13 +107,13 @@ export async function exportStudentsToPdf(
   doc.text(`Passed: ${passCount}`, 60, 35);
   
   doc.setTextColor(180, 83, 9); // Amber
-  doc.text(`Conditional: ${condCount}`, 95, 35);
+  doc.text(`Conditional: ${condCount}`, 100, 35);
 
   doc.setTextColor(185, 28, 28); // Red
-  doc.text(`Failed: ${failCount}`, 135, 35);
+  doc.text(`Failed: ${failCount}`, 145, 35);
 
   doc.setTextColor(30, 58, 138); // Blue
-  doc.text(`Passing Rate: ${passRate}%`, 175, 35);
+  doc.text(`Passing Rate: ${passRate}%`, 185, 35);
 
   // Prepare Table Rows
   const tableData = students.map((s, idx) => {
@@ -132,9 +131,7 @@ export async function exportStudentsToPdf(
         ? 'Passed'
         : s.remarks === 'Conditional'
         ? 'Conditional'
-        : s.remarks === 'Failed'
-        ? 'Failed'
-        : 'Pending');
+        : 'Failed');
     const provText = s.testingCenterProvince === 'Others'
       ? s.testingCenterProvinceOther || 'Others'
       : s.testingCenterProvince;
@@ -321,28 +318,31 @@ export async function exportStudentProfilePdf(
   doc.text(`LRN: ${student.lrn || 'N/A'}  |  School: ${student.elementarySchool || 'N/A'}`, 20, curY + 15);
 
   // Status Badge in card
-  const isPass = student.remarks === 'A - PASS';
-  doc.setFillColor(isPass ? 220 : 254, isPass ? 252 : 243, isPass ? 231 : 199);
+  const statusStr = student.admissionStatus === 'Passed' || student.remarks === 'A - PASS' || student.remarks === 'Passed'
+    ? 'Passed'
+    : student.admissionStatus === 'Conditional' || student.remarks === 'Conditional'
+    ? 'Conditional'
+    : 'Failed';
+
+  if (statusStr === 'Passed') {
+    doc.setFillColor(220, 252, 231);
+    doc.setTextColor(22, 101, 52);
+  } else if (statusStr === 'Conditional') {
+    doc.setFillColor(254, 243, 199);
+    doc.setTextColor(180, 83, 9);
+  } else {
+    doc.setFillColor(254, 226, 226);
+    doc.setTextColor(185, 28, 28);
+  }
   doc.roundedRect(pageWidth - 62, curY + 4, 44, 12, 2, 2, 'F');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
-  doc.setTextColor(isPass ? 22 : 154, isPass ? 101 : 52, isPass ? 52 : 18);
-  doc.text(isPass ? 'STATUS: A (PASS)' : 'STATUS: B (PENDING)', pageWidth - 40, curY + 11.5, { align: 'center' });
+  doc.text(`STATUS: ${statusStr.toUpperCase()}`, pageWidth - 40, curY + 11.5, { align: 'center' });
 
   curY += 26;
 
   // Demographics Section
-  const resolvedAdmStatus =
-    student.admissionStatus ||
-    (student.remarks === 'A - PASS'
-      ? 'Passed'
-      : student.remarks === 'Passed'
-      ? 'Passed'
-      : student.remarks === 'Conditional'
-      ? 'Conditional'
-      : student.remarks === 'Failed'
-      ? 'Failed'
-      : 'Pending');
+  const resolvedAdmStatus = statusStr;
 
   autoTable(doc, {
     startY: curY,
@@ -544,13 +544,18 @@ export async function exportSchoolsSummaryPdf(
   doc.text(`Generated on: ${new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}`, 14, 23);
 
   // Group by School
-  const schoolMap: Record<string, { total: number; pass: number; pending: number }> = {};
+  const schoolMap: Record<string, { total: number; pass: number; cond: number; fail: number }> = {};
   students.forEach((s) => {
     const sch = s.elementarySchool?.trim() || 'Unspecified School';
-    if (!schoolMap[sch]) schoolMap[sch] = { total: 0, pass: 0, pending: 0 };
+    if (!schoolMap[sch]) schoolMap[sch] = { total: 0, pass: 0, cond: 0, fail: 0 };
     schoolMap[sch].total += 1;
-    if (s.remarks === 'A - PASS') schoolMap[sch].pass += 1;
-    else schoolMap[sch].pending += 1;
+    if (s.admissionStatus === 'Passed' || s.remarks === 'A - PASS' || s.remarks === 'Passed') {
+      schoolMap[sch].pass += 1;
+    } else if (s.admissionStatus === 'Conditional' || s.remarks === 'Conditional') {
+      schoolMap[sch].cond += 1;
+    } else {
+      schoolMap[sch].fail += 1;
+    }
   });
 
   const schoolRows = Object.entries(schoolMap)
@@ -562,14 +567,15 @@ export async function exportSchoolsSummaryPdf(
         name,
         String(counts.total),
         String(counts.pass),
-        String(counts.pending),
+        String(counts.cond),
+        String(counts.fail),
         `${rate}%`,
       ];
     });
 
   autoTable(doc, {
     startY: 34,
-    head: [['#', 'Elementary School Name', 'Total Applicants', 'PASS (A)', 'PENDING (B)', 'Pass Rate']],
+    head: [['#', 'Elementary School Name', 'Total Applicants', 'Passed', 'Conditional', 'Failed', 'Pass Rate']],
     body: schoolRows,
     theme: 'striped',
     styles: {
@@ -584,11 +590,12 @@ export async function exportSchoolsSummaryPdf(
     },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center' },
-      1: { cellWidth: 85, halign: 'left', fontStyle: 'bold' },
-      2: { cellWidth: 25, halign: 'center' },
-      3: { cellWidth: 22, halign: 'center', fontStyle: 'bold', textColor: [22, 101, 52] },
-      4: { cellWidth: 22, halign: 'center', fontStyle: 'bold', textColor: [180, 83, 9] },
-      5: { cellWidth: 20, halign: 'center', fontStyle: 'bold', textColor: [30, 58, 138] },
+      1: { cellWidth: 75, halign: 'left', fontStyle: 'bold' },
+      2: { cellWidth: 22, halign: 'center' },
+      3: { cellWidth: 18, halign: 'center', fontStyle: 'bold', textColor: [22, 101, 52] },
+      4: { cellWidth: 20, halign: 'center', fontStyle: 'bold', textColor: [180, 83, 9] },
+      5: { cellWidth: 18, halign: 'center', fontStyle: 'bold', textColor: [185, 28, 28] },
+      6: { cellWidth: 18, halign: 'center', fontStyle: 'bold', textColor: [30, 58, 138] },
     },
     didDrawPage: (data) => {
       const pageCount = (doc.internal as any).getNumberOfPages ? (doc.internal as any).getNumberOfPages() : 1;

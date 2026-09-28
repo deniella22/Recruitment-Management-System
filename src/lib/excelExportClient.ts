@@ -23,7 +23,7 @@ export async function exportStudentsToExcel(
   // Always sort students using exact required hierarchy:
   // 1. Province (A–Z, with OTHERS at the end)
   // 2. Testing Center (A–Z)
-  // 3. Admission Status (Passed -> Conditional -> Pending -> Failed)
+  // 3. Admission Status (Passed -> Conditional -> Failed)
   // 4. Student Name (Last Name / Surname -> First Name -> Middle Name A–Z)
   const sortedStudents = sortStudents(students, 'province', 'asc');
 
@@ -42,8 +42,8 @@ export async function exportStudentsToExcel(
   workbook.subject = `Recruitment Records (${academicYear})`;
   workbook.company = schoolName;
 
-  // 1. Main Recruitment Records Worksheet (Organized by Province -> Testing Center)
-  const worksheet = workbook.addWorksheet('Recruitment Records', {
+  // 1. Main Student Records Worksheet (Organized by Province -> Testing Center)
+  const worksheet = workbook.addWorksheet('Student Records', {
     views: [{ state: 'frozen', xSplit: 0, ySplit: 1, activeCell: 'A2' }],
   });
 
@@ -405,34 +405,33 @@ export async function exportStudentsToExcel(
     }
   }
 
-  // 2. Summary by Origin Schools Sheet (Companion Demographic Summary)
-  const summarySheet = workbook.addWorksheet('Schools Summary', {
+  // 2. Testing Center Summary Sheet (Summarizes applicant counts per Testing Center)
+  const summarySheet = workbook.addWorksheet('Testing Center Summary', {
     views: [{ state: 'frozen', xSplit: 0, ySplit: 1, activeCell: 'A2' }],
   });
 
-  const sumHeaders = [
-    { header: 'No.', width: 7 },
-    { header: 'Elementary School Name', width: 38 },
+  const centerSummaryHeaders = [
+    { header: 'No.', width: 8 },
+    { header: 'Province', width: 24 },
+    { header: 'Testing Center / Place', width: 44 },
     { header: 'Total Applicants', width: 18 },
     { header: 'Passed', width: 14 },
     { header: 'Conditional', width: 14 },
-    { header: 'Pending', width: 14 },
     { header: 'Failed', width: 14 },
-    { header: 'Passing Rate (%)', width: 18 },
   ];
 
-  sumHeaders.forEach((h, idx) => {
+  centerSummaryHeaders.forEach((h, idx) => {
     summarySheet.getColumn(idx + 1).width = h.width;
   });
 
   const sumHeaderRow = summarySheet.getRow(1);
   sumHeaderRow.height = 30;
-  sumHeaders.forEach((h, idx) => {
+  centerSummaryHeaders.forEach((h, idx) => {
     const cell = sumHeaderRow.getCell(idx + 1);
     cell.value = h.header;
     cell.font = { name: 'Calibri', size: 10.5, bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
-    cell.alignment = { horizontal: idx === 1 ? 'left' : 'center', vertical: 'middle' };
+    cell.alignment = { horizontal: idx >= 3 ? 'center' : (idx === 0 ? 'center' : 'left'), vertical: 'middle' };
     cell.border = {
       top: { style: 'thin', color: { argb: 'FF3B82F6' } },
       left: { style: 'thin', color: { argb: 'FF3B82F6' } },
@@ -441,69 +440,169 @@ export async function exportStudentsToExcel(
     };
   });
 
-  const schoolMap: Record<
-    string,
-    { total: number; passed: number; conditional: number; pending: number; failed: number }
-  > = {};
+  interface CenterSummaryEntry {
+    province: string;
+    testingCenter: string;
+    total: number;
+    passed: number;
+    conditional: number;
+    failed: number;
+  }
+
+  const centerMap = new Map<string, CenterSummaryEntry>();
 
   sortedStudents.forEach((s) => {
-    const sch = s.elementarySchool?.trim() || s.school?.trim() || 'Unspecified School';
-    if (!schoolMap[sch]) {
-      schoolMap[sch] = { total: 0, passed: 0, conditional: 0, pending: 0, failed: 0 };
+    // 6. OTHERS PROVINCE RULE:
+    // If Province = Others, all those students must still be grouped under OTHERS in Testing Center Summary.
+    // Do not create separate Province groups based on the text entered in the Other Province field.
+    let provDisplay = getStudentProvince(s);
+    if (provDisplay === 'OTHERS') {
+      provDisplay = 'OTHERS';
+    } else if (s.testingCenterProvince && s.testingCenterProvince.trim() && s.testingCenterProvince.trim().toLowerCase() !== 'others') {
+      provDisplay = s.testingCenterProvince.trim();
     }
-    schoolMap[sch].total += 1;
+
+    const center = getTestingCenterName(s);
+    const key = `${provDisplay}___${center}`;
+
+    if (!centerMap.has(key)) {
+      centerMap.set(key, {
+        province: provDisplay,
+        testingCenter: center,
+        total: 0,
+        passed: 0,
+        conditional: 0,
+        failed: 0,
+      });
+    }
+
+    const entry = centerMap.get(key)!;
+    entry.total += 1;
     const st = resolveAdmissionStatus(s);
-    if (st === 'Passed') schoolMap[sch].passed += 1;
-    else if (st === 'Conditional') schoolMap[sch].conditional += 1;
-    else if (st === 'Failed') schoolMap[sch].failed += 1;
-    else schoolMap[sch].pending += 1;
+    if (st === 'Passed') {
+      entry.passed += 1;
+    } else if (st === 'Conditional') {
+      entry.conditional += 1;
+    } else {
+      entry.failed += 1;
+    }
+  });
+
+  // Sort summary rows:
+  // Provinces arranged A–Z (with OTHERS grouped at the end)
+  // Testing Centers arranged alphabetically A–Z
+  const summaryRows = Array.from(centerMap.values()).sort((a, b) => {
+    if (a.province !== b.province) {
+      if (a.province === 'OTHERS') return 1;
+      if (b.province === 'OTHERS') return -1;
+      const pComp = a.province.localeCompare(b.province, undefined, { sensitivity: 'base' });
+      if (pComp !== 0) return pComp;
+    }
+    return a.testingCenter.localeCompare(b.testingCenter, undefined, { sensitivity: 'base' });
   });
 
   let sumRowIdx = 2;
-  Object.entries(schoolMap)
-    .sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0]))
-    .forEach(([schName, counts], idx) => {
-      const row = summarySheet.getRow(sumRowIdx);
-      row.height = 22;
-      const rate = counts.total > 0 ? Math.round((counts.passed / counts.total) * 100) : 0;
-      const isEven = idx % 2 === 0;
-      const rowBgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+  let grandTotal = 0;
+  let grandPassed = 0;
+  let grandConditional = 0;
+  let grandFailed = 0;
 
-      const rowValues = [
-        idx + 1,
-        schName,
-        counts.total,
-        counts.passed,
-        counts.conditional,
-        counts.pending,
-        counts.failed,
-        `${rate}%`,
-      ];
+  summaryRows.forEach((entry, idx) => {
+    const row = summarySheet.getRow(sumRowIdx);
+    row.height = 23;
+    const isEven = idx % 2 === 0;
+    const rowBgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
 
-      rowValues.forEach((val, cIdx) => {
-        const cell = row.getCell(cIdx + 1);
-        cell.value = val;
-        cell.font = { name: 'Calibri', size: 9.5 };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBgArgb } };
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-          right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        };
+    grandTotal += entry.total;
+    grandPassed += entry.passed;
+    grandConditional += entry.conditional;
+    grandFailed += entry.failed;
 
-        if (cIdx === 0 || cIdx >= 2) {
-          cell.alignment = { horizontal: 'center', vertical: 'middle' };
-          if (cIdx === 0 || (cIdx >= 2 && cIdx <= 6)) {
-            cell.numFmt = '#,##0';
-          }
-        } else {
-          cell.alignment = { horizontal: 'left', vertical: 'middle' };
-          cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
+    const rowValues = [
+      idx + 1,
+      entry.province,
+      entry.testingCenter,
+      entry.total,
+      entry.passed,
+      entry.conditional,
+      entry.failed,
+    ];
+
+    rowValues.forEach((val, cIdx) => {
+      const cell = row.getCell(cIdx + 1);
+      cell.value = val;
+      cell.font = { name: 'Calibri', size: 10 };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowBgArgb } };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      };
+
+      if (cIdx === 0) {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.font = { name: 'Calibri', size: 9.5, color: { argb: 'FF64748B' } };
+      } else if (cIdx === 1) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+      } else if (cIdx === 2) {
+        cell.alignment = { horizontal: 'left', vertical: 'middle' };
+        cell.font = { name: 'Calibri', size: 10, color: { argb: 'FF1E293B' } };
+      } else {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.numFmt = '#,##0';
+        if (cIdx === 3) {
+          // Total Applicants
+          cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+        } else if (cIdx === 4) {
+          // Passed
+          cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF15803D' } };
+        } else if (cIdx === 5) {
+          // Conditional
+          cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFB45309' } };
+        } else if (cIdx === 6) {
+          // Failed
+          cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFB91C1C' } };
         }
-      });
-      sumRowIdx++;
+      }
     });
+    sumRowIdx++;
+  });
+
+  // Grand Total Summary Row
+  if (summaryRows.length > 0) {
+    const totalRow = summarySheet.getRow(sumRowIdx);
+    totalRow.height = 26;
+    
+    // Label
+    totalRow.getCell(1).value = '';
+    totalRow.getCell(2).value = '';
+    totalRow.getCell(3).value = 'TOTAL';
+    totalRow.getCell(3).font = { name: 'Calibri', size: 10.5, bold: true, color: { argb: 'FF0F172A' } };
+    totalRow.getCell(3).alignment = { horizontal: 'right', vertical: 'middle' };
+
+    // Counts
+    const totals = [grandTotal, grandPassed, grandConditional, grandFailed];
+    totals.forEach((sumVal, sIdx) => {
+      const cell = totalRow.getCell(sIdx + 4);
+      cell.value = sumVal;
+      cell.font = { name: 'Calibri', size: 10.5, bold: true, color: { argb: 'FF0F172A' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.numFmt = '#,##0';
+    });
+
+    for (let c = 1; c <= 7; c++) {
+      const cell = totalRow.getCell(c);
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        bottom: { style: 'double', color: { argb: 'FF0F172A' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+      };
+    }
+  }
 
   // Write and trigger download
   const buffer = await workbook.xlsx.writeBuffer();

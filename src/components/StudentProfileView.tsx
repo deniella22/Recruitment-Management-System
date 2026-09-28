@@ -143,15 +143,10 @@ export const StudentProfileView: React.FC<Props> = ({
               <Clock className="w-5 h-5 text-amber-300" />
               <span>STATUS: CONDITIONAL</span>
             </div>
-          ) : student.admissionStatus === 'Failed' ? (
+          ) : (
             <div className="px-5 py-2.5 bg-red-500/20 text-red-200 border border-red-400/40 rounded-2xl backdrop-blur-md flex items-center gap-2 font-black text-sm shadow-inner">
               <Clock className="w-5 h-5 text-red-300" />
               <span>STATUS: FAILED</span>
-            </div>
-          ) : (
-            <div className="px-5 py-2.5 bg-blue-500/20 text-blue-200 border border-blue-400/40 rounded-2xl backdrop-blur-md flex items-center gap-2 font-black text-sm shadow-inner">
-              <Clock className="w-5 h-5 text-blue-300" />
-              <span>STATUS: PENDING</span>
             </div>
           )}
           <div className="text-[11px] text-blue-200 font-bold bg-white/10 px-3 py-1 rounded-xl">
@@ -176,7 +171,9 @@ export const StudentProfileView: React.FC<Props> = ({
             </div>
             <div>
               <p className="text-gray-500 font-semibold uppercase text-[10px]">First Name</p>
-              <p className="font-bold text-gray-900 text-sm mt-0.5">{student.firstName || 'N/A'}</p>
+              <p className="font-bold text-gray-900 text-sm mt-0.5">
+                {student.firstName || 'N/A'}{student.suffix ? ` ${student.suffix}` : ''}
+              </p>
             </div>
             <div>
               <p className="text-gray-500 font-semibold uppercase text-[10px]">Middle Name</p>
@@ -529,15 +526,10 @@ export const StudentProfileView: React.FC<Props> = ({
                   <Clock className="w-3.5 h-3.5 text-amber-600" />
                   Conditional
                 </span>
-              ) : student.admissionStatus === 'Failed' || (student.remarks && student.remarks.toLowerCase().includes('fail')) ? (
+              ) : (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-800 border border-red-200 rounded-lg font-bold text-xs">
                   <Clock className="w-3.5 h-3.5 text-red-600" />
                   Failed
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-700 border border-slate-300 rounded-lg font-bold text-xs">
-                  <Clock className="w-3.5 h-3.5 text-slate-500" />
-                  Pending
                 </span>
               )}
             </div>
