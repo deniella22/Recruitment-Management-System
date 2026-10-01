@@ -270,7 +270,7 @@ export async function createStudent(
     body: JSON.stringify(studentData),
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Failed to add student record');
+  if (!res.ok) throw new Error(json.message || json.error || 'Failed to add student record');
   return json;
 }
 
@@ -287,7 +287,7 @@ export async function updateStudent(
     body: JSON.stringify(studentData),
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || 'Failed to update student record');
+  if (!res.ok) throw new Error(json.message || json.error || 'Failed to update student record');
   return json;
 }
 

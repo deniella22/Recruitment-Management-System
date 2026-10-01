@@ -33,6 +33,7 @@ import {
 import { StudentRecord, AdmissionStatus, SiblingRecord, PROVINCE_OPTIONS, resolveProvince } from '../types';
 import { createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
 import { calculateAgeFromBirthdate } from '../lib/dateUtils';
+import { getStudentReportCardSy, extractGraduationYearFromRemarks } from '../lib/schoolYearUtils';
 import { ScanFormView } from './ScanFormView';
 import { DateOfBirthInput } from './DateOfBirthInput';
 
@@ -41,6 +42,7 @@ interface Props {
   initialMode?: 'selection' | 'ocr' | 'form';
   maxExamScore: number;
   recruitmentListId?: string;
+  recruitmentListName?: string;
   onClose: () => void;
   onSuccess: (student: StudentRecord) => void;
 }
@@ -52,6 +54,7 @@ export const StudentFormModal: React.FC<Props> = ({
   initialMode = 'selection',
   maxExamScore,
   recruitmentListId,
+  recruitmentListName,
   onClose,
   onSuccess,
 }) => {
@@ -101,8 +104,11 @@ export const StudentFormModal: React.FC<Props> = ({
     studentToEdit?.elementarySchool || studentToEdit?.school || ''
   );
   const [schoolAddress, setSchoolAddress] = useState<string>(studentToEdit?.schoolAddress || '');
-  const [reportCardSy, setReportCardSy] = useState<string>(
-    studentToEdit?.reportCardSy || studentToEdit?.reportCard || 'SY 2024-2025'
+  const [reportCardSy, setReportCardSy] = useState<string>(() =>
+    getStudentReportCardSy(
+      studentToEdit || { currentGrade: 'Grade 6', oldGraduateRemarks: '' },
+      recruitmentListName || recruitmentListId
+    ) || studentToEdit?.reportCardSy || studentToEdit?.reportCard || ''
   );
   const [lrn, setLrn] = useState<string>(studentToEdit?.lrn || '');
   const [grading, setGrading] = useState<string>(studentToEdit?.grading || 'Final');
@@ -746,30 +752,41 @@ export const StudentFormModal: React.FC<Props> = ({
     }
   }, [sitioStreet, barangay, municipality, province]);
 
-  // Real-time duplicate checking
+  // Automatic School Year calculation based on educational history
+  useEffect(() => {
+    const computedSy = getStudentReportCardSy(
+      {
+        oldGraduateRemarks,
+        currentGrade,
+        reportCardSy: studentToEdit?.reportCardSy || studentToEdit?.reportCard,
+        recruitmentListId,
+      },
+      recruitmentListName || recruitmentListId
+    );
+    if (computedSy) {
+      setReportCardSy(computedSy);
+    }
+  }, [oldGraduateRemarks, currentGrade, recruitmentListId, recruitmentListName, studentToEdit]);
+
+  // Real-time duplicate checking (LRN Unique Identifier)
   useEffect(() => {
     const timer = setTimeout(async () => {
       const cleanLrn = lrn.trim();
-      const cleanSn = lastName.trim();
-      const cleanFn = firstName.trim();
+      const digits = cleanLrn.replace(/[^0-9]/g, '');
 
-      if ((cleanLrn && cleanLrn.length >= 6) || (cleanSn && cleanFn)) {
+      // Rule: Use LRN as the unique identifier.
+      // If LRN is blank/unavailable, allow applicant to be saved without blocking.
+      if (digits.length >= 6) {
         try {
           const res = await checkStudentDuplicate(
             {
               lrn: cleanLrn,
-              lastName: cleanSn,
-              surname: cleanSn,
-              firstName: cleanFn,
-              birthdate: birthdate,
-              birthday: birthdate,
-              address: address,
             },
             studentToEdit?.id,
             recruitmentListId
           );
 
-          if (res.duplicateStatus === 'EXACT' || res.duplicateStatus === 'POSSIBLE') {
+          if (res.duplicateStatus === 'EXACT') {
             setDuplicateWarning({
               duplicateStatus: res.duplicateStatus,
               existingRecord: res.existingRecord!,
@@ -785,10 +802,10 @@ export const StudentFormModal: React.FC<Props> = ({
       } else {
         setDuplicateWarning(null);
       }
-    }, 600);
+    }, 400);
 
     return () => clearTimeout(timer);
-  }, [lrn, lastName, firstName, birthdate, address, studentToEdit?.id, recruitmentListId]);
+  }, [lrn, studentToEdit?.id, recruitmentListId]);
 
   // Lock body scroll while open
   useEffect(() => {
@@ -879,13 +896,22 @@ export const StudentFormModal: React.FC<Props> = ({
       setActiveTab('A');
       return;
     }
-    if (!cleanLrn) {
-      setError('12-Digit Learner Reference Number (LRN) is required.');
-      setActiveTab('C');
-      return;
+    // LRN duplicate validation rule:
+    // If LRN is blank/unavailable, allow applicant to be saved without blocking based on matching personal information.
+    // If entered, check 12-digit format.
+    const isLrnUnavailable = !cleanLrn || ['N/A', 'NA', 'NONE', 'UNAVAILABLE', 'PENDING'].includes(cleanLrn.toUpperCase());
+    if (!isLrnUnavailable) {
+      const lrnDigits = cleanLrn.replace(/[^0-9]/g, '');
+      if (lrnDigits.length !== 12) {
+        setError('Learner Reference Number (LRN) must be 12 digits (or leave blank if unavailable).');
+        setActiveTab('C');
+        return;
+      }
     }
-    if (cleanLrn.length !== 12 || !/^\d{12}$/.test(cleanLrn)) {
-      setError('Learner Reference Number (LRN) must be exactly 12 digits.');
+
+    // Prevent saving if duplicate LRN exists
+    if (duplicateWarning?.duplicateStatus === 'EXACT') {
+      setError(duplicateWarning.message || `Duplicate LRN Warning: An applicant with LRN ${cleanLrn} already exists.`);
       setActiveTab('C');
       return;
     }
@@ -916,6 +942,16 @@ export const StudentFormModal: React.FC<Props> = ({
         recruitmentListId ||
         (studentToEdit as any)?.recruitmentListId ||
         (typeof localStorage !== 'undefined' ? localStorage.getItem('sms_active_recruitment_list_id') || undefined : undefined);
+
+      const accurateReportCardSy = getStudentReportCardSy(
+        {
+          oldGraduateRemarks: oldGraduateRemarks.trim(),
+          currentGrade: currentGrade.trim() || 'Grade 6',
+          reportCardSy,
+          recruitmentListId: activeListId,
+        },
+        recruitmentListName || activeListId
+      ) || reportCardSy.trim();
 
       const studentPayload: any = {
         recruitmentListId: activeListId,
@@ -951,8 +987,8 @@ export const StudentFormModal: React.FC<Props> = ({
         elementarySchool: elementarySchool.trim(),
         school: elementarySchool.trim(),
         schoolAddress: schoolAddress.trim(),
-        reportCardSy: reportCardSy.trim(),
-        reportCard: reportCardSy.trim(),
+        reportCardSy: accurateReportCardSy,
+        reportCard: accurateReportCardSy,
         lrn: cleanLrn,
         grading: grading.trim(),
         currentGrade: currentGrade.trim() || 'Grade 6',
@@ -1049,6 +1085,7 @@ export const StudentFormModal: React.FC<Props> = ({
           recruitmentListId ||
           (typeof localStorage !== 'undefined' ? localStorage.getItem('sms_active_recruitment_list_id') || undefined : undefined)
         }
+        recruitmentListName={recruitmentListName}
       />
     );
   }
@@ -1208,8 +1245,8 @@ export const StudentFormModal: React.FC<Props> = ({
             <div className="flex-1 text-xs">
               <p className="font-black text-sm">
                 {duplicateWarning.duplicateStatus === 'EXACT'
-                  ? 'DUPLICATE STUDENT RECORD DETECTED'
-                  : 'POSSIBLE MATCH DETECTED IN DATABASE'}
+                  ? 'DUPLICATE LRN DETECTED'
+                  : 'DUPLICATE LRN WARNING'}
               </p>
               <p className="mt-0.5 font-medium">{duplicateWarning.message}</p>
               <p className="text-[11px] opacity-80 mt-1">
@@ -1680,6 +1717,20 @@ export const StudentFormModal: React.FC<Props> = ({
                     onChange={(e) => setOldGraduateRemarks(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                   />
+                  {reportCardSy ? (
+                    <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Report Card (SY): <strong className="text-blue-700 font-bold">{reportCardSy}</strong></span>
+                      {extractGraduationYearFromRemarks(oldGraduateRemarks) ? (
+                        <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md font-medium text-[10px]">
+                          Old Graduate ({extractGraduationYearFromRemarks(oldGraduateRemarks)})
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-medium text-[10px]">
+                          Regular Grade 6
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

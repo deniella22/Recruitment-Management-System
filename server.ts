@@ -668,9 +668,7 @@ async function startServer() {
     }
 
     // Required Field Validations matching official workflow
-    if (!lrn) {
-      return res.status(400).json({ error: "Please enter the student's 12-digit LRN." });
-    }
+    // LRN duplicate-validation rule: if LRN is blank/unavailable, allow saving without blocking
     if (!lastName) {
       return res.status(400).json({ error: 'Last Name / Surname is required.' });
     }
@@ -797,10 +795,6 @@ async function startServer() {
 
     const body = req.body || {};
     const { lrn, birthdate, birthday, examScore, remarks, admissionStatus } = body;
-
-    if (lrn !== undefined && (!lrn || !String(lrn).trim())) {
-      return res.status(400).json({ error: "Please enter the student's LRN." });
-    }
 
     const bDate = birthdate || birthday;
     if (bDate && isNaN(Date.parse(bDate))) {
@@ -1327,9 +1321,16 @@ ACCURACY & INTEGRITY RULES:
   app.get('/api/students/export/excel', async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
-      const students = dbService.getStudents(currentUser?.id);
+      const recruitmentListId = req.query.recruitmentListId as string | undefined;
+      const students = dbService.getStudents(currentUser?.id, recruitmentListId);
+      const lists = currentUser ? dbService.getRecruitmentLists(currentUser.id, false) : [];
+      const settings = dbService.getSettings();
+      const targetList = recruitmentListId ? lists.find((l) => l.id === recruitmentListId) : undefined;
 
-      const excelBuffer = await generateStudentRecordsExcel(students);
+      const excelBuffer = await generateStudentRecordsExcel(students, {
+        academicYear: targetList?.name || settings.academicYear,
+        recruitmentLists: lists,
+      });
 
       if (currentUser) {
         dbService.addAuditLog({

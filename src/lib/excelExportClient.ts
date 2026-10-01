@@ -7,12 +7,14 @@ import {
   getStudentProvince,
   resolveAdmissionStatus,
 } from './studentSorting';
+import { getStudentReportCardSy } from './schoolYearUtils';
 
 export interface ExcelExportOptions {
   title?: string;
   statusFilter?: string;
   academicYear?: string;
   schoolName?: string;
+  recruitmentListName?: string;
 }
 
 export async function exportStudentsToExcel(
@@ -277,7 +279,11 @@ export async function exportStudentsToExcel(
           s.address || '',
           s.elementarySchool || s.school || '',
           s.schoolAddress || '',
-          s.reportCardSy || '',
+          getStudentReportCardSy(
+            s,
+            options?.recruitmentListName || options?.academicYear,
+            academicYear
+          ) || s.reportCardSy || '',
           s.grading || '',
           s.currentGrade || 'Grade 6',
           s.oldGraduateRemarks || '',

@@ -38,6 +38,7 @@ import {
 import { StudentRecord, AdmissionStatus, OCRScanResult, SiblingRecord, PROVINCE_OPTIONS, resolveProvince } from '../types';
 import { performOCRScan, fetchOcrStatus, createStudent, updateStudent, checkStudentDuplicate } from '../lib/api';
 import { calculateAgeFromBirthdate } from '../lib/dateUtils';
+import { getStudentReportCardSy, extractGraduationYearFromRemarks } from '../lib/schoolYearUtils';
 import { DateOfBirthInput } from './DateOfBirthInput';
 
 interface Props {
@@ -46,6 +47,7 @@ interface Props {
   maxExamScore: number;
   initialImageBase64?: string;
   recruitmentListId?: string;
+  recruitmentListName?: string;
 }
 
 export const ScanFormView: React.FC<Props> = ({
@@ -54,6 +56,7 @@ export const ScanFormView: React.FC<Props> = ({
   maxExamScore,
   initialImageBase64,
   recruitmentListId,
+  recruitmentListName,
 }) => {
   // Stage: 'capture' | 'scanning' | 'review'
   const [stage, setStage] = useState<'capture' | 'scanning' | 'review'>(
@@ -95,7 +98,12 @@ export const ScanFormView: React.FC<Props> = ({
   // --- SECTION C: Educational Background ---
   const [elementarySchool, setElementarySchool] = useState<string>('');
   const [schoolAddress, setSchoolAddress] = useState<string>('');
-  const [reportCardSy, setReportCardSy] = useState<string>('SY 2024-2025');
+  const [reportCardSy, setReportCardSy] = useState<string>(() =>
+    getStudentReportCardSy(
+      { currentGrade: 'Grade 6', oldGraduateRemarks: '' },
+      recruitmentListName || recruitmentListId
+    )
+  );
   const [lrn, setLrn] = useState<string>('');
   const [grading, setGrading] = useState<string>('Final');
   const [currentGrade, setCurrentGrade] = useState<string>('Grade 6');
@@ -644,7 +652,16 @@ export const ScanFormView: React.FC<Props> = ({
       // Section C
       setElementarySchool(data.elementarySchool || data.school || '');
       setSchoolAddress(data.schoolAddress || '');
-      setReportCardSy(data.reportCardSy || 'SY 2024-2025');
+      const ocrSy = getStudentReportCardSy(
+        {
+          oldGraduateRemarks: data.oldGraduateRemarks,
+          currentGrade: data.currentGrade,
+          reportCardSy: data.reportCardSy,
+          recruitmentListId,
+        },
+        recruitmentListName || recruitmentListId
+      );
+      setReportCardSy(ocrSy || data.reportCardSy || '');
       setLrn(data.lrn ? String(data.lrn).replace(/\D/g, '').slice(0, 12) : '');
       setGrading(data.grading || 'Final');
       setCurrentGrade(data.currentGrade || 'Grade 6');
@@ -755,35 +772,30 @@ export const ScanFormView: React.FC<Props> = ({
     }
   };
 
-  // Real-time duplicate checking in Review Mode
+  // Real-time duplicate checking in Review Mode (LRN Unique Identifier)
   useEffect(() => {
     if (stage !== 'review') return;
 
     const timer = setTimeout(async () => {
       const cleanLrn = lrn.trim();
-      const cleanSn = lastName.trim();
-      const cleanFn = firstName.trim();
+      const digits = cleanLrn.replace(/[^0-9]/g, '');
       const activeListId =
         recruitmentListId ||
         (typeof localStorage !== 'undefined' ? localStorage.getItem('sms_active_recruitment_list_id') || undefined : undefined);
 
-      if ((cleanLrn && cleanLrn.length >= 6) || (cleanSn && cleanFn)) {
+      // Rule: Use LRN as the unique identifier.
+      // If LRN is blank/unavailable, allow applicant to be saved without blocking.
+      if (digits.length >= 6) {
         try {
           const res = await checkStudentDuplicate(
             {
               lrn: cleanLrn,
-              lastName: cleanSn,
-              surname: cleanSn,
-              firstName: cleanFn,
-              birthdate: birthdate,
-              birthday: birthdate,
-              address: address,
             },
             undefined,
             activeListId
           );
 
-          if (res.duplicateStatus === 'EXACT' || res.duplicateStatus === 'POSSIBLE') {
+          if (res.duplicateStatus === 'EXACT') {
             setDuplicateWarning({
               duplicateStatus: res.duplicateStatus,
               existingRecord: res.existingRecord!,
@@ -799,10 +811,26 @@ export const ScanFormView: React.FC<Props> = ({
       } else {
         setDuplicateWarning(null);
       }
-    }, 600);
+    }, 400);
 
     return () => clearTimeout(timer);
-  }, [stage, lrn, lastName, firstName, birthdate, address, recruitmentListId]);
+  }, [stage, lrn, recruitmentListId]);
+
+  // Automatic School Year calculation based on educational history
+  useEffect(() => {
+    const computedSy = getStudentReportCardSy(
+      {
+        oldGraduateRemarks,
+        currentGrade,
+        reportCardSy,
+        recruitmentListId,
+      },
+      recruitmentListName || recruitmentListId
+    );
+    if (computedSy) {
+      setReportCardSy(computedSy);
+    }
+  }, [oldGraduateRemarks, currentGrade, recruitmentListId, recruitmentListName]);
 
   // Sibling Helpers
   const handleAddSibling = () => {
@@ -851,13 +879,22 @@ export const ScanFormView: React.FC<Props> = ({
       setActiveReviewTab('A');
       return;
     }
-    if (!cleanLrn) {
-      setSaveError('12-Digit Learner Reference Number (LRN) is required.');
-      setActiveReviewTab('C');
-      return;
+    // LRN duplicate validation rule:
+    // If LRN is blank/unavailable, allow applicant to be saved without blocking based on matching personal information.
+    // If entered, check 12-digit format.
+    const isLrnUnavailable = !cleanLrn || ['N/A', 'NA', 'NONE', 'UNAVAILABLE', 'PENDING'].includes(cleanLrn.toUpperCase());
+    if (!isLrnUnavailable) {
+      const lrnDigits = cleanLrn.replace(/[^0-9]/g, '');
+      if (lrnDigits.length !== 12) {
+        setSaveError('Learner Reference Number (LRN) must be 12 digits (or leave blank if unavailable).');
+        setActiveReviewTab('C');
+        return;
+      }
     }
-    if (cleanLrn.length !== 12 || !/^\d{12}$/.test(cleanLrn)) {
-      setSaveError('Learner Reference Number (LRN) must be exactly 12 digits.');
+
+    // Prevent saving if duplicate LRN exists
+    if (duplicateWarning?.duplicateStatus === 'EXACT') {
+      setSaveError(duplicateWarning.message || `Duplicate LRN Warning: An applicant with LRN ${cleanLrn} already exists.`);
       setActiveReviewTab('C');
       return;
     }
@@ -888,6 +925,16 @@ export const ScanFormView: React.FC<Props> = ({
         recruitmentListId ||
         (typeof localStorage !== 'undefined' ? localStorage.getItem('sms_active_recruitment_list_id') || undefined : undefined);
 
+      const accurateReportCardSy = getStudentReportCardSy(
+        {
+          oldGraduateRemarks: oldGraduateRemarks.trim(),
+          currentGrade: currentGrade.trim() || 'Grade 6',
+          reportCardSy,
+          recruitmentListId: activeListId,
+        },
+        recruitmentListName || activeListId
+      ) || reportCardSy.trim();
+
       const studentPayload: any = {
         recruitmentListId: activeListId,
         photoUrl: photoUrl || undefined,
@@ -912,8 +959,8 @@ export const ScanFormView: React.FC<Props> = ({
         elementarySchool: elementarySchool.trim(),
         school: elementarySchool.trim(),
         schoolAddress: schoolAddress.trim(),
-        reportCardSy: reportCardSy.trim(),
-        reportCard: reportCardSy.trim(),
+        reportCardSy: accurateReportCardSy,
+        reportCard: accurateReportCardSy,
         lrn: cleanLrn,
         grading: grading.trim(),
         currentGrade: currentGrade.trim() || 'Grade 6',
@@ -1320,8 +1367,8 @@ export const ScanFormView: React.FC<Props> = ({
             <div className="flex-1 text-xs">
               <p className="font-black text-sm">
                 {duplicateWarning.duplicateStatus === 'EXACT'
-                  ? 'DUPLICATE RECORD WARNING'
-                  : 'POSSIBLE MATCH DETECTED IN DATABASE'}
+                  ? 'DUPLICATE LRN DETECTED'
+                  : 'DUPLICATE LRN WARNING'}
               </p>
               <p className="mt-0.5 font-medium">{duplicateWarning.message}</p>
               <p className="text-[11px] opacity-80 mt-0.5">
@@ -1729,6 +1776,20 @@ export const ScanFormView: React.FC<Props> = ({
                         onChange={(e) => setOldGraduateRemarks(e.target.value)}
                         className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-gray-900 focus:ring-2 focus:ring-blue-600 focus:outline-none"
                       />
+                      {reportCardSy ? (
+                        <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+                          <span>Report Card (SY): <strong className="text-blue-700 font-bold">{reportCardSy}</strong></span>
+                          {extractGraduationYearFromRemarks(oldGraduateRemarks) ? (
+                            <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md font-medium text-[10px]">
+                              Old Graduate ({extractGraduationYearFromRemarks(oldGraduateRemarks)})
+                            </span>
+                          ) : (
+                            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-medium text-[10px]">
+                              Regular Grade 6
+                            </span>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>

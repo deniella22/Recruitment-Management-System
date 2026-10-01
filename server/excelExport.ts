@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { StudentRecord } from '../src/types.js';
+import { StudentRecord, RecruitmentList } from '../src/types.js';
 import { calculateAgeFromBirthdate } from '../src/lib/dateUtils.js';
 import {
   sortStudents,
@@ -7,8 +7,12 @@ import {
   getStudentProvince,
   resolveAdmissionStatus,
 } from '../src/lib/studentSorting.js';
+import { getStudentReportCardSy } from '../src/lib/schoolYearUtils.js';
 
-export async function generateStudentRecordsExcel(students: StudentRecord[]): Promise<Buffer> {
+export async function generateStudentRecordsExcel(
+  students: StudentRecord[],
+  options?: { academicYear?: string; recruitmentLists?: RecruitmentList[] }
+): Promise<Buffer> {
   // Always sort students using exact required hierarchy:
   // 1. PRIMARY: Province (A–Z)
   // 2. SECONDARY: Testing Center / Place (A–Z)
@@ -260,7 +264,11 @@ export async function generateStudentRecordsExcel(students: StudentRecord[]): Pr
         s.address || '',
         s.elementarySchool || s.school || '',
         s.schoolAddress || '',
-        s.reportCardSy || '',
+        getStudentReportCardSy(
+          s,
+          options?.recruitmentLists?.find((l) => l.id === s.recruitmentListId)?.name || options?.academicYear,
+          options?.academicYear
+        ) || s.reportCardSy || '',
         s.grading || '',
         s.currentGrade || 'Grade 6',
         s.oldGraduateRemarks || '',

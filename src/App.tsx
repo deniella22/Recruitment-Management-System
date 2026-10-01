@@ -317,6 +317,8 @@ export default function App() {
 
       await exportStudentsToExcel(targetStudents, systemSettings, {
         statusFilter: label,
+        recruitmentListName: selectedRecruitmentList?.name,
+        academicYear: selectedRecruitmentList?.name || systemSettings?.academicYear,
       });
       showToast(`Excel export completed! (${targetStudents.length} records exported)`);
     } catch (err: any) {
@@ -638,6 +640,7 @@ export default function App() {
           initialMode={modalInitialMode}
           maxExamScore={systemSettings.maxExamScore}
           recruitmentListId={selectedRecruitmentList.id}
+          recruitmentListName={selectedRecruitmentList.name}
           onClose={() => {
             setIsFormModalOpen(false);
             setStudentToEdit(null);

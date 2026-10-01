@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { StudentRecord, SystemSettings, UserRole } from '../types';
 import { exportStudentProfilePdf } from '../lib/pdfExport';
+import { getStudentReportCardSy } from '../lib/schoolYearUtils';
 import { calculateAgeFromBirthdate } from '../lib/dateUtils';
 
 interface Props {
@@ -257,6 +258,10 @@ export const StudentProfileView: React.FC<Props> = ({
             <div>
               <p className="text-gray-500 font-semibold uppercase text-[10px]">Current Grade</p>
               <p className="font-bold text-gray-900 mt-0.5">{student.currentGrade || 'Grade 6'}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 font-semibold uppercase text-[10px]">Report Card (SY)</p>
+              <p className="font-bold text-gray-900 mt-0.5">{getStudentReportCardSy(student) || student.reportCardSy || 'N/A'}</p>
             </div>
             {student.oldGraduateRemarks ? (
               <div>

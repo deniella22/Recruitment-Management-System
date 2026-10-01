@@ -5,8 +5,13 @@ import pg from 'pg';
 import { User, StudentRecord, SiblingRecord, AuditLogEntry, SystemSettings, BrandingPreset, ThemePreset, RecruitmentList, RecruitmentListWithStats, PaginatedResult } from '../src/types.js';
 import { calculateAgeFromBirthdate } from '../src/lib/dateUtils.js';
 import { sortStudents } from './studentSorting.js';
+import { getStudentReportCardSy } from '../src/lib/schoolYearUtils.js';
 
-export function sanitizeStudentRecord(s: any): StudentRecord {
+export function sanitizeStudentRecord(
+  s: any,
+  recruitmentListOrName?: RecruitmentList | string | null,
+  fallbackAcademicYear?: string | null
+): StudentRecord {
   const lastName = (s.lastName || s.surname || '').trim();
   const firstName = (s.firstName || '').trim();
   const middleName = (s.middleName || '').trim();
@@ -31,11 +36,39 @@ export function sanitizeStudentRecord(s: any): StudentRecord {
 
   const elementarySchool = (s.elementarySchool || s.school || '').trim();
   const schoolAddress = (s.schoolAddress || '').trim();
-  const reportCardSy = (s.reportCardSy || s.reportCard || 'SY2025-2026 Submitted').trim();
   const lrn = (s.lrn || '').trim();
   const grading = (s.grading || '').trim();
   const currentGrade = (s.currentGrade || 'Grade 6').trim();
   const oldGraduateRemarks = (s.oldGraduateRemarks || s.othersSpecify || '').trim();
+
+  // Determine recruitment list name for accurate School Year calculation
+  let rListName: string | undefined = undefined;
+  if (typeof recruitmentListOrName === 'string') {
+    rListName = recruitmentListOrName;
+  } else if (recruitmentListOrName?.name) {
+    rListName = recruitmentListOrName.name;
+  } else if (s.recruitmentListId) {
+    try {
+      const db = ensureDbExists();
+      const r = (db.recruitmentLists || []).find((l: any) => l.id === s.recruitmentListId);
+      if (r?.name) rListName = r.name;
+    } catch {
+      // fallback
+    }
+  }
+
+  // Calculate accurate, individual Report Card SY based on student's actual educational history
+  const calculatedSy = getStudentReportCardSy(
+    {
+      oldGraduateRemarks,
+      currentGrade,
+      reportCardSy: s.reportCardSy || s.reportCard,
+      recruitmentListId: s.recruitmentListId,
+    },
+    rListName,
+    fallbackAcademicYear
+  );
+  const reportCardSy = (calculatedSy || s.reportCardSy || s.reportCard || '').trim();
 
   const fatherName = (s.fatherName || '').trim();
   const fatherOccupation = (s.fatherOccupation || '').trim();
@@ -1451,7 +1484,12 @@ export const dbService = {
     if (recruitmentListId) {
       list = list.filter((s) => s.recruitmentListId === recruitmentListId || !s.recruitmentListId);
     }
-    return list;
+    const listMap = new Map((db.recruitmentLists || []).map((l: any) => [l.id, l.name]));
+    const settings = db.settings || DEFAULT_SETTINGS;
+    return list.map((s) => {
+      const accurateSy = getStudentReportCardSy(s, listMap.get(s.recruitmentListId), settings?.academicYear);
+      return accurateSy ? { ...s, reportCardSy: accurateSy } : s;
+    });
   },
 
   queryStudents(params: {
@@ -1528,8 +1566,15 @@ export const dbService = {
     const startIndex = (page - 1) * limit;
     const paginatedData = records.slice(startIndex, startIndex + limit);
 
+    const listMap = new Map((db.recruitmentLists || []).map((l: any) => [l.id, l.name]));
+    const settings = db.settings || DEFAULT_SETTINGS;
+    const resolvedData = paginatedData.map((s) => {
+      const accurateSy = getStudentReportCardSy(s, listMap.get(s.recruitmentListId), settings?.academicYear);
+      return accurateSy ? { ...s, reportCardSy: accurateSy } : s;
+    });
+
     return {
-      data: paginatedData,
+      data: resolvedData,
       page,
       limit,
       totalRecords,
@@ -1540,18 +1585,28 @@ export const dbService = {
   getStudentById(id: string, userId?: string, recruitmentListId?: string): StudentRecord | undefined {
     const db = ensureDbExists();
     if (!userId) return undefined;
-    return db.students.find(
+    const student = db.students.find(
       (s) => s.id === id && s.userId === userId && (!recruitmentListId || !s.recruitmentListId || s.recruitmentListId === recruitmentListId)
     );
+    if (!student) return undefined;
+    const list = (db.recruitmentLists || []).find((l: any) => l.id === student.recruitmentListId);
+    const settings = db.settings || DEFAULT_SETTINGS;
+    const accurateSy = getStudentReportCardSy(student, list?.name, settings?.academicYear);
+    return accurateSy ? { ...student, reportCardSy: accurateSy } : student;
   },
 
   getStudentByLrn(lrn: string, userId?: string, recruitmentListId?: string): StudentRecord | undefined {
     const db = ensureDbExists();
     if (!userId) return undefined;
     const cleanLrn = lrn.trim();
-    return db.students.find(
+    const student = db.students.find(
       (s) => s.lrn.trim() === cleanLrn && s.userId === userId && (!recruitmentListId || !s.recruitmentListId || s.recruitmentListId === recruitmentListId)
     );
+    if (!student) return undefined;
+    const list = (db.recruitmentLists || []).find((l: any) => l.id === student.recruitmentListId);
+    const settings = db.settings || DEFAULT_SETTINGS;
+    const accurateSy = getStudentReportCardSy(student, list?.name, settings?.academicYear);
+    return accurateSy ? { ...student, reportCardSy: accurateSy } : student;
   },
 
   async createStudent(
@@ -1574,12 +1629,25 @@ export const dbService = {
       throw new Error(dupCheck.message || `Duplicate student record: ${dupCheck.existingRecord?.lastName || dupCheck.existingRecord?.surname}, ${dupCheck.existingRecord?.firstName} (LRN: ${dupCheck.existingRecord?.lrn || 'N/A'}) already exists in this recruitment list.`);
     }
 
-    const sanitized = sanitizeStudentRecord({
-      ...studentData,
-      recruitmentListId: rListId,
-      createdBy: operatorName,
-      updatedBy: operatorName,
-    });
+    const targetList = (db.recruitmentLists || []).find((l: any) => l.id === rListId);
+    const settings = db.settings || DEFAULT_SETTINGS;
+    const autoSy = getStudentReportCardSy(
+      studentData,
+      targetList?.name,
+      settings?.academicYear
+    );
+
+    const sanitized = sanitizeStudentRecord(
+      {
+        ...studentData,
+        ...(autoSy ? { reportCardSy: autoSy, reportCard: autoSy } : {}),
+        recruitmentListId: rListId,
+        createdBy: operatorName,
+        updatedBy: operatorName,
+      },
+      targetList?.name,
+      settings?.academicYear
+    );
 
     db.students.push(sanitized);
     await saveDb(db);
@@ -1600,30 +1668,41 @@ export const dbService = {
     }
 
     const currentRecruitmentId = db.students[idx].recruitmentListId;
+    const targetRecruitmentId = updates.recruitmentListId !== undefined ? updates.recruitmentListId : currentRecruitmentId;
+    const targetList = (db.recruitmentLists || []).find((l: any) => l.id === targetRecruitmentId);
+    const settings = db.settings || DEFAULT_SETTINGS;
+
+    // Recalculate accurate Report Card SY when old graduate remarks, grade, or list changes
+    const newOldGrad = updates.oldGraduateRemarks !== undefined ? updates.oldGraduateRemarks : db.students[idx].oldGraduateRemarks;
+    const newGrade = updates.currentGrade !== undefined ? updates.currentGrade : db.students[idx].currentGrade;
+    const autoSy = getStudentReportCardSy(
+      {
+        oldGraduateRemarks: newOldGrad,
+        currentGrade: newGrade,
+        reportCardSy: updates.reportCardSy !== undefined ? updates.reportCardSy : db.students[idx].reportCardSy,
+        recruitmentListId: targetRecruitmentId,
+      },
+      targetList?.name,
+      settings?.academicYear
+    );
 
     // If LRN is being changed, check if new LRN exists on ANOTHER record belonging to this user in the same list
-    if (updates.lrn && updates.lrn.trim() !== db.students[idx].lrn.trim()) {
-      const cleanLrn = updates.lrn.trim();
-      const duplicate = db.students.find(
-        (s) =>
-          s.id !== id &&
-          s.lrn.trim() === cleanLrn &&
-          (!userId || s.userId === userId) &&
-          (!currentRecruitmentId || s.recruitmentListId === currentRecruitmentId)
-      );
-      if (duplicate) {
-        throw new Error(`This LRN (${cleanLrn}) already exists for student: ${duplicate.lastName || duplicate.surname}, ${duplicate.firstName}.`);
+    if (updates.lrn !== undefined) {
+      const dupCheck = this.checkDuplicate({ lrn: updates.lrn }, userId, id, currentRecruitmentId);
+      if (dupCheck.duplicateStatus === 'EXACT') {
+        throw new Error(dupCheck.message || `Duplicate LRN Warning: An applicant with LRN ${updates.lrn} already exists.`);
       }
     }
 
     const merged = {
       ...db.students[idx],
       ...updates,
+      ...(autoSy ? { reportCardSy: autoSy, reportCard: autoSy } : {}),
       updatedAt: new Date().toISOString(),
       updatedBy: operatorName,
     };
 
-    const sanitized = sanitizeStudentRecord(merged);
+    const sanitized = sanitizeStudentRecord(merged, targetList?.name, settings?.academicYear);
     db.students[idx] = sanitized;
     await saveDb(db);
 
@@ -1642,7 +1721,7 @@ export const dbService = {
     return false;
   },
 
-  // DUPLICATE DETECTION ENGINE (Normalization & Multi-factor matching)
+  // DUPLICATE DETECTION ENGINE (LRN Unique Identifier)
   checkDuplicate(
     candidate: Partial<StudentRecord>,
     userId?: string,
@@ -1655,6 +1734,18 @@ export const dbService = {
     matchReason?: string;
     message: string;
   } {
+    const rawCandidateLrn = candidate.lrn !== undefined && candidate.lrn !== null ? String(candidate.lrn).trim() : '';
+    const normCandidateLrn = rawCandidateLrn.replace(/[^0-9]/g, '');
+
+    // Rule: If LRN is blank/unavailable, allow the applicant to be saved without blocking based on matching personal information.
+    // Rule: Do not use name, surname, date of birth, or family information as a duplicate rule.
+    if (!normCandidateLrn) {
+      return {
+        duplicateStatus: 'NONE',
+        message: 'No duplicate records found. LRN is blank or unavailable.',
+      };
+    }
+
     const db = ensureDbExists();
     const userStudents = db.students.filter(
       (s) =>
@@ -1663,120 +1754,26 @@ export const dbService = {
         (!recruitmentListId || !s.recruitmentListId || s.recruitmentListId === recruitmentListId)
     );
 
-    const norm = (str?: string) =>
-      (str || '')
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, '')
-        .trim();
-
-    const normLrn = (candidate.lrn || '').trim().replace(/[^0-9]/g, '');
-    const candSurname = norm(candidate.lastName || candidate.surname);
-    const candFirst = norm(candidate.firstName);
-    const candBirth = (candidate.birthdate || candidate.birthday || '').trim();
-    const candSchool = norm(candidate.elementarySchool || candidate.school);
-    const candAddress = norm(candidate.address || `${candidate.sitioStreet || ''} ${candidate.barangay || ''} ${candidate.municipality || ''}`);
-
     for (const existing of userStudents) {
-      const exLrn = existing.lrn.trim().replace(/[^0-9]/g, '');
-      const exSurname = norm(existing.lastName || existing.surname);
-      const exFirst = norm(existing.firstName);
-      const exBirth = (existing.birthdate || existing.birthday || '').trim();
-      const exSchool = norm(existing.elementarySchool || existing.school);
-      const exAddress = norm(existing.address || `${existing.sitioStreet || ''} ${existing.barangay || ''} ${existing.municipality || ''}`);
+      const exNormLrn = (existing.lrn || '').trim().replace(/[^0-9]/g, '');
 
-      // 1. EXACT DUPLICATE: Same LRN (at least 6 digits)
-      if (normLrn && exLrn && normLrn.length >= 6 && normLrn === exLrn) {
+      // Rule: Use LRN as the unique identifier.
+      // If the entered LRN already exists, prevent saving and show a clear duplicate-LRN warning.
+      if (exNormLrn && normCandidateLrn === exNormLrn) {
         return {
           duplicateStatus: 'EXACT',
           existingRecord: existing,
           matchedFields: ['lrn'],
           matchReason: `Exact LRN Match: ${existing.lrn}`,
-          message: `Exact duplicate found: Student "${existing.lastName || existing.surname}, ${existing.firstName}" already has the same LRN (${existing.lrn}) in your records.`,
+          message: `Duplicate LRN Warning: An applicant with Learner Reference Number (LRN) ${existing.lrn} already exists in this recruitment list (${existing.lastName || existing.surname || ''}, ${existing.firstName || ''}).`,
         };
-      }
-
-      // 2. EXACT DUPLICATE: Same Surname + First Name + Birthday
-      if (candSurname && candFirst && candBirth && exSurname && exFirst && exBirth) {
-        if (candSurname === exSurname && candFirst === exFirst && candBirth === exBirth) {
-          return {
-            duplicateStatus: 'EXACT',
-            existingRecord: existing,
-            matchedFields: ['surname', 'firstName', 'birthdate'],
-            matchReason: 'Exact Name and Birthday Match',
-            message: `Exact duplicate found: Student "${existing.lastName || existing.surname}, ${existing.firstName}" (DOB: ${existing.birthdate || existing.birthday}) is already registered in your account.`,
-          };
-        }
-      }
-
-      // 3. EXACT DUPLICATE: Same Surname + First Name + Address (when address is detailed)
-      if (candSurname && candFirst && candAddress && exSurname && exFirst && exAddress && candAddress.length > 8) {
-        if (candSurname === exSurname && candFirst === exFirst && candAddress === exAddress) {
-          return {
-            duplicateStatus: 'EXACT',
-            existingRecord: existing,
-            matchedFields: ['surname', 'firstName', 'address'],
-            matchReason: 'Exact Name and Address Match',
-            message: `Exact duplicate found: Student "${existing.lastName || existing.surname}, ${existing.firstName}" from "${existing.address}" is already registered.`,
-          };
-        }
-      }
-
-      // 4. EXACT DUPLICATE: Fuzzy Name (OCR minor typo) + Exact Birthday
-      if (candSurname && candFirst && candBirth && exSurname && exFirst && exBirth && candBirth === exBirth) {
-        const candFull = `${candSurname} ${candFirst}`;
-        const exFull = `${exSurname} ${exFirst}`;
-        if (candFull.length >= 6 && exFull.length >= 6) {
-          let diffCount = 0;
-          const maxL = Math.max(candFull.length, exFull.length);
-          const minL = Math.min(candFull.length, exFull.length);
-          if (Math.abs(candFull.length - exFull.length) <= 2) {
-            for (let i = 0; i < minL; i++) {
-              if (candFull[i] !== exFull[i]) diffCount++;
-            }
-            diffCount += maxL - minL;
-            if (diffCount <= 2) {
-              return {
-                duplicateStatus: 'EXACT',
-                existingRecord: existing,
-                matchedFields: ['surname', 'firstName', 'birthdate'],
-                matchReason: `High-confidence Name match with identical Date of Birth (${existing.birthdate || existing.birthday})`,
-                message: `Exact duplicate found: Student "${existing.lastName || existing.surname}, ${existing.firstName}" (DOB: ${existing.birthdate || existing.birthday}) already exists in your database.`,
-              };
-            }
-          }
-        }
-      }
-
-      // 5. POSSIBLE DUPLICATE: Same Surname + First Name (different or missing birthday)
-      if (candSurname && candFirst && exSurname && exFirst) {
-        if (candSurname === exSurname && candFirst === exFirst) {
-          return {
-            duplicateStatus: 'POSSIBLE',
-            existingRecord: existing,
-            matchedFields: ['surname', 'firstName'],
-            matchReason: 'Matching Full Name with different birthday or school',
-            message: `Possible duplicate found: A student named "${existing.lastName || existing.surname}, ${existing.firstName}" already exists (LRN: ${existing.lrn}, School: ${existing.elementarySchool || 'N/A'}). Please verify if this is the same student.`,
-          };
-        }
-      }
-
-      // 6. POSSIBLE DUPLICATE: Same Surname + Birthday + School
-      if (candSurname && candBirth && candSchool && exSurname && exBirth && exSchool && candSchool.length > 5) {
-        if (candSurname === exSurname && candBirth === exBirth && candSchool === exSchool) {
-          return {
-            duplicateStatus: 'POSSIBLE',
-            existingRecord: existing,
-            matchedFields: ['surname', 'birthdate', 'elementarySchool'],
-            matchReason: 'Matching Surname, Birthday, and Elementary School',
-            message: `Possible duplicate found: Another student with surname "${existing.lastName || existing.surname}", birthday "${existing.birthdate || existing.birthday}", and school "${existing.elementarySchool}" was found (Record: ${existing.firstName} ${existing.lastName || existing.surname}).`,
-          };
-        }
       }
     }
 
+    // Rule: If the LRN is different, allow the applicant to be saved even if their name, surname, date of birth, or family information matches another applicant.
     return {
       duplicateStatus: 'NONE',
-      message: 'No duplicate records found in your database.',
+      message: 'No duplicate records found.',
     };
   },
 
