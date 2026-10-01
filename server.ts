@@ -60,15 +60,60 @@ if (resolvedKeyAtStartup) {
 }
 console.log('====================================================');
 
-async function startServer() {
-  await initDatabaseAsync();
-  const app = express();
-  const PORT = 3000;
+// Resolve the HTTP server port (supports Render's assigned process.env.PORT, CLI --port, and default 3000)
+export function resolvePort(): number {
+  // 1. Explicit CLI argument --port takes precedence (e.g. npm run dev --port 3000 in AI Studio)
+  const portArgIdx = process.argv.indexOf('--port');
+  if (portArgIdx !== -1 && process.argv[portArgIdx + 1]) {
+    const parsed = parseInt(process.argv[portArgIdx + 1], 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
 
+  // 2. Render or production deployment: listen on Render's assigned process.env.PORT
+  if (process.env.PORT) {
+    const envPort = parseInt(process.env.PORT, 10);
+    if (!isNaN(envPort) && envPort > 0) {
+      // In AI Studio internal dev container, port 8080 is reserved by internal nginx proxy
+      const isInternalAiStudio = fs.existsSync('/app/control-plane-api') && !process.env.RENDER;
+      if (isInternalAiStudio && envPort === 8080 && process.env.NODE_ENV !== 'production') {
+        return 3000;
+      }
+      return envPort;
+    }
+  }
+
+  // 3. Default fallback port
+  return 3000;
+}
+
+async function startServer() {
+  const PORT = resolvePort();
+
+  // Necessary initialization: Ensure uploads directory exists and local disk database is loaded
   const UPLOADS_DIR = path.join(process.cwd(), 'data', 'uploads');
   if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   }
+
+  // Synchronously ensure local database is loaded into memory so all endpoints have immediate data access
+  getDatabaseStatus();
+
+  // Start PostgreSQL initialization without blocking HTTP server startup indefinitely
+  const dbInitPromise = initDatabaseAsync().catch((err: any) => {
+    console.warn('[DB] PostgreSQL initialization encountered error (operating with local fallback):', err?.message || err);
+  });
+
+  // Allow up to 1.5 seconds for quick database handshake, but do not block HTTP server startup
+  try {
+    await Promise.race([
+      dbInitPromise,
+      new Promise((resolve) => setTimeout(resolve, 1500)),
+    ]);
+  } catch {
+    // Non-blocking
+  }
+
+  const app = express();
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -1321,16 +1366,9 @@ ACCURACY & INTEGRITY RULES:
   app.get('/api/students/export/excel', async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
-      const recruitmentListId = req.query.recruitmentListId as string | undefined;
-      const students = dbService.getStudents(currentUser?.id, recruitmentListId);
-      const lists = currentUser ? dbService.getRecruitmentLists(currentUser.id, false) : [];
-      const settings = dbService.getSettings();
-      const targetList = recruitmentListId ? lists.find((l) => l.id === recruitmentListId) : undefined;
+      const students = dbService.getStudents(currentUser?.id);
 
-      const excelBuffer = await generateStudentRecordsExcel(students, {
-        academicYear: targetList?.name || settings.academicYear,
-        recruitmentLists: lists,
-      });
+      const excelBuffer = await generateStudentRecordsExcel(students);
 
       if (currentUser) {
         dbService.addAuditLog({
@@ -1953,8 +1991,27 @@ ACCURACY & INTEGRITY RULES:
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Server] Listening on port ${PORT}`);
+    console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`[Server] Bound to host: 0.0.0.0, port: ${PORT}`);
     console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[Server Error] Port ${PORT} is already in use.`);
+    } else {
+      console.error(`[Server Error] Failed to bind to port ${PORT}:`, err.message);
+    }
+  });
+
+  process.on('SIGTERM', () => {
+    console.log('[Server] SIGTERM received. Shutting down gracefully...');
+    server.close(() => {
+      console.log('[Server] HTTP server closed.');
+      process.exit(0);
+    });
   });
 }
 

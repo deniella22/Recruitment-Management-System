@@ -20,7 +20,7 @@
       "fullName": "Sisters of Mary School – Biga Admin",
       "username": "sistersofmarybiga",
       "createdAt": "2026-09-18T02:13:40.889Z",
-      "lastLoginAt": "2026-10-01T00:25:21.620Z",
+      "lastLoginAt": "2026-09-30T06:03:21.748Z",
       "passwordHash": "$2b$10$KHpZely3k1rlFiLNQvhuF.UA9GbaXMNa57tRi5N4naHDMGMQk51XC"
     }
   ],
@@ -18854,9 +18854,9 @@
       "surname": "FRESA",
       "firstName": "NIKKA",
       "middleName": "FUENTES",
-      "birthdate": "2015-09-13",
-      "birthday": "2015-09-13",
-      "age": 11,
+      "birthdate": "2014-09-13",
+      "birthday": "2014-09-13",
+      "age": 12,
       "gender": "Female",
       "sitioStreet": "Purok 1",
       "barangay": "San Jose",
@@ -18915,7 +18915,7 @@
       "healthStatus": "Normal / Fit for schooling",
       "studentSignature": "Signed",
       "createdAt": "2026-09-30T07:15:24.216Z",
-      "updatedAt": "2026-09-30T07:15:24.216Z",
+      "updatedAt": "2026-10-01T01:44:20.976Z",
       "createdBy": "Sisters of Mary School – Biga Admin",
       "updatedBy": "Sisters of Mary School – Biga Admin"
     },
@@ -20705,12 +20705,20 @@
   ],
   "auditLogs": [
     {
-      "id": "log_1790814321627_1lznw",
+      "id": "log_1790819063667_k55zl",
+      "action": "Student Edited",
       "userId": "usr_1789697620889_ms1m8",
+      "details": "Updated details for student FRESA, NIKKA (LRN: 114071200006)",
       "userName": "Sisters of Mary School – Biga Admin",
-      "action": "Login",
-      "details": "User @sistersofmarybiga (Sisters of Mary School – Biga Admin) logged in successfully",
-      "timestamp": "2026-10-01T00:25:21.627Z"
+      "timestamp": "2026-10-01T01:44:23.667Z"
+    },
+    {
+      "id": "log_1790815169970_z9nu6",
+      "action": "Student Edited",
+      "userId": "usr_1789697620889_ms1m8",
+      "details": "Updated details for student FRESA, NIKKA (LRN: 114071200006)",
+      "userName": "Sisters of Mary School – Biga Admin",
+      "timestamp": "2026-10-01T00:39:29.970Z"
     },
     {
       "id": "log_1790758661579_r8277",

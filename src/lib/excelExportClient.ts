@@ -7,14 +7,12 @@ import {
   getStudentProvince,
   resolveAdmissionStatus,
 } from './studentSorting';
-import { getStudentReportCardSy } from './schoolYearUtils';
 
 export interface ExcelExportOptions {
   title?: string;
   statusFilter?: string;
   academicYear?: string;
   schoolName?: string;
-  recruitmentListName?: string;
 }
 
 export async function exportStudentsToExcel(
@@ -70,8 +68,6 @@ export async function exportStudentsToExcel(
     { header: 'Full Home Address', key: 'address', width: 36 },
     { header: 'Elementary School Graduated', key: 'elementarySchool', width: 32 },
     { header: 'School Address', key: 'schoolAddress', width: 26 },
-    { header: 'Report Card (SY)', key: 'reportCardSy', width: 20 },
-    { header: 'Grading Period', key: 'grading', width: 16 },
     { header: 'Current Grade', key: 'currentGrade', width: 16 },
     { header: 'If Elementary Graduate – Year Graduated', key: 'oldGraduateRemarks', width: 32 },
     { header: "Father's Full Name", key: 'fatherName', width: 24 },
@@ -279,12 +275,6 @@ export async function exportStudentsToExcel(
           s.address || '',
           s.elementarySchool || s.school || '',
           s.schoolAddress || '',
-          getStudentReportCardSy(
-            s,
-            options?.recruitmentListName || options?.academicYear,
-            academicYear
-          ) || s.reportCardSy || '',
-          s.grading || '',
           s.currentGrade || 'Grade 6',
           s.oldGraduateRemarks || '',
           s.fatherName || '',
@@ -384,21 +374,21 @@ export async function exportStudentsToExcel(
             cell.numFmt = '#,##0';
           } else if (colIdx === 9) {
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
-          } else if (colIdx === 17 || colIdx === 18 || colIdx === 19) {
+          } else if (colIdx === 17) {
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
-          } else if (colIdx === 31) {
+          } else if (colIdx === 29) {
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
             cell.numFmt = '@';
-          } else if (colIdx === 40 || colIdx === 41) {
+          } else if (colIdx === 38 || colIdx === 39) {
             cell.alignment = { horizontal: 'right', vertical: 'middle' };
             cell.numFmt = '#,##0';
-          } else if (colIdx === 42 || colIdx === 44) {
+          } else if (colIdx === 40 || colIdx === 42) {
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
-          } else if (colIdx === 48) {
+          } else if (colIdx === 46) {
             cell.alignment = { horizontal: 'right', vertical: 'middle' };
             cell.numFmt = '#,##0';
             cell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
-          } else if (colIdx === 53) {
+          } else if (colIdx === 51) {
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
           } else {
             cell.alignment = { horizontal: 'left', vertical: 'middle' };
